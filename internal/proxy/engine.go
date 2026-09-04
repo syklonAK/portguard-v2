@@ -183,6 +183,23 @@ func ValidateMapping(m store.Mapping, all []store.Mapping, panelPort int) error 
 	if err := validatePathRoutes(m); err != nil {
 		return err
 	}
+	if m.Decoy != "" && m.Decoy != "builtin" && m.Decoy != "custom" {
+		return fmt.Errorf("decoy must be empty, \"builtin\" or \"custom\"")
+	}
+	if m.Decoy == "custom" && strings.TrimSpace(m.DecoyHTML) == "" {
+		return fmt.Errorf("custom decoy requires decoy_html")
+	}
+	if m.Decoy != "" {
+		if m.Protocol != "http" && m.Protocol != "https" {
+			return fmt.Errorf("decoy site is only supported for http/https mappings")
+		}
+		if m.Engine != "nginx" {
+			return fmt.Errorf("decoy site is only supported by the nginx engine")
+		}
+		if m.RedirectTo != "" {
+			return fmt.Errorf("decoy site cannot be combined with redirect_to")
+		}
+	}
 	if m.ListenPort == panelPort {
 		return fmt.Errorf("listen_port %d is the PortGuard panel port", panelPort)
 	}

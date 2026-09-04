@@ -15,6 +15,10 @@ PortGuard is a lightweight, single-binary web tool that runs on your Ubuntu serv
 - **Port discovery**: scans TCP/UDP listening sockets via `ss` (with a `/proc` fallback), showing process, PID and owner; auto-classifies services (web server, load balancer, ssh, xray, database, docker…) and marks **unmanaged** ports with a one-click "Map" action.
 - **Mappings**: HTTP/HTTPS/TCP/UDP listeners with multiple weighted backends, backup targets, WebSocket support, HTTP/2, redirects, custom headers, and port-conflict detection before saving.
 - **Dynamic path routing** for the **ws / httpupgrade / xhttp** transports: the `/<prefix>/<port>` pattern extracts the destination port from the request path itself (Xray-style) — one domain + one TLS port serves all of your inbounds, on both nginx and HAProxy.
+- **Anti-DPI decoy site**: serve a realistic built-in (or your own custom) website on unmatched paths instead of a suspicious 404 — proxies hide under a normal-looking site.
+- **Hedioum Pool Tunnel management**: the Iran side of the tunnel topology (user → Iran → xray dokodemo bridge → SOCKS5 hub → foreign egress → node) managed from the panel — relays (raw passthrough or local TLS termination), bridge config generation with `xray run -test` validation, backups and automatic rollback.
+- **Live connection log**: every established inbound connection (source IP, target port, serving process, duration) in real time, classified as managed / unmanaged / panel session, plus top-talker aggregation — a security view of who is talking to which port right now.
+- **Built-in self-updater**: one click in Settings pulls the latest release, rebuilds the binary (embedded frontend — no Node needed) and restarts the service with rollback on failure. No reinstalling, ever.
 - **Free-form config authoring**: every mapping can be built with the visual editor **or** a raw JSON editor; a live preview shows the final URLs as you type.
 - **HAProxy runtime API**: live `show info`/`show stat`, ready/drain/maint server states without a reload; service start/stop/restart for nginx & haproxy.
 - **Backups & restore**: timestamped config backups with diff and one-click validated restore.
@@ -79,13 +83,18 @@ cmd/server/          entry point
 internal/api/        chi router, JWT auth, SSE broker, handlers
 internal/service/    apply orchestration: render → validate → backup → atomic → reload → rollback
 internal/proxy/      Engine interface, nginx/haproxy renderers, live-config parser, HAProxy runtime client
+internal/tunnel/     Hedioum bridge builder + xray validation + systemd unit + rollback
+internal/conntrack/  live inbound-connection sampler (ss) for the security log
 internal/scanner/    listening-port discovery & service classification
 internal/health/     periodic TCP/HTTP health checker
 internal/store/      SQLite (modernc, CGO-free) schema + queries
 internal/sysinfo/    gopsutil system stats
 web/                 React 19 + Vite + Tailwind dashboard (embedded)
-deploy/              install.sh + remote-install.sh + systemd unit
+deploy/              install.sh + remote-install.sh + update.sh + uninstall.sh + systemd unit
+docs/                full usage guide (USAGE.md)
 ```
+
+Full usage guide: [docs/USAGE.md](docs/USAGE.md)
 
 ## Troubleshooting
 

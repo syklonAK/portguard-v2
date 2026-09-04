@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Upload } from 'lucide-react'
+import { Download, Upload, RefreshCw } from 'lucide-react'
 import { api, type ImportResult } from '../api'
 import { Button, Card, CardHeader, Field, Input, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
@@ -17,6 +17,8 @@ export default function Settings() {
   const [checkInterval, setCheckInterval] = useState('30')
   const [scanInterval, setScanInterval] = useState('300')
   const [autoApply, setAutoApply] = useState(false)
+  const [socksHost, setSocksHost] = useState('127.0.0.1')
+  const [socksPort, setSocksPort] = useState('40001')
 
   const [pw, setPw] = useState({ old: '', new: '', confirm: '' })
 
@@ -26,6 +28,8 @@ export default function Settings() {
       setCheckInterval(settings.data.check_interval)
       setScanInterval(settings.data.scan_interval)
       setAutoApply(settings.data.auto_apply === 'true')
+      setSocksHost(settings.data.tunnel_socks_host || '127.0.0.1')
+      setSocksPort(settings.data.tunnel_socks_port || '40001')
     }
   }, [settings.data])
 
@@ -36,10 +40,20 @@ export default function Settings() {
         check_interval: checkInterval,
         scan_interval: scanInterval,
         auto_apply: autoApply ? 'true' : 'false',
+        tunnel_socks_host: socksHost,
+        tunnel_socks_port: socksPort,
       }),
     onSuccess: () => {
       push('success', 'Settings saved')
       qc.invalidateQueries({ queryKey: ['settings'] })
+    },
+    onError: (e: any) => push('error', e.message),
+  })
+
+  const selfUpdate = useMutation({
+    mutationFn: () => api.selfUpdate(),
+    onSuccess: (res) => {
+      push('info', res.note || 'Update started — the panel will restart in a few seconds.')
     },
     onError: (e: any) => push('error', e.message),
   })
@@ -154,10 +168,39 @@ export default function Settings() {
             </span>
           </label>
         </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Tunnel (Hedioum)" desc="SOCKS5 hub the Iran-side bridge routes through — must match your hedioum setup-iran port" />
+        <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
+          <Field label="SOCKS5 host" hint="usually 127.0.0.1 (the hub listens on loopback)">
+            <Input value={socksHost} onChange={(e) => setSocksHost(e.target.value)} />
+          </Field>
+          <Field label="SOCKS5 port" hint="default 40001, range 40000-49999">
+            <Input type="number" value={socksPort} onChange={(e) => setSocksPort(e.target.value)} />
+          </Field>
+        </div>
         <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save settings'}
           </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Panel updater"
+          desc="Pull the latest release from GitHub, rebuild and restart — no reinstall needed"
+        />
+        <div className="flex flex-wrap items-center gap-3 p-5">
+          <Button variant="secondary" onClick={() => selfUpdate.mutate()} disabled={selfUpdate.isPending}>
+            <RefreshCw className={`h-4 w-4 ${selfUpdate.isPending ? 'animate-spin' : ''}`} />
+            {selfUpdate.isPending ? 'Starting…' : 'Check & update now'}
+          </Button>
+          <p className="w-full text-2xs text-slate-400">
+            Runs <code>deploy/update.sh</code>: git pull → rebuild binary (embedded frontend, no Node needed) → restart the systemd service.
+            The panel goes down for a few seconds and comes back on the same port.
+          </p>
         </div>
       </Card>
 

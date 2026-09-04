@@ -35,6 +35,8 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	interval := "30"
 	scanInterval := "300"
 	autoApply := "false"
+	socksHost := a.St.GetSettingOr("tunnel_socks_host", "127.0.0.1")
+	socksPort := a.St.GetSettingOr("tunnel_socks_port", "40001")
 	if v, err := a.St.GetSetting("check_interval"); err == nil && v != "" {
 		interval = v
 	}
@@ -45,20 +47,24 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		autoApply = v
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"paths":          paths,
-		"check_interval": interval,
-		"scan_interval":  scanInterval,
-		"auto_apply":     autoApply,
-		"panel_port":     a.PanelPort,
+		"paths":             paths,
+		"check_interval":    interval,
+		"scan_interval":     scanInterval,
+		"auto_apply":        autoApply,
+		"panel_port":        a.PanelPort,
+		"tunnel_socks_host": socksHost,
+		"tunnel_socks_port": socksPort,
 	})
 }
 
 func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Paths         *proxy.Paths `json:"paths"`
-		CheckInterval string       `json:"check_interval"`
-		ScanInterval  string       `json:"scan_interval"`
-		AutoApply     *string      `json:"auto_apply"`
+		Paths          *proxy.Paths `json:"paths"`
+		CheckInterval  string       `json:"check_interval"`
+		ScanInterval   string       `json:"scan_interval"`
+		AutoApply      *string      `json:"auto_apply"`
+		TunnelSocksHost *string     `json:"tunnel_socks_host"`
+		TunnelSocksPort *string     `json:"tunnel_socks_port"`
 	}
 	if !readJSON(w, r, &body) {
 		return
@@ -116,6 +122,17 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			v = "true"
 		}
 		_ = a.St.SetSetting("auto_apply", v)
+	}
+	if body.TunnelSocksHost != nil && *body.TunnelSocksHost != "" {
+		_ = a.St.SetSetting("tunnel_socks_host", *body.TunnelSocksHost)
+	}
+	if body.TunnelSocksPort != nil {
+		if n, err := fmtAtoi(*body.TunnelSocksPort); err == nil && n >= 1 && n <= 65535 {
+			_ = a.St.SetSetting("tunnel_socks_port", *body.TunnelSocksPort)
+		} else {
+			errJSON(w, errors.New("tunnel_socks_port must be 1-65535"), http.StatusUnprocessableEntity)
+			return
+		}
 	}
 	a.St.Audit(actorFrom(r.Context()), "settings.update", "settings changed", "ok")
 	a.handleGetSettings(w, r)

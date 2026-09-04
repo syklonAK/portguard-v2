@@ -20,13 +20,16 @@ func (NginxEngine) Name() string { return "nginx" }
 
 func (NginxEngine) ActiveFiles(p Paths) []string {
 	dir := posixJoin(posixDir(p.NginxConf), "portguard")
-	return []string{p.NginxConf, dir + "/http.conf", dir + "/stream.conf"}
+	return []string{p.NginxConf, dir + "/http.conf", dir + "/stream.conf", "/var/lib/portguard/decoy/index.html"}
 }
 
 // LivePath maps staged rel paths ("nginx.conf", "portguard/http.conf", ...) to live locations.
 func (NginxEngine) LivePath(p Paths, rel string) string {
-	if rel == "nginx.conf" {
+	switch rel {
+	case "nginx.conf":
 		return p.NginxConf
+	case "decoy/index.html":
+		return "/var/lib/portguard/decoy/index.html"
 	}
 	return posixJoin(posixDir(p.NginxConf), rel)
 }
@@ -41,6 +44,8 @@ func (NginxEngine) StagedRel(p Paths, live string) (string, bool) {
 		return "portguard/http.conf", true
 	case posixJoin(posixDir(p.NginxConf), "portguard/stream.conf"):
 		return "portguard/stream.conf", true
+	case "/var/lib/portguard/decoy/index.html":
+		return "decoy/index.html", true
 	}
 	return "", false
 }
@@ -106,6 +111,9 @@ stream {
 		"portguard/http.conf":   upstreams.String() + httpBlocks.String() + "# --- end of PortGuard http mappings ---\n",
 		"portguard/stream.conf": streamBlocks.String() + "# --- end of PortGuard stream mappings ---\n",
 	}
+	for rel, content := range DecoyFiles(sorted) {
+		files[rel] = content
+	}
 	return files, nil
 }
 
@@ -148,31 +156,23 @@ func renderHTTPServer(m store.Mapping, p Paths) (string, error) {
 		// dynamic port-in-path routes (ws/httpupgrade/xhttp) take precedence
 		// over the static proxy location blocks.
 		b.WriteString(renderNginxPathRoutes(m))
-		// path-prefix routing: proxy only the prefix, reject everything else
-		loc := "/"
 		if m.PathPrefix != "" {
-			loc = m.PathPrefix
+			// path-prefix routing: proxy only the prefix, reject everything else
+			fmt.Fprintf(&b, "        location %s {\n", m.PathPrefix)
+			b.WriteString(renderProxyHeaders(m))
+			b.WriteString(renderWSHeaders(m))
+			b.WriteString(renderProxyPass(m))
+			b.WriteString("        }\n")
+		} else if len(m.Targets) > 0 {
+			// whole-site proxy
+			b.WriteString("        location / {\n")
+			b.WriteString(renderProxyHeaders(m))
+			b.WriteString(renderWSHeaders(m))
+			b.WriteString(renderProxyPass(m))
+			b.WriteString("        }\n")
 		}
-		fmt.Fprintf(&b, "        location %s {\n", loc)
-		for _, h := range proxyHeaders() {
-			fmt.Fprintf(&b, "            %s\n", h)
-		}
-		if m.WebSocket {
-			b.WriteString("            proxy_http_version 1.1;\n")
-			b.WriteString("            proxy_set_header Upgrade $http_upgrade;\n")
-			b.WriteString("            proxy_set_header Connection \"upgrade\";\n")
-			b.WriteString("            proxy_read_timeout 3600s;\n")
-		}
-		if len(m.Targets) == 1 {
-			t := m.Targets[0]
-			fmt.Fprintf(&b, "            proxy_pass http://%s:%d;\n", escapeNginx(t.Host), t.Port)
-		} else {
-			fmt.Fprintf(&b, "            proxy_pass http://pg_upstream_%d;\n", m.ID)
-		}
-		b.WriteString("        }\n")
-		if m.PathPrefix != "" {
-			b.WriteString("        location / {\n            return 404;\n        }\n")
-		}
+		// unmatched paths: decoy site (anti-DPI) or 404
+		b.WriteString(renderNginxFallback(m))
 	}
 	for k, v := range m.ExtraHeaders {
 		fmt.Fprintf(&b, "        add_header %s \"%s\" always;\n", escapeNginx(k), escapeNginx(v))
@@ -180,6 +180,120 @@ func renderHTTPServer(m store.Mapping, p Paths) (string, error) {
 	b.WriteString("    }\n\n")
 	return b.String(), nil
 }
+
+// renderProxyHeaders emits the standard proxy headers, honouring host_header.
+func renderProxyHeaders(m store.Mapping) string {
+	host := "$host"
+	if m.HostHeader != "" {
+		host = escapeNginx(m.HostHeader)
+	}
+	return fmt.Sprintf("            proxy_set_header Host %s;\n"+
+		"            proxy_set_header X-Real-IP $remote_addr;\n"+
+		"            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"+
+		"            proxy_set_header X-Forwarded-Proto $scheme;\n", host)
+}
+
+func renderWSHeaders(m store.Mapping) string {
+	if !m.WebSocket {
+		return ""
+	}
+	return "            proxy_http_version 1.1;\n" +
+		"            proxy_set_header Upgrade $http_upgrade;\n" +
+		"            proxy_set_header Connection \"upgrade\";\n" +
+		"            proxy_read_timeout 3600s;\n"
+}
+
+func renderProxyPass(m store.Mapping) string {
+	if len(m.Targets) == 1 {
+		t := m.Targets[0]
+		return fmt.Sprintf("            proxy_pass http://%s:%d;\n", escapeNginx(t.Host), t.Port)
+	}
+	return fmt.Sprintf("            proxy_pass http://pg_upstream_%d;\n", m.ID)
+}
+
+// renderNginxFallback decides what unmatched paths get: a real-looking decoy
+// site (anti-DPI camouflage) or a plain 404. Only reachable when path routes or
+// a path prefix guard the proxy locations above.
+func renderNginxFallback(m store.Mapping) string {
+	if m.Decoy == "" {
+		if m.PathPrefix != "" || len(m.PathRoutes) > 0 || len(m.Targets) > 0 {
+			if m.PathPrefix != "" || len(m.PathRoutes) > 0 {
+				return "        location / {\n            return 404;\n        }\n"
+			}
+		}
+		return ""
+	}
+	var b strings.Builder
+	switch m.Decoy {
+	case "builtin":
+		b.WriteString("        location / {\n            root /var/lib/portguard/decoy;\n            index index.html;\n            try_files $uri $uri/ =404;\n        }\n")
+	case "custom":
+		b.WriteString("        location / {\n            root /var/lib/portguard/decoy;\n            index index.html;\n            try_files $uri $uri/ =404;\n        }\n")
+	}
+	return b.String()
+}
+
+// DecoyFiles returns the staged decoy webroot files for nginx mappings that
+// request one (builtin templates or the user's custom HTML).
+func DecoyFiles(mappings []store.Mapping) map[string]string {
+	out := map[string]string{}
+	for _, m := range mappings {
+		if !m.Enabled || m.Engine != "nginx" || m.Decoy == "" || m.Protocol == "tcp" || m.Protocol == "udp" {
+			continue
+		}
+		if _, ok := out["decoy/index.html"]; ok {
+			continue // one shared webroot
+		}
+		switch m.Decoy {
+		case "builtin":
+			out["decoy/index.html"] = builtinDecoyHTML
+		case "custom":
+			out["decoy/index.html"] = m.DecoyHTML
+		}
+	}
+	return out
+}
+
+const builtinDecoyHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloudMetrics — Server Monitoring</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f8fafc;color:#0f172a}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:1rem 2rem;background:#fff;border-bottom:1px solid #e2e8f0}
+.brand{font-weight:700;font-size:1.1rem;color:#2563eb}
+.hero{max-width:720px;margin:4rem auto;padding:0 1rem;text-align:center}
+.hero h1{font-size:2.2rem;margin-bottom:1rem}
+.hero p{color:#64748b;font-size:1.05rem;line-height:1.7;margin-bottom:2rem}
+.cta{display:inline-block;background:#2563eb;color:#fff;padding:.75rem 1.5rem;border-radius:.5rem;text-decoration:none;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;max-width:960px;margin:0 auto 4rem;padding:0 1rem}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:.75rem;padding:1.5rem}
+.card h3{font-size:1rem;margin-bottom:.5rem}
+.card p{color:#64748b;font-size:.875rem;line-height:1.6}
+footer{text-align:center;color:#94a3b8;font-size:.8rem;padding:2rem 0;border-top:1px solid #e2e8f0}
+</style>
+</head>
+<body>
+<nav class="nav"><span class="brand">CloudMetrics</span><span>Docs · Pricing · Sign in</span></nav>
+<section class="hero">
+<h1>Uptime and performance monitoring for modern teams</h1>
+<p>Track latency, errors and traffic across your whole infrastructure from one
+dashboard. Get alerted before your users notice. Free 14-day trial, no credit
+card required.</p>
+<a class="cta" href="#">Start monitoring</a>
+</section>
+<section class="grid">
+<div class="card"><h3>Latency maps</h3><p>Global probe network with per-region percentiles and anomaly detection.</p></div>
+<div class="card"><h3>Incident alerts</h3><p>Webhooks, email and Slack alerts the moment a check fails twice.</p></div>
+<div class="card"><h3>SLA reports</h3><p>Beautiful monthly reports your customers will actually read.</p></div>
+</section>
+<footer>© 2026 CloudMetrics Inc. All rights reserved.</footer>
+</body>
+</html>
+`
 
 func renderHTTPUpstream(m store.Mapping) string {
 	if m.RedirectTo != "" || len(m.Targets) <= 1 {
@@ -325,15 +439,6 @@ func renderNginxAccessRules(m store.Mapping) string {
 	return b.String()
 }
 
-func proxyHeaders() []string {
-	return []string{
-		"proxy_set_header Host $host;",
-		"proxy_set_header X-Real-IP $remote_addr;",
-		"proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;",
-		"proxy_set_header X-Forwarded-Proto $scheme;",
-	}
-}
-
 func escapeNginx(s string) string {
 	return strings.NewReplacer(";", "\\;", "{", "\\{", "}", "\\}", "\"", "\\\"", "\\", "\\\\").Replace(s)
 }
@@ -353,6 +458,11 @@ func (NginxEngine) Validate(staged map[string]string, p Paths) error {
 	main := strings.ReplaceAll(staged["nginx.conf"], posixJoin(posixDir(p.NginxConf), "portguard"), confDir)
 	for rel, content := range staged {
 		if rel == "nginx.conf" {
+			continue
+		}
+		if rel == "decoy/index.html" {
+			// nginx -t does not stat `root` directories; the decoy webroot is
+			// written to its live location by the apply pipeline, skip it here
 			continue
 		}
 		dst := filepath.Join(confDir, strings.TrimPrefix(rel, "portguard/"))

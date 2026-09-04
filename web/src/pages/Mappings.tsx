@@ -33,6 +33,9 @@ function emptyMapping(prePort?: number): Partial<Mapping> {
     access_rules: [],
     extra_headers: {},
     path_routes: [],
+    host_header: '',
+    decoy: '',
+    decoy_html: '',
     notes: '',
   }
 }
@@ -531,6 +534,45 @@ export default function Mappings() {
                 <Field label="Redirect to (optional)" hint="If set, all requests are 301-redirected instead of proxied">
                   <Input value={draft.redirect_to || ''} onChange={(e) => setDraftField('redirect_to', e.target.value)} placeholder="https://new.example.com" />
                 </Field>
+              )}
+
+              {isL7 && !isRedirect && (
+                <Field label="Host header (optional)" hint="Sent to the backend instead of $host — needed when proxying to a foreign node that expects its own domain">
+                  <Input value={draft.host_header || ''} onChange={(e) => setDraftField('host_header', e.target.value)} placeholder="node.example.com" />
+                </Field>
+              )}
+
+              {isL7 && !isRedirect && draft.engine === 'nginx' && (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                      Decoy site (anti-DPI) <span className="text-2xs text-slate-400">— serve a real-looking website on unmatched paths instead of 404</span>
+                    </span>
+                  </div>
+                  <Select
+                    value={draft.decoy || ''}
+                    onChange={(e) => setDraftField('decoy', e.target.value as '' | 'builtin' | 'custom')}
+                  >
+                    <option value="">Off — unmatched paths get 404</option>
+                    <option value="builtin">Builtin — realistic SaaS landing page</option>
+                    <option value="custom">Custom — my own HTML</option>
+                  </Select>
+                  {draft.decoy === 'custom' && (
+                    <textarea
+                      rows={8}
+                      spellCheck={false}
+                      value={draft.decoy_html || ''}
+                      onChange={(e) => setDraftField('decoy_html', e.target.value)}
+                      placeholder="<!DOCTYPE html>… your camouflage page …"
+                      className="mt-2 w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    />
+                  )}
+                  {draft.decoy && (
+                    <p className="mt-1 text-2xs text-slate-400">
+                      Served from /var/lib/portguard/decoy/ — users (and DPI probes) that hit a path outside your ws/hu/xhttp routes see a normal website.
+                    </p>
+                  )}
+                </div>
               )}
 
               {!isRedirect && (!isL7 || !hasPathRoutes) && (

@@ -148,6 +148,9 @@ func renderHABackend(be string, m store.Mapping, tcpMode bool) string {
 		fmt.Fprintf(&b, "backend %s\n    mode tcp\n    balance %s\n", be, balance)
 	} else {
 		fmt.Fprintf(&b, "backend %s\n    balance %s\n", be, balance)
+		if m.HostHeader != "" {
+			fmt.Fprintf(&b, "    http-request set-header Host %s\n", escapeHA(m.HostHeader))
+		}
 	}
 	for i, t := range m.Targets {
 		fmt.Fprintf(&b, "%s\n", backendLine(fmt.Sprintf("s%d", i), t, true))

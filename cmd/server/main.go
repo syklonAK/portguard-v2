@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"portguard/internal/api"
+	"portguard/internal/conntrack"
 	"portguard/internal/health"
 	"portguard/internal/proxy"
 	"portguard/internal/scanner"
@@ -167,6 +168,13 @@ func main() {
 	go sysinfo.RunSampler(ctx, 5*time.Second, func(s sysinfo.Snapshot) {
 		broker.Publish("system", s)
 	})
+
+	// live connection log -> DB snapshot + SSE ping on change
+	connSampler := conntrack.NewSampler(st, *port)
+	connSampler.OnChange(func(count int) {
+		broker.Publish("conns", map[string]int{"count": count})
+	})
+	go connSampler.Run(5*time.Second, ctx.Done())
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(*host, strconv.Itoa(*port)),

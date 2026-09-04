@@ -41,13 +41,16 @@ func migrate(db *sql.DB) error {
 			_, _ = db.Exec(`DROP TABLE target_health`)
 		}
 	}
-	// v2.0.0 mappings gained balance/path_prefix/access_rules columns; v2.1.0 added path_routes.
-	// ALTER for databases created by an older version.
+	// v2.0.0 mappings gained balance/path_prefix/access_rules columns; v2.1.0 added
+	// path_routes; v2.2.0 added host_header/decoy/decoy_html. ALTER for older DBs.
 	for _, col := range []struct{ name, ddl string }{
 		{"balance", `ALTER TABLE mappings ADD COLUMN balance TEXT NOT NULL DEFAULT ''`},
 		{"path_prefix", `ALTER TABLE mappings ADD COLUMN path_prefix TEXT NOT NULL DEFAULT ''`},
 		{"access_rules", `ALTER TABLE mappings ADD COLUMN access_rules TEXT NOT NULL DEFAULT '[]'`},
 		{"path_routes", `ALTER TABLE mappings ADD COLUMN path_routes TEXT NOT NULL DEFAULT '[]'`},
+		{"host_header", `ALTER TABLE mappings ADD COLUMN host_header TEXT NOT NULL DEFAULT ''`},
+		{"decoy", `ALTER TABLE mappings ADD COLUMN decoy TEXT NOT NULL DEFAULT ''`},
+		{"decoy_html", `ALTER TABLE mappings ADD COLUMN decoy_html TEXT NOT NULL DEFAULT ''`},
 	} {
 		var mCols string
 		if err := db.QueryRow(`SELECT group_concat(name) FROM pragma_table_info('mappings')`).Scan(&mCols); err == nil {
@@ -97,9 +100,46 @@ CREATE TABLE IF NOT EXISTS mappings (
 	access_rules TEXT NOT NULL DEFAULT '[]',
 	extra_headers TEXT NOT NULL DEFAULT '{}',
 	path_routes TEXT NOT NULL DEFAULT '[]',
+	host_header TEXT NOT NULL DEFAULT '',
+	decoy TEXT NOT NULL DEFAULT '',
+	decoy_html TEXT NOT NULL DEFAULT '',
 	notes TEXT NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tunnel_relays (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL UNIQUE,
+	mode TEXT NOT NULL,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	target_host TEXT NOT NULL,
+	target_port INTEGER NOT NULL,
+	listen_ip TEXT NOT NULL DEFAULT '0.0.0.0',
+	listen_port INTEGER NOT NULL DEFAULT 0,
+	bridge_port INTEGER NOT NULL DEFAULT 0,
+	udp INTEGER NOT NULL DEFAULT 0,
+	host_header TEXT NOT NULL DEFAULT '',
+	domain TEXT NOT NULL DEFAULT '',
+	ssl_cert_id INTEGER,
+	notes TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS connections (
+	src_ip TEXT NOT NULL,
+	src_port INTEGER NOT NULL,
+	dst_ip TEXT NOT NULL,
+	dst_port INTEGER NOT NULL,
+	process TEXT NOT NULL DEFAULT '',
+	pid INTEGER NOT NULL DEFAULT 0,
+	uid INTEGER NOT NULL DEFAULT 0,
+	state TEXT NOT NULL DEFAULT '',
+	managed INTEGER NOT NULL DEFAULT 0,
+	inner INTEGER NOT NULL DEFAULT 0,
+	self INTEGER NOT NULL DEFAULT 0,
+	first_seen INTEGER NOT NULL,
+	last_seen INTEGER NOT NULL,
+	PRIMARY KEY (src_ip, src_port, dst_ip, dst_port)
 );
 CREATE TABLE IF NOT EXISTS ports (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -275,12 +315,13 @@ func (s *Store) CreateMapping(m *Mapping) (int64, error) {
 	ts := nowTS()
 	res, err := s.DB.Exec(`INSERT INTO mappings
 		(name, enabled, engine, protocol, listen_ip, listen_port, server_names, ssl_cert_id,
-		 redirect_to, websocket, http2, targets, balance, path_prefix, access_rules, extra_headers, path_routes, notes, created_at, updated_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 redirect_to, websocket, http2, targets, balance, path_prefix, access_rules, extra_headers, path_routes,
+		 host_header, decoy, decoy_html, notes, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		m.Name, b2i(m.Enabled), m.Engine, m.Protocol, m.ListenIP, m.ListenPort,
 		mustJSON(m.ServerNames), nullInt64(m.SSLCertID), m.RedirectTo, b2i(m.WebSocket), b2i(m.HTTP2),
 		mustJSON(m.Targets), m.Balance, m.PathPrefix, mustJSON(m.AccessRules), mustJSON(m.ExtraHeaders),
-		mustJSON(m.PathRoutes), m.Notes, ts, ts)
+		mustJSON(m.PathRoutes), m.HostHeader, m.Decoy, m.DecoyHTML, m.Notes, ts, ts)
 	if err != nil {
 		return 0, err
 	}
@@ -290,11 +331,12 @@ func (s *Store) CreateMapping(m *Mapping) (int64, error) {
 func (s *Store) UpdateMapping(m *Mapping) error {
 	_, err := s.DB.Exec(`UPDATE mappings SET name=?, enabled=?, engine=?, protocol=?, listen_ip=?,
 		listen_port=?, server_names=?, ssl_cert_id=?, redirect_to=?, websocket=?, http2=?,
-		targets=?, balance=?, path_prefix=?, access_rules=?, extra_headers=?, path_routes=?, notes=?, updated_at=? WHERE id=?`,
+		targets=?, balance=?, path_prefix=?, access_rules=?, extra_headers=?, path_routes=?,
+		host_header=?, decoy=?, decoy_html=?, notes=?, updated_at=? WHERE id=?`,
 		m.Name, b2i(m.Enabled), m.Engine, m.Protocol, m.ListenIP, m.ListenPort,
 		mustJSON(m.ServerNames), nullInt64(m.SSLCertID), m.RedirectTo, b2i(m.WebSocket), b2i(m.HTTP2),
 		mustJSON(m.Targets), m.Balance, m.PathPrefix, mustJSON(m.AccessRules), mustJSON(m.ExtraHeaders),
-		mustJSON(m.PathRoutes), m.Notes, nowTS(), m.ID)
+		mustJSON(m.PathRoutes), m.HostHeader, m.Decoy, m.DecoyHTML, m.Notes, nowTS(), m.ID)
 	return err
 }
 
@@ -479,6 +521,193 @@ func (s *Store) ListAudit(limit int) ([]AuditLog, error) {
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+// ---- tunnel relays (Hedioum) ----
+
+func (s *Store) ListTunnelRelays() ([]TunnelRelay, error) {
+	rows, err := s.DB.Query(`SELECT ` + tunnelRelayCols + ` FROM tunnel_relays ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TunnelRelay
+	for rows.Next() {
+		r, err := scanTunnelRelay(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetTunnelRelay(id int64) (TunnelRelay, error) {
+	row := s.DB.QueryRow(`SELECT `+tunnelRelayCols+` FROM tunnel_relays WHERE id=?`, id)
+	r, err := scanTunnelRelay(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return TunnelRelay{}, ErrNotFound
+	}
+	return r, err
+}
+
+func (s *Store) CreateTunnelRelay(r *TunnelRelay) (int64, error) {
+	ts := nowTS()
+	res, err := s.DB.Exec(`INSERT INTO tunnel_relays
+		(name, mode, enabled, target_host, target_port, listen_ip, listen_port, bridge_port,
+		 udp, host_header, domain, ssl_cert_id, notes, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		r.Name, r.Mode, b2i(r.Enabled), r.TargetHost, r.TargetPort, r.ListenIP, r.ListenPort, r.BridgePort,
+		b2i(r.UDP), r.HostHeader, r.Domain, nullInt64(r.SSLCertID), r.Notes, ts, ts)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) UpdateTunnelRelay(r *TunnelRelay) error {
+	_, err := s.DB.Exec(`UPDATE tunnel_relays SET name=?, mode=?, enabled=?, target_host=?, target_port=?,
+		listen_ip=?, listen_port=?, bridge_port=?, udp=?, host_header=?, domain=?, ssl_cert_id=?, notes=?, updated_at=? WHERE id=?`,
+		r.Name, r.Mode, b2i(r.Enabled), r.TargetHost, r.TargetPort, r.ListenIP, r.ListenPort, r.BridgePort,
+		b2i(r.UDP), r.HostHeader, r.Domain, nullInt64(r.SSLCertID), r.Notes, nowTS(), r.ID)
+	return err
+}
+
+func (s *Store) DeleteTunnelRelay(id int64) error {
+	res, err := s.DB.Exec(`DELETE FROM tunnel_relays WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) GetSettingOr(key, def string) string {
+	if v, err := s.GetSetting(key); err == nil && v != "" {
+		return v
+	}
+	return def
+}
+
+func (s *Store) SetSettingSilently(key, val string) {
+	_ = s.SetSetting(key, val)
+}
+
+// ---- live connections ----
+
+// ReplaceConnections atomically swaps the live-connection snapshot: new rows
+// are inserted (keeping their original first_seen), missing ones deleted.
+func (s *Store) ReplaceConnections(conns []ConnEntry, now int64) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	type key struct{ src, dstIP string; srcP, dstP int }
+	prev := map[key]int64{}
+	rows, err := tx.Query(`SELECT src_ip, src_port, dst_ip, dst_port, first_seen FROM connections`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var k key
+		var fs int64
+		if err := rows.Scan(&k.src, &k.srcP, &k.dstIP, &k.dstP, &fs); err != nil {
+			rows.Close()
+			return err
+		}
+		prev[k] = fs
+	}
+	rows.Close()
+
+	if _, err := tx.Exec(`DELETE FROM connections`); err != nil {
+		return err
+	}
+	for _, c := range conns {
+		k := key{c.SrcIP, c.DstIP, c.SrcPort, c.DstPort}
+		fs, ok := prev[k]
+		if !ok {
+			fs = now
+		}
+		if _, err := tx.Exec(`INSERT INTO connections
+			(src_ip, src_port, dst_ip, dst_port, process, pid, uid, state, managed, inner, self, first_seen, last_seen)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			c.SrcIP, c.SrcPort, c.DstIP, c.DstPort, c.Process, c.PID, c.UID, c.State,
+			b2i(c.Managed), b2i(c.Inner), b2i(c.Self), fs, now); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) ListConnections() ([]ConnEntry, error) {
+	rows, err := s.DB.Query(`SELECT src_ip, src_port, dst_ip, dst_port, process, pid, uid, state, managed, inner, self, first_seen, last_seen
+		FROM connections ORDER BY last_seen DESC, src_ip`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ConnEntry
+	for rows.Next() {
+		var c ConnEntry
+		var managed, inner, self int
+		var firstSeen, lastSeen int64
+		if err := rows.Scan(&c.SrcIP, &c.SrcPort, &c.DstIP, &c.DstPort, &c.Process, &c.PID, &c.UID, &c.State,
+			&managed, &inner, &self, &firstSeen, &lastSeen); err != nil {
+			return nil, err
+		}
+		c.Managed = managed == 1
+		c.Inner = inner == 1
+		c.Self = self == 1
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// TopTalkers aggregates current live connections per external source IP,
+// returning the noisiest clients with their most-used destinations.
+func (s *Store) TopTalkers(limit int) ([]TopTalker, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := s.DB.Query(`
+		SELECT src_ip, COUNT(*) AS conns, MIN(first_seen) AS first_seen FROM connections
+		WHERE inner = 0 AND self = 0
+		GROUP BY src_ip ORDER BY conns DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TopTalker
+	for rows.Next() {
+		var t TopTalker
+		if err := rows.Scan(&t.SrcIP, &t.Conns, &t.FirstSeen); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	// attach top destinations per talker
+	for i := range out {
+		dRows, err := s.DB.Query(`SELECT dst_ip || ':' || dst_port AS target, COUNT(*) c FROM connections
+			WHERE src_ip = ? GROUP BY target ORDER BY c DESC LIMIT 3`, out[i].SrcIP)
+		if err != nil {
+			continue
+		}
+		var targets []string
+		for dRows.Next() {
+			var t string
+			var c int
+			if err := dRows.Scan(&t, &c); err == nil {
+				targets = append(targets, t)
+			}
+		}
+		dRows.Close()
+		out[i].Targets = strings.Join(targets, ", ")
+	}
+	return out, nil
 }
 
 func b2i(b bool) int {

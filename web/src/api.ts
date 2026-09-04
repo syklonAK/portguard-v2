@@ -39,6 +39,9 @@ export interface Mapping {
   access_rules: ACLRule[]
   extra_headers: Record<string, string>
   path_routes: PathRoute[]
+  host_header: string
+  decoy: '' | 'builtin' | 'custom'
+  decoy_html: string
   notes: string
   created_at: string
   updated_at: string
@@ -121,6 +124,8 @@ export interface Settings {
   scan_interval: string
   auto_apply: string
   panel_port: number
+  tunnel_socks_host?: string
+  tunnel_socks_port?: string
 }
 
 // ---- v2 feature types (ported from haproxy-manager) ----
@@ -354,7 +359,90 @@ export const api = {
   audit: () => req<AuditLog[]>('GET', '/api/audit'),
   certValidate: (id: number) => req<CertValidation>('GET', `/api/certs/${id}/validate`),
 
+  // v2.2: Hedioum tunnels
+  tunnelStatus: () => req<TunnelStatus>('GET', '/api/tunnels'),
+  listRelays: () => req<TunnelRelay[]>('GET', '/api/tunnels/relays'),
+  createRelay: (r: Partial<TunnelRelay>) => req<{ id: number }>('POST', '/api/tunnels/relays', r),
+  updateRelay: (id: number, r: Partial<TunnelRelay>) => req<{ ok: boolean }>('PUT', `/api/tunnels/relays/${id}`, r),
+  deleteRelay: (id: number) => req<{ ok: boolean }>('DELETE', `/api/tunnels/relays/${id}`),
+  tunnelValidate: () => req<{ ok: boolean; error?: string; note?: string }>('POST', '/api/tunnels/validate'),
+  tunnelApply: () => req<{ ok: boolean; relays: number }>('POST', '/api/tunnels/apply'),
+
+  // v2.2: self-updater
+  selfUpdate: () => req<{ ok: boolean; note: string }>('POST', '/api/update'),
+
+  // v2.2: live connections
+  connections: (params?: { dst_port?: string; managed?: '1' | '0' }) => {
+    const q = new URLSearchParams()
+    if (params?.dst_port) q.set('dst_port', params.dst_port)
+    if (params?.managed) q.set('managed', params.managed)
+    const qs = q.toString()
+    return req<ConnectionsData>('GET', '/api/connections' + (qs ? `?${qs}` : ''))
+  },
+
   eventsUrl: () => `/api/events?token=${encodeURIComponent(getToken() || '')}`,
+}
+
+// ---- v2.2 live connections ----
+
+export interface ConnEntry {
+  src_ip: string
+  src_port: number
+  dst_ip: string
+  dst_port: number
+  process: string
+  pid: number
+  state: string
+  managed: boolean
+  inner: boolean
+  self: boolean
+}
+
+export interface TopTalker {
+  src_ip: string
+  conns: number
+  targets: string
+  first_seen: number
+}
+
+export interface ConnectionsData {
+  connections: ConnEntry[]
+  top_talkers: TopTalker[]
+  total: number
+}
+
+// ---- v2.2 tunnel types ----
+
+export interface TunnelStatus {
+  hedioum_installed: boolean
+  hedioum_version?: string
+  hedioum_active: string
+  hedioum_binary?: string
+  xray_installed: boolean
+  xray_version?: string
+  xray_binary?: string
+  bridge_active: string
+  socks_listening?: string
+  role: string
+}
+
+export interface TunnelRelay {
+  id: number
+  name: string
+  mode: 'raw' | 'tls'
+  enabled: boolean
+  target_host: string
+  target_port: number
+  listen_ip: string
+  listen_port: number
+  bridge_port: number
+  udp: boolean
+  host_header: string
+  domain: string
+  ssl_cert_id: number | null
+  notes: string
+  created_at: string
+  updated_at: string
 }
 
 export function fmtBytes(n: number): string {

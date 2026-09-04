@@ -100,6 +100,7 @@ func (a *App) Router() http.Handler {
 
 		pr.Get("/api/ports", a.handleListPorts)
 		pr.Post("/api/ports/scan", a.handleScan)
+		pr.Get("/api/connections", a.handleListConnections)
 
 		pr.Get("/api/certs", a.handleListCerts)
 		pr.Post("/api/certs", a.handleCreateCert)
@@ -113,6 +114,18 @@ func (a *App) Router() http.Handler {
 
 		pr.Get("/api/settings", a.handleGetSettings)
 		pr.Put("/api/settings", a.handlePutSettings)
+
+		// v2.2: Hedioum tunnel management
+		pr.Get("/api/tunnels", a.handleTunnelStatus)
+		pr.Get("/api/tunnels/relays", a.handleListRelays)
+		pr.Post("/api/tunnels/relays", a.handleCreateRelay)
+		pr.Put("/api/tunnels/relays/{id}", a.handleUpdateRelay)
+		pr.Delete("/api/tunnels/relays/{id}", a.handleDeleteRelay)
+		pr.Post("/api/tunnels/apply", a.handleTunnelApply)
+		pr.Post("/api/tunnels/validate", a.handleTunnelValidate)
+
+		// v2.2: self-updater
+		pr.Post("/api/update", a.handleUpdate)
 	})
 
 	// SPA (embedded)
