@@ -1,0 +1,503 @@
+package store
+
+import (
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+var ErrNotFound = errors.New("not found")
+
+type Store struct {
+	DB *sql.DB
+}
+
+func Open(path string) (*Store, error) {
+	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
+	if err != nil {
+		return nil, err
+	}
+	// modernc/sqlite is safest with a single writer connection for our write patterns
+	db.SetMaxOpenConns(1)
+	if err := migrate(db); err != nil {
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	return &Store{DB: db}, nil
+}
+
+func migrate(db *sql.DB) error {
+	// target_health gained host/port columns in v1.0.1; it is a disposable cache, so
+	// recreate it if the old shape is present.
+	var thCols string
+	if err := db.QueryRow(`SELECT group_concat(name) FROM pragma_table_info('target_health')`).Scan(&thCols); err == nil {
+		if !strings.Contains(thCols, "host") {
+			_, _ = db.Exec(`DROP TABLE target_health`)
+		}
+	}
+	// v2.0.0 mappings gained balance/path_prefix/access_rules columns; v2.1.0 added path_routes.
+	// ALTER for databases created by an older version.
+	for _, col := range []struct{ name, ddl string }{
+		{"balance", `ALTER TABLE mappings ADD COLUMN balance TEXT NOT NULL DEFAULT ''`},
+		{"path_prefix", `ALTER TABLE mappings ADD COLUMN path_prefix TEXT NOT NULL DEFAULT ''`},
+		{"access_rules", `ALTER TABLE mappings ADD COLUMN access_rules TEXT NOT NULL DEFAULT '[]'`},
+		{"path_routes", `ALTER TABLE mappings ADD COLUMN path_routes TEXT NOT NULL DEFAULT '[]'`},
+	} {
+		var mCols string
+		if err := db.QueryRow(`SELECT group_concat(name) FROM pragma_table_info('mappings')`).Scan(&mCols); err == nil {
+			if !strings.Contains(mCols, col.name) {
+				_, _ = db.Exec(col.ddl)
+			}
+		}
+	}
+	schema := `
+CREATE TABLE IF NOT EXISTS admins (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	username TEXT NOT NULL UNIQUE,
+	password_hash TEXT NOT NULL,
+	created_at INTEGER NOT NULL,
+	last_login_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS settings (
+	key TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ssl_certs (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	type TEXT NOT NULL DEFAULT 'manual',
+	cert_pem TEXT NOT NULL DEFAULT '',
+	key_pem TEXT NOT NULL DEFAULT '',
+	domains TEXT NOT NULL DEFAULT '[]',
+	expires_at INTEGER,
+	created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS mappings (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	engine TEXT NOT NULL,
+	protocol TEXT NOT NULL,
+	listen_ip TEXT NOT NULL DEFAULT '0.0.0.0',
+	listen_port INTEGER NOT NULL,
+	server_names TEXT NOT NULL DEFAULT '[]',
+	ssl_cert_id INTEGER,
+	redirect_to TEXT NOT NULL DEFAULT '',
+	websocket INTEGER NOT NULL DEFAULT 0,
+	http2 INTEGER NOT NULL DEFAULT 1,
+	targets TEXT NOT NULL DEFAULT '[]',
+		balance TEXT NOT NULL DEFAULT '',
+	path_prefix TEXT NOT NULL DEFAULT '',
+	access_rules TEXT NOT NULL DEFAULT '[]',
+	extra_headers TEXT NOT NULL DEFAULT '{}',
+	path_routes TEXT NOT NULL DEFAULT '[]',
+	notes TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ports (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	port INTEGER NOT NULL,
+	proto TEXT NOT NULL,
+	listen_ip TEXT NOT NULL,
+	process TEXT NOT NULL,
+	pid INTEGER NOT NULL,
+	user_name TEXT NOT NULL,
+	classification TEXT NOT NULL,
+	managed INTEGER NOT NULL DEFAULT 0,
+	self INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS target_health (
+	mapping_id INTEGER NOT NULL,
+	target_index INTEGER NOT NULL,
+	host TEXT NOT NULL DEFAULT '',
+	port INTEGER NOT NULL DEFAULT 0,
+	status TEXT NOT NULL DEFAULT 'unknown',
+	latency_ms REAL NOT NULL DEFAULT 0,
+	fail_count INTEGER NOT NULL DEFAULT 0,
+	last_check_at INTEGER,
+	PRIMARY KEY (mapping_id, target_index)
+);
+CREATE TABLE IF NOT EXISTS audit_logs (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	actor TEXT NOT NULL,
+	action TEXT NOT NULL,
+	detail TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'ok',
+	created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ports_port ON ports(port);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+`
+	_, err := db.Exec(schema)
+	return err
+}
+
+func nowTS() int64 { return time.Now().Unix() }
+
+// ---- settings ----
+
+func (s *Store) GetSetting(key string) (string, error) {
+	var v string
+	err := s.DB.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return v, err
+}
+
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.DB.Exec(`INSERT INTO settings(key,value) VALUES(?,?)
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
+	return err
+}
+
+// Secret returns a persisted random secret, generating it on first use.
+func (s *Store) Secret(key string) (string, error) {
+	v, err := s.GetSetting(key)
+	if err == nil && v != "" {
+		return v, nil
+	}
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return "", err
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	v = hex.EncodeToString(b)
+	if err := s.SetSetting(key, v); err != nil {
+		return "", err
+	}
+	return v, nil
+}
+
+// ---- admins ----
+
+func (s *Store) AdminCount() (int, error) {
+	var n int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM admins`).Scan(&n)
+	return n, err
+}
+
+func (s *Store) CreateAdmin(username, hash string) (int64, error) {
+	res, err := s.DB.Exec(`INSERT INTO admins(username,password_hash,created_at) VALUES(?,?,?)`,
+		username, hash, nowTS())
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) GetAdminByUsername(username string) (Admin, error) {
+	var a Admin
+	var createdTS int64
+	var lastLogin sql.NullInt64
+	err := s.DB.QueryRow(`SELECT id, username, password_hash, created_at, last_login_at FROM admins WHERE username=?`, username).
+		Scan(&a.ID, &a.Username, &a.PasswordHash, &createdTS, &lastLogin)
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, ErrNotFound
+	}
+	if err != nil {
+		return a, err
+	}
+	a.CreatedAt = time.Unix(createdTS, 0)
+	if lastLogin.Valid {
+		t := time.Unix(lastLogin.Int64, 0)
+		a.LastLoginAt = &t
+	}
+	return a, nil
+}
+
+func (s *Store) GetAdminByID(id int64) (Admin, error) {
+	var a Admin
+	var createdTS int64
+	var lastLogin sql.NullInt64
+	err := s.DB.QueryRow(`SELECT id, username, password_hash, created_at, last_login_at FROM admins WHERE id=?`, id).
+		Scan(&a.ID, &a.Username, &a.PasswordHash, &createdTS, &lastLogin)
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, ErrNotFound
+	}
+	if err != nil {
+		return a, err
+	}
+	a.CreatedAt = time.Unix(createdTS, 0)
+	if lastLogin.Valid {
+		t := time.Unix(lastLogin.Int64, 0)
+		a.LastLoginAt = &t
+	}
+	return a, nil
+}
+
+func (s *Store) SetAdminPassword(id int64, hash string) error {
+	_, err := s.DB.Exec(`UPDATE admins SET password_hash=? WHERE id=?`, hash, id)
+	return err
+}
+
+func (s *Store) TouchAdminLogin(id int64) {
+	_, _ = s.DB.Exec(`UPDATE admins SET last_login_at=? WHERE id=?`, nowTS(), id)
+}
+
+// ---- mappings ----
+
+func (s *Store) ListMappings() ([]Mapping, error) {
+	rows, err := s.DB.Query(`SELECT ` + mappingCols + ` FROM mappings ORDER BY listen_port, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Mapping
+	for rows.Next() {
+		m, err := scanMapping(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetMapping(id int64) (Mapping, error) {
+	m, err := scanMapping(s.DB.QueryRow(`SELECT `+mappingCols+` FROM mappings WHERE id=?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return m, ErrNotFound
+	}
+	return m, err
+}
+
+func (s *Store) CreateMapping(m *Mapping) (int64, error) {
+	ts := nowTS()
+	res, err := s.DB.Exec(`INSERT INTO mappings
+		(name, enabled, engine, protocol, listen_ip, listen_port, server_names, ssl_cert_id,
+		 redirect_to, websocket, http2, targets, balance, path_prefix, access_rules, extra_headers, path_routes, notes, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		m.Name, b2i(m.Enabled), m.Engine, m.Protocol, m.ListenIP, m.ListenPort,
+		mustJSON(m.ServerNames), nullInt64(m.SSLCertID), m.RedirectTo, b2i(m.WebSocket), b2i(m.HTTP2),
+		mustJSON(m.Targets), m.Balance, m.PathPrefix, mustJSON(m.AccessRules), mustJSON(m.ExtraHeaders),
+		mustJSON(m.PathRoutes), m.Notes, ts, ts)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) UpdateMapping(m *Mapping) error {
+	_, err := s.DB.Exec(`UPDATE mappings SET name=?, enabled=?, engine=?, protocol=?, listen_ip=?,
+		listen_port=?, server_names=?, ssl_cert_id=?, redirect_to=?, websocket=?, http2=?,
+		targets=?, balance=?, path_prefix=?, access_rules=?, extra_headers=?, path_routes=?, notes=?, updated_at=? WHERE id=?`,
+		m.Name, b2i(m.Enabled), m.Engine, m.Protocol, m.ListenIP, m.ListenPort,
+		mustJSON(m.ServerNames), nullInt64(m.SSLCertID), m.RedirectTo, b2i(m.WebSocket), b2i(m.HTTP2),
+		mustJSON(m.Targets), m.Balance, m.PathPrefix, mustJSON(m.AccessRules), mustJSON(m.ExtraHeaders),
+		mustJSON(m.PathRoutes), m.Notes, nowTS(), m.ID)
+	return err
+}
+
+func (s *Store) DeleteMapping(id int64) error {
+	_, err := s.DB.Exec(`DELETE FROM mappings WHERE id=?`, id)
+	if err == nil {
+		_, _ = s.DB.Exec(`DELETE FROM target_health WHERE mapping_id=?`, id)
+	}
+	return err
+}
+
+// ---- certs ----
+
+func (s *Store) ListCerts() ([]Cert, error) {
+	rows, err := s.DB.Query(`SELECT id, name, type, cert_pem, key_pem, domains, expires_at, created_at FROM ssl_certs ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Cert
+	for rows.Next() {
+		var c Cert
+		var domains string
+		var exp sql.NullInt64
+		var createdTS int64
+		if err := rows.Scan(&c.ID, &c.Name, &c.Type, &c.CertPEM, &c.KeyPEM, &domains, &exp, &createdTS); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal([]byte(domains), &c.Domains)
+		if exp.Valid {
+			t := time.Unix(exp.Int64, 0)
+			c.ExpiresAt = &t
+		}
+		c.CreatedAt = time.Unix(createdTS, 0)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetCert(id int64) (Cert, error) {
+	var c Cert
+	var domains string
+	var exp sql.NullInt64
+	var createdTS int64
+	err := s.DB.QueryRow(`SELECT id, name, type, cert_pem, key_pem, domains, expires_at, created_at FROM ssl_certs WHERE id=?`, id).
+		Scan(&c.ID, &c.Name, &c.Type, &c.CertPEM, &c.KeyPEM, &domains, &exp, &createdTS)
+	if errors.Is(err, sql.ErrNoRows) {
+		return c, ErrNotFound
+	}
+	if err != nil {
+		return c, err
+	}
+	_ = json.Unmarshal([]byte(domains), &c.Domains)
+	if exp.Valid {
+		t := time.Unix(exp.Int64, 0)
+		c.ExpiresAt = &t
+	}
+	c.CreatedAt = time.Unix(createdTS, 0)
+	return c, nil
+}
+
+func (s *Store) CreateCert(c *Cert) (int64, error) {
+	res, err := s.DB.Exec(`INSERT INTO ssl_certs(name,type,cert_pem,key_pem,domains,expires_at,created_at) VALUES(?,?,?,?,?,?,?)`,
+		c.Name, c.Type, c.CertPEM, c.KeyPEM, mustJSON(c.Domains), nullTime(c.ExpiresAt), nowTS())
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) DeleteCert(id int64) error {
+	var n int
+	if err := s.DB.QueryRow(`SELECT COUNT(*) FROM mappings WHERE ssl_cert_id=?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return fmt.Errorf("certificate is used by %d mapping(s)", n)
+	}
+	_, err := s.DB.Exec(`DELETE FROM ssl_certs WHERE id=?`, id)
+	return err
+}
+
+// ---- ports (scan snapshot) ----
+
+func (s *Store) ReplacePorts(entries []PortEntry) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM ports`); err != nil {
+		return err
+	}
+	for _, p := range entries {
+		if _, err := tx.Exec(`INSERT INTO ports(port, proto, listen_ip, process, pid, user_name, classification, managed, self)
+			VALUES(?,?,?,?,?,?,?,?,?)`,
+			p.Port, p.Proto, p.ListenIP, p.Process, p.PID, p.User, p.Classification, b2i(p.Managed), b2i(p.Self)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) ListPorts() ([]PortEntry, error) {
+	rows, err := s.DB.Query(`SELECT port, proto, listen_ip, process, pid, user_name, classification, managed, self FROM ports ORDER BY port, proto`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PortEntry
+	for rows.Next() {
+		var p PortEntry
+		var managed, self int
+		if err := rows.Scan(&p.Port, &p.Proto, &p.ListenIP, &p.Process, &p.PID, &p.User, &p.Classification, &managed, &self); err != nil {
+			return nil, err
+		}
+		p.Managed = managed == 1
+		p.Self = self == 1
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ---- health ----
+
+func (s *Store) UpsertHealth(h TargetHealth) error {
+	_, err := s.DB.Exec(`INSERT INTO target_health(mapping_id, target_index, host, port, status, latency_ms, fail_count, last_check_at)
+		VALUES(?,?,?,?,?,?,?,?)
+		ON CONFLICT(mapping_id, target_index) DO UPDATE SET
+		  host=excluded.host, port=excluded.port, status=excluded.status, latency_ms=excluded.latency_ms,
+		  fail_count=excluded.fail_count, last_check_at=excluded.last_check_at`,
+		h.MappingID, h.TargetIndex, h.Host, h.Port, h.Status, h.LatencyMS, h.FailCount, nullTime(h.LastCheckAt))
+	return err
+}
+
+func (s *Store) ListHealth() ([]TargetHealth, error) {
+	rows, err := s.DB.Query(`SELECT mapping_id, target_index, host, port, status, latency_ms, fail_count, last_check_at FROM target_health`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TargetHealth
+	for rows.Next() {
+		var h TargetHealth
+		var last sql.NullInt64
+		if err := rows.Scan(&h.MappingID, &h.TargetIndex, &h.Host, &h.Port, &h.Status, &h.LatencyMS, &h.FailCount, &last); err != nil {
+			return nil, err
+		}
+		if last.Valid {
+			t := time.Unix(last.Int64, 0)
+			h.LastCheckAt = &t
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// ---- audit ----
+
+func (s *Store) Audit(actor, action, detail, status string) {
+	_, _ = s.DB.Exec(`INSERT INTO audit_logs(actor, action, detail, status, created_at) VALUES(?,?,?,?,?)`,
+		actor, action, detail, status, nowTS())
+}
+
+func (s *Store) ListAudit(limit int) ([]AuditLog, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := s.DB.Query(`SELECT id, actor, action, detail, status, created_at FROM audit_logs ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AuditLog
+	for rows.Next() {
+		var a AuditLog
+		var createdTS int64
+		if err := rows.Scan(&a.ID, &a.Actor, &a.Action, &a.Detail, &a.Status, &createdTS); err != nil {
+			return nil, err
+		}
+		a.CreatedAt = time.Unix(createdTS, 0)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func nullInt64(p *int64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func nullTime(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.Unix()
+}

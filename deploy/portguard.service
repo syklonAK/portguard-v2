@@ -1,0 +1,15 @@
+[Unit]
+Description=PortGuard — Port & Reverse Proxy Manager
+After=network-online.target nginx.service haproxy.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/opt/portguard/bin/portguard -port 8080 -db /var/lib/portguard/portguard.db
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

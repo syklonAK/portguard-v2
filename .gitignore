@@ -1,0 +1,21 @@
+# build artifacts
+bin/
+web/node_modules/
+
+# runtime data
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# environment / secrets
+.env
+
+# the embedded dashboard ships prebuilt in the repo (web/dist) so the
+# one-line installer does not need Node; keep *.key from blocking it below.
+!web/dist/
+
+# editor
+.idea/
+.vscode/
+*.swp

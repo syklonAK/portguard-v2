@@ -1,0 +1,10 @@
+# normalize line endings — shell scripts and systemd units must stay LF
+* text=auto
+*.sh text eol=lf
+*.service text eol=lf
+Makefile text eol=lf
+*.go text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.md text eol=lf
