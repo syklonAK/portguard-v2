@@ -49,6 +49,21 @@ From an existing checkout:
 sudo bash /opt/portguard/deploy/install.sh
 ```
 
+### Uninstall
+
+```bash
+# remove the panel (data and nginx/haproxy kept)
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/uninstall.sh)"
+
+# full purge including data (admins, mappings, certs, backups)
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/uninstall.sh)" -- --purge-data --yes
+
+# everything, including nginx & haproxy
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/uninstall.sh)" -- --purge-data --purge-packages --yes
+```
+
+From an existing checkout: `sudo bash /opt/portguard/deploy/uninstall.sh [--purge-data] [--purge-packages] [--yes]`
+
 ### Build from source
 
 ```bash

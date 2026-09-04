@@ -98,7 +98,6 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-
 ```bash
 sudo bash /opt/portguard/deploy/install.sh
 ```
-
 اسکریپت نصب به‌صورت خودکار:
 1. **Nginx** و **HAProxy** و `libnginx-mod-stream` را نصب می‌کند (و site پیش‌فرض را خنثی می‌کند تا با سرویس‌های موجود تداخل نکند)
 2. در نبود Go، آخرین نسخه را نصب می‌کند
@@ -114,6 +113,21 @@ http://<IP-سرور>:8080
 اولین بازدید، ویزارد ساخت حساب ادمین را نشان می‌دهد. 🎉
 
 > پورت پنل را می‌توانید با متغیر `PORTGUARD_PORT` عوض کنید: `PORTGUARD_PORT=9000 sudo -E bash deploy/install.sh`
+
+### حذف (Uninstall)
+
+```bash
+# حذف پنل (دیتا و nginx/haproxy نگه داشته می‌شوند)
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/uninstall.sh)"
+
+# حذف کامل همراه با دیتا (ادمین، مپینگ‌ها، گواهی‌ها، بکاپ‌ها)
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/uninstall.sh)" -- --purge-data --yes
+
+# حذف خیلی کامل: حتی nginx و haproxy هم پاک شوند
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/uninstall.sh)" -- --purge-data --purge-packages --yes
+```
+
+از سورس موجود: `sudo bash /opt/portguard/deploy/uninstall.sh [--purge-data] [--purge-packages] [--yes]`
 
 ### بیلد از سورس
 
