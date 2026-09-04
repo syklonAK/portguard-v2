@@ -60,6 +60,11 @@ log "binary ready: $APP_DIR/bin/portguard"
 mkdir -p "$DATA_DIR" "$DATA_DIR/certs" "$DATA_DIR/backups"
 chmod 750 "$DATA_DIR/certs"
 
+# ---- firewall: allow the panel port when ufw is active ----
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi "Status: active"; then
+  ufw allow "${PANEL_PORT}/tcp" >/dev/null 2>&1 && log "ufw: allowed port ${PANEL_PORT}/tcp"
+fi
+
 # ---- systemd ----
 sed "s|-port 8080|-port ${PANEL_PORT}|; s|/var/lib/portguard/portguard.db|${DATA_DIR}/portguard.db|" \
   "$APP_DIR/deploy/portguard.service" > /etc/systemd/system/portguard.service

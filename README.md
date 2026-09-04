@@ -83,14 +83,14 @@ reload صفر-قطعی (اگر سرویس خاموش بود: start)
 ### نصب با یک فرمان (تک‌خطی)
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard/main/deploy/remote-install.sh)"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/remote-install.sh)"
 ```
 
 این فرمان به‌صورت خودکار مخزن را در `/opt/portguard` کلون/به‌روزرسانی می‌کند و نصب کامل را اجرا می‌کند.
 
 > پورت پنل را می‌توانید با متغیر `PORTGUARD_PORT` عوض کنید:
 > ```bash
-> sudo PORTGUARD_PORT=9000 bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard/main/deploy/remote-install.sh)"
+> sudo PORTGUARD_PORT=9000 bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/remote-install.sh)"
 > ```
 
 ### نصب روی سرور (از سورس موجود)

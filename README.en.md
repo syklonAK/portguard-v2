@@ -31,14 +31,14 @@ PortGuard is a lightweight, single-binary web tool that runs on your Ubuntu serv
 One line:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard/main/deploy/remote-install.sh)"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/remote-install.sh)"
 # open http://<server-ip>:8080 — the first visit creates the admin account
 ```
 
 Custom panel port:
 
 ```bash
-sudo PORTGUARD_PORT=9000 bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard/main/deploy/remote-install.sh)"
+sudo PORTGUARD_PORT=9000 bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/remote-install.sh)"
 ```
 
 The installer clones the repo to `/opt/portguard`, sets up **nginx + haproxy + libnginx-mod-stream**, installs Go if missing, builds the binary (the dashboard is prebuilt and embedded — no Node needed) and registers the `portguard` systemd service.

@@ -3,7 +3,7 @@
 #  PortGuard — one-line remote installer
 #
 #  Install:
-#    sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard/main/deploy/remote-install.sh)"
+#    sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-v2/main/deploy/remote-install.sh)"
 #
 #  Custom panel port:
 #    sudo PORTGUARD_PORT=9000 bash -c "$(curl -fsSL ...)"
@@ -13,7 +13,7 @@
 # =============================================================================
 set -euo pipefail
 
-REPO="https://github.com/syklonAK/portguard"
+REPO="https://github.com/syklonAK/portguard-v2"
 APP_DIR="/opt/portguard"
 
 say() { echo -e "\033[1;35m[install]\033[0m $*"; }
