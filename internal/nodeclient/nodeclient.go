@@ -145,6 +145,42 @@ func (c *Client) Tools() ([]ToolState, error) {
 	return out.Tools, nil
 }
 
+// Get performs a token-authenticated GET returning the raw JSON.
+func (c *Client) Get(path string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.do(http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Post sends a JSON body and returns the raw JSON response.
+func (c *Client) Post(path string, body any) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.do(http.MethodPost, path, body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Put sends a JSON body and returns the raw JSON response.
+func (c *Client) Put(path string, body any) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.do(http.MethodPut, path, body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Delete performs a token-authenticated DELETE returning the raw JSON.
+func (c *Client) Delete(path string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.do(http.MethodDelete, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InstallTool runs the official installer for one tool on the node.
 func (c *Client) InstallTool(id string) (*InstallResult, error) {
 	var out InstallResult

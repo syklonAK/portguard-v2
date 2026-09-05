@@ -140,19 +140,28 @@ func (a *App) Router() http.Handler {
 		pr.Get("/api/node-self", a.handleNodeTokenInfo)
 		pr.Put("/api/node-self", a.handlePutNodeToken)
 
+		// v2.5: remote node management (mappings + certs via the node API)
+		pr.Get("/api/nodes/{id}/mappings", a.handleNodeMappingsProxy)
+		pr.Post("/api/nodes/{id}/mappings", a.handleNodeMappingCreate)
+		pr.Put("/api/nodes/{id}/mappings/{mid}", a.handleNodeMappingUpdate)
+		pr.Delete("/api/nodes/{id}/mappings/{mid}", a.handleNodeMappingDelete)
+		pr.Get("/api/nodes/{id}/certs", a.handleNodeCertsProxy)
+		pr.Post("/api/nodes/{id}/certs", a.handleNodeCertCreate)
+
 		// v2.4: tools (local)
 		pr.Get("/api/tools", a.handleTools)
 		pr.Post("/api/tools/{tool}/install", a.handleToolInstall)
 	})
 
-	// node API (master→node, token-authenticated, no admin JWT)
-	r.Get("/api/node/ping", a.handleNodePing)
-	r.Get("/api/node/summary", a.handleNodeSummary)
-	r.Get("/api/node/mappings", a.handleNodeMappings)
-	r.Post("/api/node/apply", a.handleNodeApply)
-	r.Get("/api/node/connections", a.handleNodeConnections)
-	r.Get("/api/node/tools", a.handleNodeTools)
-	r.Post("/api/node/tools/{tool}/install", a.handleNodeToolInstall)
+	// node API (master→node, token-authenticated, no admin JWT). Panels and
+	// headless agents expose the same surface; the Agent router carries the
+	// full contract (mappings/certs CRUD, apply, tools, tunnel, ...).
+	r.Mount("/api/node/", (&Agent{App: a}).Router())
+
+	// node bootstrap: the master serves its own binary + the installer
+	// script so a new server needs nothing but curl.
+	r.Get("/api/node/binary", a.handleNodeBinary)
+	r.Get("/api/agent-install.sh", a.handleAgentInstaller)
 
 	// SPA (embedded)
 	dist, err := fs.Sub(web.Dist, "dist")

@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Pencil, Trash2, RefreshCw, Server, Globe2, KeyRound, Zap, Activity,
-  RadioTower, Landmark, Cpu, HardDrive, HeartPulse, Waypoints, Wrench, Download,
+  RadioTower, Landmark, Cpu, HardDrive, HeartPulse, Waypoints, Wrench, Download, Rocket, ArrowLeftRight,
 } from 'lucide-react'
 import { api, type ServerNode, type NodeSummary, type ToolState, type ToolInstallResult } from '../api'
-import { Badge, Button, Card, CardHeader, CodeBlock, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
+import { Badge, Button, Card, CardHeader, CodeBlock, CodeEditor, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
 
 const ROLES: { value: ServerNode['role']; label: string; desc: string }[] = [
@@ -54,6 +54,21 @@ export default function Servers() {
   const [toolsLoading, setToolsLoading] = useState(false)
   const [installingTool, setInstallingTool] = useState<string | null>(null)
   const [toolOutput, setToolOutput] = useState<ToolInstallResult | null>(null)
+  const [deployModal, setDeployModal] = useState(false)
+  const [manageModal, setManageModal] = useState<ServerNode | null>(null)
+  const [manageTab, setManageTab] = useState<'mappings' | 'certs'>('mappings')
+  const [remoteMappings, setRemoteMappings] = useState<any[] | null>(null)
+  const [remoteCerts, setRemoteCerts] = useState<any[] | null>(null)
+  const [manageLoading, setManageLoading] = useState(false)
+  const [newMappingJSON, setNewMappingJSON] = useState('')
+  const [jsonInvalid, setJsonInvalid] = useState(false)
+
+  // location of this master panel (for the one-liner)
+  const [origin, setOrigin] = useState('')
+  useEffect(() => { setOrigin(window.location.origin) }, [])
+
+  const genToken = () => crypto.randomUUID().replace(/-/g, '')
+  const [deployToken, setDeployToken] = useState('')
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['nodes'] })
 
@@ -153,6 +168,71 @@ export default function Servers() {
     }
   }
 
+  const openManage = async (n: ServerNode) => {
+    setManageModal(n)
+    setManageTab('mappings')
+    setManageLoading(true)
+    setNewMappingJSON('')
+    try {
+      const [ms, cs] = await Promise.all([api.nodeMappings(n.id), api.nodeCerts(n.id)])
+      setRemoteMappings(ms ?? [])
+      setRemoteCerts(cs ?? [])
+    } catch (e: any) {
+      push('error', e.message)
+      setManageModal(null)
+    } finally {
+      setManageLoading(false)
+    }
+  }
+
+  const reloadManage = async () => {
+    if (!manageModal) return
+    const [ms, cs] = await Promise.all([api.nodeMappings(manageModal.id), api.nodeCerts(manageModal.id)])
+    setRemoteMappings(ms ?? [])
+    setRemoteCerts(cs ?? [])
+  }
+
+  const createRemoteMapping = async () => {
+    if (!manageModal) return
+    let parsed: any
+    try {
+      parsed = JSON.parse(newMappingJSON)
+    } catch {
+      push('error', 'Invalid JSON')
+      return
+    }
+    delete parsed.id
+    try {
+      await api.nodeCreateMapping(manageModal.id, parsed)
+      push('success', 'Mapping created on the remote server. Use Apply to activate.')
+      setNewMappingJSON('')
+      await reloadManage()
+    } catch (e: any) {
+      push('error', e.message)
+    }
+  }
+
+  const deleteRemoteMapping = async (mid: number) => {
+    if (!manageModal) return
+    try {
+      await api.nodeDeleteMapping(manageModal.id, mid)
+      push('success', 'Mapping deleted on the remote server.')
+      await reloadManage()
+    } catch (e: any) {
+      push('error', e.message)
+    }
+  }
+
+  const applyRemote = async () => {
+    if (!manageModal) return
+    try {
+      await api.nodeApply(manageModal.id)
+      push('success', 'Apply pipeline started on the remote server.')
+    } catch (e: any) {
+      push('error', e.message)
+    }
+  }
+
   const selfRole = selfInfo.data?.role || 'standalone'
 
   return (
@@ -167,6 +247,9 @@ export default function Servers() {
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => { nodes.refetch(); selfInfo.refetch() }}>
             <RefreshCw className="h-4 w-4" /> Refresh
+          </Button>
+          <Button variant="success" onClick={() => { setDeployToken(genToken()); setDeployModal(true) }}>
+            <Rocket className="h-4 w-4" /> Deploy new node
           </Button>
           <Button onClick={() => { setDraft(emptyNode()); setTokenDraft(''); setModal('create') }}>
             <Plus className="h-4 w-4" /> Add server
@@ -294,6 +377,9 @@ export default function Servers() {
                 <Button variant="secondary" size="sm" onClick={() => openTools(n)}>
                   <Wrench className="h-3.5 w-3.5" /> Tools
                 </Button>
+                <Button variant="secondary" size="sm" onClick={() => openManage(n)}>
+                  <ArrowLeftRight className="h-3.5 w-3.5" /> Manage
+                </Button>
                 <Button variant="secondary" size="sm" onClick={() => remoteApply.mutate(n)} disabled={remoteApply.isPending}>
                   <Zap className="h-3.5 w-3.5" /> Apply
                 </Button>
@@ -363,6 +449,151 @@ export default function Servers() {
             <Button onClick={save} disabled={saving || !draft.name || !draft.host}>{saving ? 'Saving…' : 'Save server'}</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* deploy new node modal: one-liner + token */}
+      <Modal open={deployModal} onClose={() => setDeployModal(false)} wide
+        title="Deploy a new node — no panel install needed">
+        <div className="space-y-4">
+          <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+            Run this single command on the new Ubuntu server. It downloads <b>this master's own binary</b>,
+            installs it as a headless <b>portguard-agent</b> service and registers the token below.
+            Afterwards, click <b>Add server</b> with the same token — the node is fully managed from here.
+          </p>
+          <Field label="1. Node token (generated — copy it)">
+            <div className="flex gap-2">
+              <Input readOnly className="font-mono" value={deployToken} />
+              <Button variant="secondary" onClick={() => { setDeployToken(genToken()) }} title="Regenerate">
+                <KeyRound className="h-4 w-4" />
+              </Button>
+            </div>
+          </Field>
+          <Field label="2. Pick the node role">
+            <div className="text-2xs leading-relaxed text-slate-500 dark:text-slate-400">
+              Pass <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">-role iran</code> or
+              <code className="mx-1 rounded bg-slate-100 px-1 dark:bg-slate-800">-role foreign</code> for tunnel
+              servers; default is <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">generic</code>.
+            </div>
+          </Field>
+          <Field label="3. One-liner (run as root on the new server)">
+            <CodeBlock
+              label=""
+              code={`sudo bash -c "$(curl -fsSL ${origin}/api/agent-install.sh)" -- -master ${origin} -token ${deployToken}`}
+            />
+          </Field>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-2xs leading-relaxed text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
+            The agent listens on port <b>8081</b> (override with <code>AGENT_PORT</code>). Make sure your firewall
+            allows the master to reach it. The binary download link
+            (<code>{'{origin}'}/api/node/binary</code>) is protected by this same token.
+          </div>
+        </div>
+      </Modal>
+
+      {/* manage remote node modal: mappings + certs */}
+      <Modal open={manageModal !== null} onClose={() => setManageModal(null)} wide
+        title={manageModal ? `Manage — ${manageModal.name} (${manageModal.host}:${manageModal.port})` : ''}>
+        {manageModal && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/60">
+                {(['mappings', 'certs'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setManageTab(t)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize ${
+                      manageTab === t ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-900 dark:text-indigo-300' : 'text-slate-500'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={reloadManage}><RefreshCw className="h-3.5 w-3.5" /></Button>
+                <Button variant="success" size="sm" onClick={applyRemote}><Zap className="h-3.5 w-3.5" /> Apply on node</Button>
+              </div>
+            </div>
+
+            {manageLoading ? (
+              <div className="flex justify-center py-12"><Spinner /></div>
+            ) : manageTab === 'mappings' ? (
+              <>
+                {(remoteMappings ?? []).length === 0 ? (
+                  <Empty message="No mappings on this node yet." />
+                ) : (
+                  <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {(remoteMappings ?? []).map((m: any) => (
+                          <tr key={m.id}>
+                            <td className="px-4 py-2.5 font-medium">{m.name}</td>
+                            <td className="px-3 py-2.5"><Badge color={m.engine === 'nginx' ? 'green' : 'purple'}>{m.engine}</Badge></td>
+                            <td className="px-3 py-2.5"><Badge color="slate">{m.protocol}</Badge></td>
+                            <td className="px-3 py-2.5 font-mono text-xs">{m.listen_ip}:{m.listen_port}</td>
+                            <td className="px-3 py-2.5 text-xs text-slate-500">{m.targets?.map((t: any) => `${t.host}:${t.port}`).join(', ') || (m.path_routes?.length ? 'path routes' : '—')}</td>
+                            <td className="px-3 py-2.5 text-right">
+                              <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteRemoteMapping(m.id)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div>
+                  <div className="mb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                    Create mapping (raw JSON — same shape as the local editor)
+                  </div>
+                  <CodeEditor
+                    rows={7}
+                    value={newMappingJSON}
+                    onChange={setNewMappingJSON}
+                    onValidate={(ok) => setJsonInvalid(!ok)}
+                    invalid={jsonInvalid}
+                    placeholder={`{\n  "name": "web",\n  "enabled": true,\n  "engine": "nginx",\n  "protocol": "http",\n  "listen_ip": "0.0.0.0",\n  "listen_port": 8081,\n  "server_names": ["example.com"],\n  "targets": [{ "host": "127.0.0.1", "port": 3000 }]\n}`}
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <Button size="sm" onClick={createRemoteMapping} disabled={!newMappingJSON.trim() || jsonInvalid}>
+                      <Plus className="h-3.5 w-3.5" /> Create on node
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
+                {(remoteCerts ?? []).length === 0 ? (
+                  <Empty message="No certificates on this node." />
+                ) : (
+                  <div className="max-h-48 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {(remoteCerts ?? []).map((c: any) => (
+                          <tr key={c.id}>
+                            <td className="px-4 py-2.5 font-medium">{c.name}</td>
+                            <td className="px-3 py-2.5"><Badge color={c.type === 'manual' ? 'blue' : 'amber'}>{c.type}</Badge></td>
+                            <td className="px-3 py-2.5 text-xs text-slate-500">{(c.domains ?? []).join(', ')}</td>
+                            <td className="px-3 py-2.5 text-2xs text-slate-400">
+                              {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="text-2xs leading-relaxed text-slate-400">
+                  Upload certs for this node from your local SSL Certs page: copy the PEM pair and POST it here
+                  (API: <code>POST /api/nodes/{manageModal.id}/certs</code> with
+                  <code> name / cert_pem / key_pem / domains</code>). The apply pipeline writes
+                  <code> .crt/.key</code> files on the node automatically.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* remote tools modal */}

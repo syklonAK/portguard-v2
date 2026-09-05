@@ -378,6 +378,15 @@ export const api = {
   nodeInstallTool: (nodeId: number, tool: string) =>
     req<ToolInstallResult>('POST', `/api/nodes/${nodeId}/install`, { tool }),
 
+  // v2.5: remote node management
+  nodeMappings: (nodeId: number) => req<any[]>('GET', `/api/nodes/${nodeId}/mappings`),
+  nodeCreateMapping: (nodeId: number, m: any) => req<any>('POST', `/api/nodes/${nodeId}/mappings`, m),
+  nodeUpdateMapping: (nodeId: number, mid: number, m: any) => req<any>('PUT', `/api/nodes/${nodeId}/mappings/${mid}`, m),
+  nodeDeleteMapping: (nodeId: number, mid: number) => req<any>('DELETE', `/api/nodes/${nodeId}/mappings/${mid}`),
+  nodeCerts: (nodeId: number) => req<any[]>('GET', `/api/nodes/${nodeId}/certs`),
+  nodeCreateCert: (nodeId: number, c: any) => req<any>('POST', `/api/nodes/${nodeId}/certs`, c),
+  nodeApply: (nodeId: number) => req<any>('POST', `/api/nodes/${nodeId}/apply`),
+
   // v2.2: live connections
   connections: (params?: { dst_port?: string; managed?: '1' | '0' }) => {
     const q = new URLSearchParams()

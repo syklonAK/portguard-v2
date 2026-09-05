@@ -30,6 +30,7 @@ export default function Layout() {
   const qc = useQueryClient()
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
   const me = useQuery({ queryKey: ['me'], queryFn: () => api.me(), staleTime: 60_000 })
+  const system = useQuery({ queryKey: ['version'], queryFn: () => api.system(), staleTime: Infinity, select: (s) => s.version })
 
   const toggleTheme = () => {
     const next = !dark
@@ -53,7 +54,12 @@ export default function Layout() {
             <ShieldHalf className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-sm font-bold tracking-tight">PortGuard</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold tracking-tight">PortGuard</span>
+              <span className="rounded bg-indigo-50 px-1 py-0.5 font-mono text-2xs font-medium text-indigo-500 dark:bg-indigo-500/10 dark:text-indigo-300" title="panel version">
+                v{system.data || '…'}
+              </span>
+            </div>
             <div className="text-2xs text-slate-400">Port & Proxy Manager</div>
           </div>
         </div>

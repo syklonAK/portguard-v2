@@ -24,7 +24,7 @@ import (
 	"portguard/internal/sysinfo"
 )
 
-var version = "2.0.0"
+var version = "2.5.0"
 
 func envInt(key string, def int) int {
 	if v := os.Getenv(key); v != "" {
@@ -42,46 +42,24 @@ func envStr(key, def string) string {
 	return def
 }
 
-// markManaged sets the Managed flag using enabled mappings; proxy engines
-// themselves (nginx/haproxy processes) are considered managed by the tool too.
-func markManaged(st *store.Store, entries []store.PortEntry) {
-	mappings, err := st.ListMappings()
-	if err != nil {
-		return
-	}
-	managedPorts := map[int]bool{}
-	for _, m := range mappings {
-		if m.Enabled {
-			managedPorts[m.ListenPort] = true
-		}
-	}
-	for i := range entries {
-		e := &entries[i]
-		e.Managed = managedPorts[e.Port] ||
-			e.Classification == "web-server" || e.Classification == "load-balancer"
-	}
-}
-
-func runScan(st *store.Store, scn *scanner.Scanner, port int, broker *api.Broker) {
-	entries, err := scn.Scan(port)
-	if err != nil {
-		log.Printf("scan error: %v", err)
-		return
-	}
-	markManaged(st, entries)
-	if err := st.ReplacePorts(entries); err != nil {
-		log.Printf("scan store error: %v", err)
-		return
-	}
-	_ = st.SetSetting("last_scan_at", time.Now().Format(time.RFC3339))
-	broker.Publish("scan", map[string]int{"count": len(entries)})
-}
-
 func main() {
+	// agent subcommand: run as a headless managed node instead of a full
+	// panel — new servers need only this binary + the master token.
+	if len(os.Args) > 1 && os.Args[1] == "agent" {
+		runAgent(os.Args[2:])
+		return
+	}
+
 	port := flag.Int("port", envInt("PORTGUARD_PORT", 8080), "panel listen port")
 	host := flag.String("host", envStr("PORTGUARD_HOST", "0.0.0.0"), "panel listen host")
 	dbPath := flag.String("db", envStr("PORTGUARD_DB", "/var/lib/portguard/portguard.db"), "sqlite database path")
 	flag.Parse()
+
+	log.Printf("PortGuard v%s starting on %s:%d", version, *host, *port)
+
+	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o755); err != nil {
+		log.Fatalf("cannot create data dir: %v", err)
+	}
 
 	log.Printf("PortGuard v%s starting on %s:%d", version, *host, *port)
 
@@ -207,4 +185,138 @@ func displayHost(h string) string {
 		return "127.0.0.1"
 	}
 	return h
+}
+
+// markManaged sets the Managed flag using enabled mappings; proxy engines
+// themselves (nginx/haproxy processes) are considered managed by the tool too.
+func markManaged(st *store.Store, entries []store.PortEntry) {
+	mappings, err := st.ListMappings()
+	if err != nil {
+		return
+	}
+	managedPorts := map[int]bool{}
+	for _, m := range mappings {
+		if m.Enabled {
+			managedPorts[m.ListenPort] = true
+		}
+	}
+	for i := range entries {
+		e := &entries[i]
+		e.Managed = managedPorts[e.Port] ||
+			e.Classification == "web-server" || e.Classification == "load-balancer"
+	}
+}
+
+func runScan(st *store.Store, scn *scanner.Scanner, port int, broker *api.Broker) {
+	entries, err := scn.Scan(port)
+	if err != nil {
+		log.Printf("scan error: %v", err)
+		return
+	}
+	markManaged(st, entries)
+	if err := st.ReplacePorts(entries); err != nil {
+		log.Printf("scan store error: %v", err)
+		return
+	}
+	_ = st.SetSetting("last_scan_at", time.Now().Format(time.RFC3339))
+	if broker != nil {
+		broker.Publish("scan", map[string]int{"count": len(entries)})
+	}
+}
+
+// runAgent is the headless node mode: the same single binary runs without
+// the web UI, admin accounts or the master features — it only exposes the
+// token-authenticated /api/node/* surface for its master, plus periodic
+// port scans and connection sampling so summaries stay live.
+func runAgent(args []string) {
+	fs := flag.NewFlagSet("agent", flag.ExitOnError)
+	port := fs.Int("port", envInt("PORTGUARD_PORT", 8081), "agent listen port")
+	host := fs.String("host", envStr("PORTGUARD_HOST", "0.0.0.0"), "agent listen host")
+	dbPath := fs.String("db", envStr("PORTGUARD_DB", "/var/lib/portguard/node.db"), "sqlite database path")
+	token := fs.String("token", envStr("PORTGUARD_NODE_TOKEN", ""), "master token (also settable via the DB)")
+	role := fs.String("role", envStr("PORTGUARD_NODE_ROLE", "generic"), "node role: generic|iran|foreign")
+	_ = fs.Parse(args)
+
+	log.Printf("PortGuard agent v%s starting on %s:%d", version, *host, *port)
+
+	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o755); err != nil {
+		log.Fatalf("cannot create data dir: %v", err)
+	}
+	st, err := store.Open(*dbPath)
+	if err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	defer st.DB.Close()
+
+	if *token != "" {
+		_ = st.SetSetting("node_token", *token)
+	}
+	if *role != "" {
+		_ = st.SetSetting("node_role", *role)
+	}
+	if st.GetSettingOr("node_token", "") == "" {
+		log.Fatal("no node token: pass -token or PORTGUARD_NODE_TOKEN (the master generates one when adding the server)")
+	}
+
+	paths := proxy.DefaultPaths()
+	_ = os.MkdirAll(paths.CertsDir, 0o750)
+	_ = os.MkdirAll(paths.BackupsDir, 0o755)
+
+	broker := api.NewBroker()
+	svc := service.New(st, paths, *port)
+	scn := scanner.New()
+
+	app := &api.App{
+		St: st, Svc: svc, Broker: broker,
+		Scanner: scn, PanelPort: *port, Version: version,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// periodic port scan keeps Ports/summary data fresh
+	go func() {
+		time.Sleep(2 * time.Second)
+		runScan(st, scn, *port, broker)
+		for {
+			t := time.NewTimer(5 * time.Minute)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
+			runScan(st, scn, *port, broker)
+		}
+	}()
+
+	// health checks feed the master's overview
+	checker := health.New(st, 30*time.Second, broker)
+	go checker.Run(ctx)
+
+	// live connection sampling
+	connSampler := conntrack.NewSampler(st, *port)
+	go connSampler.Run(5*time.Second, ctx.Done())
+
+	agent := &api.Agent{App: app}
+	srv := &http.Server{
+		Addr:              net.JoinHostPort(*host, strconv.Itoa(*port)),
+		Handler:           agent.Router(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("agent listen: %v", err)
+		}
+	}()
+	log.Printf("PortGuard agent ready on %s:%d (role=%s)", displayHost(*host), *port, st.GetSettingOr("node_role", "generic"))
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+	log.Println("agent shutting down...")
+	shCtx, shCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shCancel()
+	_ = srv.Shutdown(shCtx)
+	cancel()
 }

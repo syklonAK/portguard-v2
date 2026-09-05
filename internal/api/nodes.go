@@ -1,7 +1,10 @@
 package api
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -135,7 +138,106 @@ func (a *App) handleNodeConnections(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- node-side tools API ----
+// handleNodeBinary streams this panel's own linux-amd64 binary to a new
+// server so `agent-install.sh` can install the node without any build step.
+// The download link is protected by the node token (the master generates a
+// per-server token exactly for this).
+func (a *App) handleNodeBinary(w http.ResponseWriter, r *http.Request) {
+	if !a.nodeAuthed(r) {
+		unauthorized(w)
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		errJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	f, err := os.Open(exe)
+	if err != nil {
+		errJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="portguard"`)
+	_, _ = io.Copy(w, f)
+}
+
+// handleAgentInstaller serves deploy/agent-install.sh so the one-liner can
+// be copy-pasted from the master UI without a GitHub round-trip.
+func (a *App) handleAgentInstaller(w http.ResponseWriter, r *http.Request) {
+	// public: the script itself contains no secrets; the -token arg is added
+	// by the user when running it
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	_, _ = w.Write([]byte(agentInstallScript))
+}
+
+// agentInstallScript is the embedded node installer served by the master
+// (kept in sync with deploy/agent-install.sh).
+const agentInstallScript = `#!/usr/bin/env bash
+set -euo pipefail
+APP_DIR="/opt/portguard-agent"
+UNIT="/etc/systemd/system/portguard-agent.service"
+AGENT_PORT="${AGENT_PORT:-8081}"
+MASTER=""
+TOKEN=""
+ROLE="${ROLE:-generic}"
+say() { echo -e "\033[1;35m[agent-install]\033[0m $*"; }
+die() { echo -e "\033[1;31m[agent-install:ERROR]\033[0m $*" >&2; exit 1; }
+[ "$(id -u)" = "0" ] || die "run as root (sudo)"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -master) MASTER="$2"; shift 2 ;;
+    -token)  TOKEN="$2"; shift 2 ;;
+    -role)   ROLE="$2"; shift 2 ;;
+    -port)   AGENT_PORT="$2"; shift 2 ;;
+    *) die "unknown option: $1" ;;
+  esac
+done
+[ -n "$MASTER" ] || die "usage: bash portguard-agent-install.sh -master http://MASTER:8080 -token TOKEN [-role generic] [-port 8081]"
+[ -n "$TOKEN" ]  || die "missing -token"
+case "$ROLE" in generic|iran|foreign) ;; *) die "role must be generic, iran or foreign" ;; esac
+command -v curl >/dev/null 2>&1 || {
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y -qq >/dev/null 2>&1
+  apt-get install -y -qq curl >/dev/null 2>&1
+}
+say "downloading portguard binary from the master (${MASTER})…"
+mkdir -p "$APP_DIR"
+curl -fsSL --connect-timeout 10 -H "Authorization: Bearer ${TOKEN}" "${MASTER}/api/node/binary" -o "${APP_DIR}/portguard.new" \
+  || die "could not download the binary — check master reachability and the token"
+chmod +x "${APP_DIR}/portguard.new"
+if ! "${APP_DIR}/portguard.new" agent 2>&1 | head -1 | grep -qi portguard; then
+  die "downloaded binary failed its smoke test — the master may serve a different architecture"
+fi
+mv "${APP_DIR}/portguard.new" "${APP_DIR}/portguard"
+mkdir -p /var/lib/portguard
+cat > "$UNIT" <<EOF
+[Unit]
+Description=PortGuard managed node (agent)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${APP_DIR}/portguard agent -port ${AGENT_PORT} -token ${TOKEN} -role ${ROLE}
+Restart=always
+RestartSec=3
+LimitNOFILE=1000000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now portguard-agent
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi "Status: active"; then
+  ufw allow "${AGENT_PORT}/tcp" >/dev/null 2>&1 && say "ufw: allowed ${AGENT_PORT}/tcp"
+fi
+sleep 1
+systemctl is-active --quiet portguard-agent \
+  && say "agent running on port ${AGENT_PORT} (role: ${ROLE}) — now add this server in the master's Servers page" \
+  || { journalctl -u portguard-agent -n 20 --no-pager; die "agent failed to start"; }
+`
 
 // handleNodeTools reports which managed tools are installed on this server.
 func (a *App) handleNodeTools(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +287,148 @@ func (a *App) handleToolInstall(w http.ResponseWriter, r *http.Request) {
 	}
 	a.St.Audit(actorFrom(r.Context()), "tool.install "+id, res.Elapsed, status)
 	writeJSON(w, http.StatusOK, res)
+}
+
+// ---- remote mapping management (master drives a node's mappings) ----
+
+func (a *App) nodeClient(r *http.Request) (*nodeclient.Client, int64, error) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	n, err := a.St.GetServerNode(id)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !n.Enabled {
+		return nil, 0, errString("server is disabled")
+	}
+	return nodeclient.New(n.Host, n.Port, n.APIToken), id, nil
+}
+
+// handleNodeMappingsProxy forwards the mapping list from a remote node.
+func (a *App) handleNodeMappingsProxy(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Get("/mappings")
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeMappingCreate creates a mapping ON the remote node.
+func (a *App) handleNodeMappingCreate(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	var body json.RawMessage
+	if !readJSONRaw(w, r, &body) {
+		return
+	}
+	out, err := cli.Post("/mappings", body)
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.mapping.create", "via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeMappingUpdate updates a mapping ON the remote node.
+func (a *App) handleNodeMappingUpdate(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	var body json.RawMessage
+	if !readJSONRaw(w, r, &body) {
+		return
+	}
+	out, err := cli.Put("/mappings/"+chi.URLParam(r, "mid"), body)
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.mapping.update", "via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeMappingDelete deletes a mapping ON the remote node.
+func (a *App) handleNodeMappingDelete(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Delete("/mappings/" + chi.URLParam(r, "mid"))
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.mapping.delete", "via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeCertsProxy forwards the (scrubbed) cert list from a node.
+func (a *App) handleNodeCertsProxy(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Get("/certs")
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeCertCreate uploads a PEM cert pair to the remote node.
+func (a *App) handleNodeCertCreate(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	var body json.RawMessage
+	if !readJSONRaw(w, r, &body) {
+		return
+	}
+	out, err := cli.Post("/certs", body)
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.cert.create", "via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// readJSONRaw decodes the request body preserving the raw JSON.
+func readJSONRaw(w http.ResponseWriter, r *http.Request, v *json.RawMessage) bool {
+	defer r.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "read failed"})
+		return false
+	}
+	if !json.Valid(b) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return false
+	}
+	*v = json.RawMessage(b)
+	return true
 }
 
 // ---- master-side node CRUD ----
