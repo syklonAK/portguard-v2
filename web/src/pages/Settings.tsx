@@ -19,6 +19,10 @@ export default function Settings() {
   const [autoApply, setAutoApply] = useState(false)
   const [socksHost, setSocksHost] = useState('127.0.0.1')
   const [socksPort, setSocksPort] = useState('40001')
+  const [pgURL, setPgURL] = useState('')
+  const [pgToken, setPgToken] = useState('')
+  const [rlEnabled, setRlEnabled] = useState(false)
+  const [rlSync, setRlSync] = useState('60')
 
   const [pw, setPw] = useState({ old: '', new: '', confirm: '' })
 
@@ -30,6 +34,9 @@ export default function Settings() {
       setAutoApply(settings.data.auto_apply === 'true')
       setSocksHost(settings.data.tunnel_socks_host || '127.0.0.1')
       setSocksPort(settings.data.tunnel_socks_port || '40001')
+      setPgURL(settings.data.pasarguard_url || '')
+      setRlEnabled(settings.data.rate_limiting_enabled === 'true')
+      setRlSync(settings.data.rate_limiting_sync_interval || '60')
     }
   }, [settings.data])
 
@@ -42,6 +49,10 @@ export default function Settings() {
         auto_apply: autoApply ? 'true' : 'false',
         tunnel_socks_host: socksHost,
         tunnel_socks_port: socksPort,
+        pasarguard_url: pgURL,
+        ...(pgToken.trim() ? { pasarguard_token: pgToken.trim() } : {}),
+        rate_limiting_enabled: rlEnabled ? 'true' : 'false',
+        rate_limiting_sync_interval: rlSync,
       }),
     onSuccess: () => {
       push('success', 'Settings saved')
@@ -184,6 +195,31 @@ export default function Settings() {
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save settings'}
           </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Bandwidth / PasarGuard"
+          desc="User sync source and per-UUID rate limiting (enforced on nodes with Linux tc)"
+        />
+        <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
+          <Field label="PasarGuard panel URL" hint="admin API base, e.g. https://panel.example.com">
+            <Input value={pgURL} onChange={(e) => setPgURL(e.target.value)} placeholder="https://panel.example.com" />
+          </Field>
+          <Field
+            label="PasarGuard API token"
+            hint={settings.data?.pasarguard_token_set ? 'configured — type a new one to rotate' : 'admin API token'}
+          >
+            <Input type="password" value={pgToken} onChange={(e) => setPgToken(e.target.value)} placeholder="••••••" />
+          </Field>
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+            <Toggle checked={rlEnabled} onChange={setRlEnabled} />
+            Enable bandwidth limiting (auto sync + push)
+          </label>
+          <Field label="Sync/push interval (seconds, min 10)">
+            <Input type="number" value={rlSync} min={10} onChange={(e) => setRlSync(e.target.value)} />
+          </Field>
         </div>
       </Card>
 

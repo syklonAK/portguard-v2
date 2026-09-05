@@ -16,6 +16,7 @@ import (
 
 	"portguard/internal/health"
 	"portguard/internal/proxy"
+	"portguard/internal/ratelimit"
 	"portguard/internal/scanner"
 	"portguard/internal/service"
 	"portguard/internal/store"
@@ -31,6 +32,15 @@ type App struct {
 	Scanner   *scanner.Scanner
 	PanelPort int
 	Version   string
+	RateApplierFactory func() *ratelimit.Applier // set by main; lazily builds the node applier
+}
+
+// RateApplier returns the bandwidth applier for this host (agent or panel).
+func (a *App) RateApplier() *ratelimit.Applier {
+	if a.RateApplierFactory != nil {
+		return a.RateApplierFactory()
+	}
+	return &ratelimit.Applier{}
 }
 
 type ctxKey int
@@ -151,6 +161,19 @@ func (a *App) Router() http.Handler {
 		// v2.4: tools (local)
 		pr.Get("/api/tools", a.handleTools)
 		pr.Post("/api/tools/{tool}/install", a.handleToolInstall)
+
+		// v2.6: bandwidth / per-UUID rate limiting
+		pr.Get("/api/rate-limits/status", a.handleRateLimitStatus)
+		pr.Get("/api/rate-limits/profiles", a.handleListRateProfiles)
+		pr.Post("/api/rate-limits/profiles", a.handleCreateRateProfile)
+		pr.Put("/api/rate-limits/profiles/{id}", a.handleUpdateRateProfile)
+		pr.Delete("/api/rate-limits/profiles/{id}", a.handleDeleteRateProfile)
+		pr.Get("/api/rate-limits/policies", a.handleListRatePolicies)
+		pr.Post("/api/rate-limits/policies", a.handleUpsertRatePolicy)
+		pr.Delete("/api/rate-limits/policies/{uuid}", a.handleDeleteRatePolicy)
+		pr.Post("/api/rate-limits/push", a.handleRateLimitPush)
+		pr.Post("/api/rate-limits/sync", a.handlePasarGuardSync)
+		pr.Get("/api/pasarguard/users", a.handleListPasarguardUsers)
 	})
 
 	// node API (master→node, token-authenticated, no admin JWT). Panels and

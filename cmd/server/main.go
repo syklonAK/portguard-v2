@@ -18,6 +18,7 @@ import (
 	"portguard/internal/conntrack"
 	"portguard/internal/health"
 	"portguard/internal/proxy"
+	"portguard/internal/ratelimit"
 	"portguard/internal/scanner"
 	"portguard/internal/service"
 	"portguard/internal/store"
@@ -106,6 +107,9 @@ func main() {
 	app := &api.App{
 		St: st, Svc: svc, Auth: auth, Broker: broker,
 		Scanner: scn, PanelPort: *port, Version: version,
+		RateApplierFactory: func() *ratelimit.Applier {
+			return &ratelimit.Applier{StateDir: "/var/lib/portguard"}
+		},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -156,6 +160,46 @@ func main() {
 		broker.Publish("conns", map[string]int{"count": count})
 	})
 	go connSampler.Run(5*time.Second, ctx.Done())
+
+	// v2.6: bandwidth sync loop — periodically pull PasarGuard users and
+	// push plans to enabled nodes (both intervals re-read each round from
+	// settings so they apply live)
+	go func() {
+		every := func(key string, def int) time.Duration {
+			if v, err := st.GetSetting(key); err == nil && v != "" {
+				if n, err := strconv.Atoi(v); err == nil && n >= 10 {
+					return time.Duration(n) * time.Second
+				}
+			}
+			return time.Duration(def) * time.Second
+		}
+		enabled := func() bool {
+			return st.GetSettingOr("rate_limiting_enabled", "false") == "true"
+		}
+		// wait until the HTTP API is serving before the first push
+		time.Sleep(5 * time.Second)
+		lastPlan := int64(-1)
+		for {
+			if enabled() {
+				// sync users when the pasarguard endpoint is configured
+				if st.GetSettingOr("pasarguard_url", "") != "" {
+					app.SyncPasarGuardUsers()
+				}
+				plan := st.PolicyPlanVersion()
+				if plan != lastPlan {
+					app.PushRateLimitPlans()
+					lastPlan = plan
+				}
+			}
+			t := time.NewTimer(every("rate_limiting_sync_interval", 60))
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
+		}
+	}()
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(*host, strconv.Itoa(*port)),
@@ -269,6 +313,9 @@ func runAgent(args []string) {
 	app := &api.App{
 		St: st, Svc: svc, Broker: broker,
 		Scanner: scn, PanelPort: *port, Version: version,
+		RateApplierFactory: func() *ratelimit.Applier {
+			return &ratelimit.Applier{StateDir: "/var/lib/portguard"}
+		},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -297,6 +344,18 @@ func runAgent(args []string) {
 	// live connection sampling
 	connSampler := conntrack.NewSampler(st, *port)
 	go connSampler.Run(5*time.Second, ctx.Done())
+
+	// bandwidth policy recovery: on boot the agent asks the master for its
+	// current plan (the master pushes on connect anyway, but the pull makes
+	// recovery independent of push timing)
+	go func() {
+		time.Sleep(6 * time.Second)
+		ap := app.RateApplier()
+		st := ap.LoadState()
+		if st.Iface != "" && len(st.Rules) > 0 {
+			log.Printf("ratelimit: recovered %d bandwidth rules on %s from the applied state", len(st.Rules), st.Iface)
+		}
+	}()
 
 	agent := &api.Agent{App: app}
 	srv := &http.Server{

@@ -155,6 +155,48 @@ CREATE TABLE IF NOT EXISTS server_nodes (
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS rate_profiles (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL UNIQUE,
+	download_bps INTEGER NOT NULL DEFAULT 0,
+	upload_bps INTEGER NOT NULL DEFAULT 0,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	notes TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pasarguard_users (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	uuid TEXT NOT NULL UNIQUE,
+	username TEXT NOT NULL,
+	node_id INTEGER,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	expired INTEGER NOT NULL DEFAULT 0,
+	last_ip TEXT NOT NULL DEFAULT '',
+	synced_at INTEGER NOT NULL,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rate_limit_policies (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	uuid TEXT NOT NULL,
+	node_id INTEGER NOT NULL,
+	profile_id INTEGER,
+	download_bps INTEGER NOT NULL DEFAULT 0,
+	upload_bps INTEGER NOT NULL DEFAULT 0,
+	custom INTEGER NOT NULL DEFAULT 0,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	status TEXT NOT NULL DEFAULT 'pending',
+	last_error TEXT NOT NULL DEFAULT '',
+	last_pushed_version INTEGER NOT NULL DEFAULT 0,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL,
+	UNIQUE(uuid, node_id)
+);
+CREATE INDEX IF NOT EXISTS idx_rlp_uuid ON rate_limit_policies(uuid);
+CREATE INDEX IF NOT EXISTS idx_rlp_node ON rate_limit_policies(node_id);
+CREATE INDEX IF NOT EXISTS idx_rlp_status ON rate_limit_policies(status);
+CREATE INDEX IF NOT EXISTS idx_pgu_uuid ON pasarguard_users(uuid);
 CREATE TABLE IF NOT EXISTS ports (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	port INTEGER NOT NULL,
@@ -612,6 +654,171 @@ func (s *Store) GetSettingOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// ---- rate limiting ----
+
+func (s *Store) ListRateProfiles() ([]RateProfile, error) {
+	rows, err := s.DB.Query(`SELECT id, name, download_bps, upload_bps, enabled, notes, created_at, updated_at FROM rate_profiles ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RateProfile
+	for rows.Next() {
+		var p RateProfile
+		var enabled int
+		var c, u int64
+		if err := rows.Scan(&p.ID, &p.Name, &p.DownloadBPS, &p.UploadBPS, &enabled, &p.Notes, &c, &u); err != nil {
+			return nil, err
+		}
+		p.Enabled = enabled == 1
+		p.CreatedAt = time.Unix(c, 0)
+		p.UpdatedAt = time.Unix(u, 0)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CreateRateProfile(p *RateProfile) (int64, error) {
+	ts := nowTS()
+	res, err := s.DB.Exec(`INSERT INTO rate_profiles(name, download_bps, upload_bps, enabled, notes, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?)`, p.Name, p.DownloadBPS, p.UploadBPS, b2i(p.Enabled), p.Notes, ts, ts)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) UpdateRateProfile(p *RateProfile) error {
+	_, err := s.DB.Exec(`UPDATE rate_profiles SET name=?, download_bps=?, upload_bps=?, enabled=?, notes=?, updated_at=? WHERE id=?`,
+		p.Name, p.DownloadBPS, p.UploadBPS, b2i(p.Enabled), p.Notes, nowTS(), p.ID)
+	return err
+}
+
+func (s *Store) DeleteRateProfile(id int64) error {
+	// detach policies using this profile (they keep their bps values)
+	_, err := s.DB.Exec(`UPDATE rate_limit_policies SET profile_id=NULL, updated_at=? WHERE profile_id=?`, nowTS(), id)
+	if err != nil {
+		return err
+	}
+	res, err := s.DB.Exec(`DELETE FROM rate_profiles WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpsertPasarguardUser syncs one user by UUID (idempotent).
+func (s *Store) UpsertPasarguardUser(u *PasarguardUser) error {
+	ts := nowTS()
+	_, err := s.DB.Exec(`INSERT INTO pasarguard_users(uuid, username, node_id, enabled, expired, last_ip, synced_at, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(uuid) DO UPDATE SET
+		username=excluded.username, node_id=excluded.node_id, enabled=excluded.enabled,
+		expired=excluded.expired, last_ip=excluded.last_ip, synced_at=excluded.synced_at, updated_at=excluded.updated_at`,
+		u.UUID, u.Username, nullInt64(u.NodeID), b2i(u.Enabled), b2i(u.Expired), u.LastIP, ts, ts, ts)
+	return err
+}
+
+func (s *Store) ListPasarguardUsers() ([]PasarguardUser, error) {
+	rows, err := s.DB.Query(`SELECT id, uuid, username, node_id, enabled, expired, last_ip, synced_at, created_at, updated_at FROM pasarguard_users ORDER BY username`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PasarguardUser
+	for rows.Next() {
+		var u PasarguardUser
+		var enabled, expired int
+		var nodeID sql.NullInt64
+		var sy, c, up int64
+		if err := rows.Scan(&u.ID, &u.UUID, &u.Username, &nodeID, &enabled, &expired, &u.LastIP, &sy, &c, &up); err != nil {
+			return nil, err
+		}
+		u.Enabled = enabled == 1
+		u.Expired = expired == 1
+		if nodeID.Valid {
+			nid := nodeID.Int64
+			u.NodeID = &nid
+		}
+		u.SyncedAt = time.Unix(sy, 0)
+		u.CreatedAt = time.Unix(c, 0)
+		u.UpdatedAt = time.Unix(up, 0)
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListRatePolicies() ([]RateLimitPolicy, error) {
+	rows, err := s.DB.Query(`SELECT id, uuid, node_id, profile_id, download_bps, upload_bps, custom, enabled, status, last_error, last_pushed_version, created_at, updated_at FROM rate_limit_policies ORDER BY uuid`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RateLimitPolicy
+	for rows.Next() {
+		var p RateLimitPolicy
+		var enabled, custom int
+		var profileID sql.NullInt64
+		var c, u int64
+		if err := rows.Scan(&p.ID, &p.UUID, &p.NodeID, &profileID, &p.DownloadBPS, &p.UploadBPS, &custom, &enabled, &p.Status, &p.LastError, &p.LastPushedVer, &c, &u); err != nil {
+			return nil, err
+		}
+		p.Enabled = enabled == 1
+		p.Custom = custom == 1
+		if profileID.Valid {
+			pid := profileID.Int64
+			p.ProfileID = &pid
+		}
+		p.CreatedAt = time.Unix(c, 0)
+		p.UpdatedAt = time.Unix(u, 0)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// UpsertRatePolicy creates or updates the (uuid, node) policy. The version
+// bump makes the push loop pick it up incrementally.
+func (s *Store) UpsertRatePolicy(p *RateLimitPolicy) error {
+	ts := nowTS()
+	_, err := s.DB.Exec(`INSERT INTO rate_limit_policies(uuid, node_id, profile_id, download_bps, upload_bps, custom, enabled, status, last_error, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?, 'pending', '', ?, ?)
+		ON CONFLICT(uuid, node_id) DO UPDATE SET
+		profile_id=excluded.profile_id, download_bps=excluded.download_bps,
+		upload_bps=excluded.upload_bps, custom=excluded.custom, enabled=excluded.enabled,
+		status='pending', last_error='', updated_at=excluded.updated_at`,
+		p.UUID, p.NodeID, nullInt64(p.ProfileID), p.DownloadBPS, p.UploadBPS, b2i(p.Custom), b2i(p.Enabled), ts, ts)
+	return err
+}
+
+func (s *Store) DeleteRatePolicy(uuid string, nodeID int64) error {
+	res, err := s.DB.Exec(`DELETE FROM rate_limit_policies WHERE uuid=? AND node_id=?`, uuid, nodeID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetPolicyStatus records the push result for a policy.
+func (s *Store) SetPolicyStatus(uuid string, nodeID int64, status, errMsg string, version int64) error {
+	_, err := s.DB.Exec(`UPDATE rate_limit_policies SET status=?, last_error=?, last_pushed_version=?, updated_at=? WHERE uuid=? AND node_id=?`,
+		status, errMsg, version, nowTS(), uuid, nodeID)
+	return err
+}
+
+// PolicyPlanVersion returns the max updated_at of policies for change
+// detection (monotonic plan version across all edits).
+func (s *Store) PolicyPlanVersion() int64 {
+	var v int64
+	_ = s.DB.QueryRow(`SELECT COALESCE(MAX(updated_at), 0) FROM rate_limit_policies`).Scan(&v)
+	return v
 }
 
 // ---- server nodes (multi-server management) ----

@@ -37,6 +37,11 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	autoApply := "false"
 	socksHost := a.St.GetSettingOr("tunnel_socks_host", "127.0.0.1")
 	socksPort := a.St.GetSettingOr("tunnel_socks_port", "40001")
+	pgURL := a.St.GetSettingOr("pasarguard_url", "")
+	pgToken := a.St.GetSettingOr("pasarguard_token", "")
+	pgTokenSet := pgToken != ""
+	rlEnabled := a.St.GetSettingOr("rate_limiting_enabled", "false")
+	rlSync := a.St.GetSettingOr("rate_limiting_sync_interval", "60")
 	if v, err := a.St.GetSetting("check_interval"); err == nil && v != "" {
 		interval = v
 	}
@@ -47,13 +52,17 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		autoApply = v
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"paths":             paths,
-		"check_interval":    interval,
-		"scan_interval":     scanInterval,
-		"auto_apply":        autoApply,
-		"panel_port":        a.PanelPort,
-		"tunnel_socks_host": socksHost,
-		"tunnel_socks_port": socksPort,
+		"paths":                     paths,
+		"check_interval":            interval,
+		"scan_interval":             scanInterval,
+		"auto_apply":                autoApply,
+		"panel_port":                a.PanelPort,
+		"tunnel_socks_host":          socksHost,
+		"tunnel_socks_port":          socksPort,
+		"pasarguard_url":             pgURL,
+		"pasarguard_token_set":       pgTokenSet,
+		"rate_limiting_enabled":      rlEnabled,
+		"rate_limiting_sync_interval": rlSync,
 	})
 }
 
@@ -65,6 +74,10 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		AutoApply      *string      `json:"auto_apply"`
 		TunnelSocksHost *string     `json:"tunnel_socks_host"`
 		TunnelSocksPort *string     `json:"tunnel_socks_port"`
+		PasarGuardURL  *string      `json:"pasarguard_url"`
+		PasarGuardToken *string     `json:"pasarguard_token"`
+		RateLimitingEnabled *string `json:"rate_limiting_enabled"`
+		RateLimitingSyncInterval *string `json:"rate_limiting_sync_interval"`
 	}
 	if !readJSON(w, r, &body) {
 		return
@@ -131,6 +144,28 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			_ = a.St.SetSetting("tunnel_socks_port", *body.TunnelSocksPort)
 		} else {
 			errJSON(w, errors.New("tunnel_socks_port must be 1-65535"), http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	if body.PasarGuardURL != nil {
+		_ = a.St.SetSetting("pasarguard_url", strings.TrimSpace(*body.PasarGuardURL))
+	}
+	if body.PasarGuardToken != nil && *body.PasarGuardToken != "" {
+		// empty string keeps the existing token (never clears by accident)
+		_ = a.St.SetSetting("pasarguard_token", strings.TrimSpace(*body.PasarGuardToken))
+	}
+	if body.RateLimitingEnabled != nil {
+		v := "false"
+		if *body.RateLimitingEnabled == "true" || *body.RateLimitingEnabled == "1" {
+			v = "true"
+		}
+		_ = a.St.SetSetting("rate_limiting_enabled", v)
+	}
+	if body.RateLimitingSyncInterval != nil {
+		if n, err := fmtAtoi(*body.RateLimitingSyncInterval); err == nil && n >= 10 && n <= 3600 {
+			_ = a.St.SetSetting("rate_limiting_sync_interval", *body.RateLimitingSyncInterval)
+		} else {
+			errJSON(w, errors.New("rate_limiting_sync_interval must be 10-3600 seconds"), http.StatusUnprocessableEntity)
 			return
 		}
 	}

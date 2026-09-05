@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,6 +10,7 @@ import (
 
 	"portguard/internal/conntrack"
 	"portguard/internal/proxy"
+	"portguard/internal/ratelimit"
 	"portguard/internal/store"
 	"portguard/internal/sysinfo"
 	"portguard/internal/tools"
@@ -81,6 +83,11 @@ func (ag *Agent) Router() http.Handler {
 
 	// tunnel state
 	r.Get("/tunnel", ag.tunnelState)
+
+	// rate limiting (bandwidth plans pushed by the master)
+	r.Post("/ratelimit/apply", ag.ratelimitApply)
+	r.Get("/ratelimit/state", ag.ratelimitState)
+	r.Post("/ratelimit/clear", ag.ratelimitClear)
 
 	return r
 }
@@ -345,4 +352,47 @@ func (ag *Agent) installTool(w http.ResponseWriter, r *http.Request) {
 
 func (ag *Agent) tunnelState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tunnel.Detect())
+}
+
+// ---- rate limiting (bandwidth enforcement on this node) ----
+
+// ratelimitApply reconciles the node's Linux tc state with the pushed plan.
+// Idempotent and incremental: only changed/removed rules are touched, and
+// a plan identical to the applied state is a no-op.
+func (ag *Agent) ratelimitApply(w http.ResponseWriter, r *http.Request) {
+	var plan ratelimit.Plan
+	if !readJSON(w, r, &plan) {
+		return
+	}
+	ap := ag.App.RateApplier()
+	st, err := ap.ApplyPlan(plan)
+	if err != nil {
+		ag.App.St.Audit("master", "ratelimit.apply", err.Error(), "error")
+		errJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	ag.App.St.Audit("master", "ratelimit.apply", fmt.Sprintf("%d rules active", len(st.Rules)), "ok")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"iface":    st.Iface,
+		"rules":    len(st.Rules),
+		"version":  plan.Version,
+	})
+}
+
+func (ag *Agent) ratelimitState(w http.ResponseWriter, r *http.Request) {
+	st := ag.App.RateApplier().LoadState()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"iface": st.Iface,
+		"rules": st.SortedRules(),
+	})
+}
+
+func (ag *Agent) ratelimitClear(w http.ResponseWriter, r *http.Request) {
+	if err := ag.App.RateApplier().ClearAll(); err != nil {
+		errJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	ag.App.St.Audit("master", "ratelimit.clear", "all bandwidth rules removed", "ok")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

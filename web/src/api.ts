@@ -126,6 +126,10 @@ export interface Settings {
   panel_port: number
   tunnel_socks_host?: string
   tunnel_socks_port?: string
+  pasarguard_url?: string
+  pasarguard_token_set?: boolean
+  rate_limiting_enabled?: string
+  rate_limiting_sync_interval?: string
 }
 
 // ---- v2 feature types (ported from haproxy-manager) ----
@@ -407,6 +411,20 @@ export const api = {
   putNodeSelf: (body: { token?: string; role?: string }) =>
     req<{ configured: boolean; role: string }>('PUT', '/api/node-self', body),
 
+  // v2.6: bandwidth / per-UUID rate limiting
+  rateLimitStatus: () => req<RateLimitStatus>('GET', '/api/rate-limits/status'),
+  listRateProfiles: () => req<RateProfile[]>('GET', '/api/rate-limits/profiles'),
+  createRateProfile: (p: Partial<RateProfile>) => req<RateProfile>('POST', '/api/rate-limits/profiles', p),
+  updateRateProfile: (id: number, p: Partial<RateProfile>) => req<RateProfile>('PUT', `/api/rate-limits/profiles/${id}`, p),
+  deleteRateProfile: (id: number) => req<{ ok: boolean }>('DELETE', `/api/rate-limits/profiles/${id}`),
+  listPasarguardUsers: () => req<PasarguardUserView[]>('GET', '/api/pasarguard/users'),
+  upsertRatePolicy: (p: { uuid: string; node_id: number; profile_id?: number | null; download_bps?: number; upload_bps?: number; custom?: boolean; enabled?: boolean }) =>
+    req<{ ok: boolean }>('POST', '/api/rate-limits/policies', p),
+  deleteRatePolicy: (uuid: string, nodeId: number) =>
+    req<{ ok: boolean }>('DELETE', `/api/rate-limits/policies/${uuid}?node_id=${nodeId}`),
+  pushRateLimits: () => req<{ results: { node_id: number; ok: boolean; error?: string }[] }>('POST', '/api/rate-limits/push'),
+  syncPasarGuard: () => req<{ synced: number; ok: boolean }>('POST', '/api/rate-limits/sync'),
+
   eventsUrl: () => `/api/events?token=${encodeURIComponent(getToken() || '')}`,
 }
 
@@ -442,6 +460,46 @@ export interface ToolInstallResult {
   ok: boolean
   output: string
   elapsed: string
+}
+
+// ---- v2.6 bandwidth ----
+
+export interface RateProfile {
+  id: number
+  name: string
+  download_bps: number
+  upload_bps: number
+  enabled: boolean
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PasarguardUserView {
+  id: number
+  uuid: string
+  username: string
+  node_id: number | null
+  enabled: boolean
+  expired: boolean
+  last_ip: string
+  synced_at: string
+  has_policy: boolean
+  custom: boolean
+  policy_download_bps: number
+  policy_upload_bps: number
+  profile_name: string
+  policy_state: string
+}
+
+export interface RateLimitStatus {
+  enabled: boolean
+  total_users: number
+  limited_users: number
+  failed: number
+  pending: number
+  active_nodes: number
+  last_sync: string
 }
 
 export interface NodeSummary {

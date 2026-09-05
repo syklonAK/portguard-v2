@@ -131,6 +131,54 @@ type ServerNode struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+// ---- rate limiting (PasarGuard per-UUID bandwidth) ----
+
+// RateProfile is a reusable bandwidth profile (Basic/Standard/VIP/...).
+// Zero bps = unlimited.
+type RateProfile struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	DownloadBPS int64     `json:"download_bps"`
+	UploadBPS   int64     `json:"upload_bps"`
+	Enabled     bool      `json:"enabled"`
+	Notes       string    `json:"notes"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// PasarguardUser is a user synced from the PasarGuard panel; the Xray UUID
+// is the primary identity for rate limiting.
+type PasarguardUser struct {
+	ID        int64     `json:"id"`
+	UUID      string    `json:"uuid"`
+	Username  string    `json:"username"`
+	NodeID    *int64    `json:"node_id"`
+	Enabled   bool      `json:"enabled"`
+	Expired   bool      `json:"expired"`
+	LastIP    string    `json:"last_ip"`
+	SyncedAt  time.Time `json:"synced_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// RateLimitPolicy binds one UUID on one node to a bandwidth limit.
+// Unique per (uuid, node_id). status: pending | synced | failed.
+type RateLimitPolicy struct {
+	ID            int64     `json:"id"`
+	UUID          string    `json:"uuid"`
+	NodeID        int64     `json:"node_id"`
+	ProfileID     *int64    `json:"profile_id"`
+	DownloadBPS   int64     `json:"download_bps"`
+	UploadBPS     int64     `json:"upload_bps"`
+	Custom        bool      `json:"custom"`
+	Enabled       bool      `json:"enabled"`
+	Status        string    `json:"status"`
+	LastError     string    `json:"last_error"`
+	LastPushedVer int64     `json:"last_pushed_version"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 // TunnelRelay is one Iran-side relay entry (Hedioum Pool Tunnel topology):
 // users hit this server and traffic is relayed to the foreign node through
 // the Hedioum SOCKS5 hub. mode: raw (passthrough) | tls (terminate here).
