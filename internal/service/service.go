@@ -24,6 +24,18 @@ type Service struct {
 	PanelPort int
 
 	applyMu sync.Mutex // one apply at a time
+
+	// recordVersionResult holds the config version created by the apply in
+	// flight so its outcome can be stamped onto the row.
+	recordVersionResult int64
+}
+
+// setVersionResult stamps the deploy outcome on the version created by this apply.
+func (s *Service) setVersionResult(result string) {
+	if s.recordVersionResult > 0 {
+		_ = s.St.SetConfigVersionDeployResult(s.recordVersionResult, result)
+		s.recordVersionResult = 0
+	}
 }
 
 func New(st *store.Store, paths proxy.Paths, panelPort int) *Service {
@@ -134,6 +146,7 @@ func BinaryMissing(name string, p proxy.Paths) bool {
 // On reload failure the previous files are restored and reloaded again.
 // An engine whose binary is missing is skipped only when it has no enabled mappings;
 // if it has mappings, the apply fails with a clear error instead.
+// Every apply records a config version snapshot (author, result) first.
 func (s *Service) ApplyAll(actor string) error {
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
@@ -146,6 +159,11 @@ func (s *Service) ApplyAll(actor string) error {
 	if err != nil {
 		return err
 	}
+
+	// version snapshot BEFORE the apply: even a failed apply is recorded
+	// (deploy_result tells which ones succeeded)
+	version, _ := s.St.CreateConfigVersion(actor, "apply", "")
+	s.recordVersionResult = version
 
 	type stagedEngine struct {
 		name   string
@@ -169,10 +187,12 @@ func (s *Service) ApplyAll(actor string) error {
 		stagedFiles, err := eng.Render(mappings, certs, s.Paths)
 		if err != nil {
 			s.St.Audit(actor, "apply", "render failed for "+name+": "+err.Error(), "error")
+			s.setVersionResult("error: render " + name)
 			return fmt.Errorf("render %s: %w", name, err)
 		}
 		if err := eng.Validate(stagedFiles, s.Paths); err != nil {
 			s.St.Audit(actor, "apply", "validation failed for "+name+": "+err.Error(), "error")
+			s.setVersionResult("error: validate " + name)
 			return fmt.Errorf("validate %s: %w", name, err)
 		}
 		abs := map[string]string{}
@@ -187,6 +207,7 @@ func (s *Service) ApplyAll(actor string) error {
 	// 2) write cert files used by configs (both engines read from CertsDir)
 	if err := s.writeCertFiles(certs); err != nil {
 		s.St.Audit(actor, "apply", "cert write failed: "+err.Error(), "error")
+		s.setVersionResult("error: cert write")
 		return err
 	}
 
@@ -195,6 +216,7 @@ func (s *Service) ApplyAll(actor string) error {
 	backupDir := filepath.Join(s.Paths.BackupsDir, time.Now().Format("20060102-150405"))
 	if err := s.backupFiles(backupDir, livePaths); err != nil {
 		s.St.Audit(actor, "apply", "backup failed: "+err.Error(), "error")
+		s.setVersionResult("error: backup")
 		return err
 	}
 	wasNew := map[string]bool{}
@@ -242,6 +264,7 @@ func (s *Service) ApplyAll(actor string) error {
 				}
 			}
 			s.St.Audit(actor, "apply", "reload failed for "+se.name+", rolled back: "+err.Error(), "error")
+			s.setVersionResult("rolled back: reload " + se.name)
 			return fmt.Errorf("reload %s (rolled back): %w", se.name, err)
 		}
 	}
@@ -251,6 +274,7 @@ func (s *Service) ApplyAll(actor string) error {
 
 	s.St.Audit(actor, "apply", fmt.Sprintf("applied %d mappings (nginx=%d, haproxy=%d)",
 		countEnabled(mappings), countEngine(mappings, "nginx"), countEngine(mappings, "haproxy")), "ok")
+	s.setVersionResult("ok")
 	return nil
 }
 

@@ -431,6 +431,28 @@ func readJSONRaw(w http.ResponseWriter, r *http.Request, v *json.RawMessage) boo
 	return true
 }
 
+// handleNodeLogs tails one allowlisted log source on a node.
+func (a *App) handleNodeLogs(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	source := chi.URLParam(r, "source")
+	lines := 200
+	if v := r.URL.Query().Get("lines"); v != "" {
+		if n, err2 := strconv.Atoi(v); err2 == nil && n > 0 && n <= 500 {
+			lines = n
+		}
+	}
+	out, err := cli.Logs(source, lines)
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"source": source, "lines": out})
+}
+
 // ---- master-side node CRUD ----
 
 func (a *App) handleListNodes(w http.ResponseWriter, r *http.Request) {

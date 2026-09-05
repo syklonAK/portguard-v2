@@ -21,6 +21,10 @@ import Connections from './pages/Connections'
 import Servers from './pages/Servers'
 import Tools from './pages/Tools'
 import Bandwidth from './pages/Bandwidth'
+import Versions from './pages/Versions'
+import Alerts from './pages/Alerts'
+import Users from './pages/Users'
+import Logs from './pages/Logs'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
@@ -104,13 +108,17 @@ export default function App() {
         <Route path="/services" element={<Services />} />
         <Route path="/runtime" element={<Runtime />} />
         <Route path="/backups" element={<Backups />} />
+        <Route path="/versions" element={<Versions />} />
         <Route path="/diagnostics" element={<Diagnostics />} />
         <Route path="/tools" element={<Tools />} />
         <Route path="/bandwidth" element={<Bandwidth />} />
         <Route path="/certs" element={<Certs />} />
         <Route path="/tunnels" element={<Tunnels />} />
         <Route path="/monitoring" element={<Monitoring />} />
+        <Route path="/alerts" element={<Alerts />} />
         <Route path="/audit" element={<Audit />} />
+        <Route path="/users" element={<Users />} />
+        <Route path="/logs" element={<Logs />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

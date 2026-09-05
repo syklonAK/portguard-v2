@@ -130,6 +130,14 @@ export interface Settings {
   pasarguard_token_set?: boolean
   rate_limiting_enabled?: string
   rate_limiting_sync_interval?: string
+  alerts_enabled?: string
+  alert_cooldown_min?: string
+  alert_telegram_token_set?: boolean
+  alert_telegram_chat?: string
+  alert_webhook_set?: boolean
+  alert_cpu_min?: string
+  alert_ram_min?: string
+  alert_disk_min?: string
 }
 
 // ---- v2 feature types (ported from haproxy-manager) ----
@@ -308,7 +316,7 @@ export const api = {
     req<{ status: string }>('POST', '/api/setup', { username, password }),
   login: (username: string, password: string) =>
     req<{ token: string; username: string }>('POST', '/api/login', { username, password }),
-  me: () => req<{ username: string }>('GET', '/api/me'),
+  me: () => req<{ username: string; role: string }>('GET', '/api/me'),
   changePassword: (oldPw: string, newPw: string) =>
     req<{ status: string }>('POST', '/api/account/password', { old: oldPw, new: newPw }),
 
@@ -425,7 +433,51 @@ export const api = {
   pushRateLimits: () => req<{ results: { node_id: number; ok: boolean; error?: string }[] }>('POST', '/api/rate-limits/push'),
   syncPasarGuard: () => req<{ synced: number; ok: boolean }>('POST', '/api/rate-limits/sync'),
 
+  // v2.7: config versions
+  listVersions: () => req<ConfigVersion[]>('GET', '/api/versions'),
+  getVersion: (v: number) => req<{ version: ConfigVersion; mappings: any[]; relays: any[] }>('GET', `/api/versions/${v}`),
+  diffVersions: (from: number, to: number) => req<{ diff: string[] }>('GET', `/api/versions/${from}/diff/${to}`),
+  restoreVersion: (v: number) => req<{ ok: boolean; restored_mappings: number }>('POST', `/api/versions/${v}/restore`),
+  downloadVersion: (v: number) => `/api/versions/${v}/download`,
+
+  // v2.7: alerts
+  listAlerts: (limit = 100) => req<AlertsData>('GET', `/api/alerts?limit=${limit}`),
+  ackAlert: (id: number) => req<{ ok: boolean }>('POST', `/api/alerts/${id}/ack`),
+  testAlert: () => req<{ ok: boolean; note: string }>('POST', '/api/alerts/test'),
+
+  // v2.7: user management (owner)
+  listUsers: () => req<AdminUser[]>('GET', '/api/users'),
+  createUser: (u: { username: string; password: string; role: string }) =>
+    req<{ id: number }>('POST', '/api/users', u),
+  updateUser: (id: number, body: { role?: string }) => req<{ ok: boolean }>('PUT', `/api/users/${id}`, body),
+  deleteUser: (id: number) => req<{ ok: boolean }>('DELETE', `/api/users/${id}`),
+
+  // v2.7: node logs
+  nodeLogs: (nodeId: number, source: string, lines = 200) =>
+    req<{ source: string; lines: string }>('GET', `/api/nodes/${nodeId}/logs/${source}?lines=${lines}`),
+
+  // v2.7: config import from live files
+  importScan: () => req<ImportScan>('GET', '/api/import/scan'),
+  importConfirm: (indices: number[]) =>
+    req<{ created: number; skipped: number; issues: { section: string; reason: string }[] }>('POST', '/api/import/confirm', { indices }),
+
   eventsUrl: () => `/api/events?token=${encodeURIComponent(getToken() || '')}`,
+}
+
+export interface ImportScan {
+  mappings: Partial<Mapping>[]
+  issues: { section: string; reason: string }[]
+  found: boolean
+}
+
+// ---- v2.7 users ----
+
+export interface AdminUser {
+  id: number
+  username: string
+  role: 'owner' | 'admin' | 'operator' | 'viewer'
+  created_at: string
+  last_login_at: string | null
 }
 
 // ---- v2.3 multi-server types ----
@@ -490,6 +542,37 @@ export interface PasarguardUserView {
   policy_upload_bps: number
   profile_name: string
   policy_state: string
+}
+
+// ---- v2.7 config versions ----
+
+// ---- v2.7 alerts ----
+
+export interface Alert {
+  id: number
+  severity: 'info' | 'warning' | 'critical'
+  category: string
+  title: string
+  detail: string
+  target: string
+  acknowledged: boolean
+  created_at: string
+}
+
+export interface AlertsData {
+  alerts: Alert[]
+  unacknowledged: number
+  enabled: boolean
+}
+
+export interface ConfigVersion {
+  id: number
+  version: number
+  author: string
+  description: string
+  node_count: number
+  deploy_result: string
+  created_at: string
 }
 
 export interface RateLimitStatus {

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"portguard/internal/alerter"
 	"portguard/internal/api"
 	"portguard/internal/conntrack"
 	"portguard/internal/health"
@@ -114,6 +115,12 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// alert engine: evaluates node/backend/cert/threshold conditions every
+	// minute, dedups with cooldowns and notifies the configured channels
+	alertEngine := alerter.New(st, broker.Publish)
+	app.Alerter = alertEngine
+	go alertEngine.Run(ctx.Done())
 
 	interval := 30 * time.Second
 	if v, err := st.GetSetting("check_interval"); err == nil && v != "" {

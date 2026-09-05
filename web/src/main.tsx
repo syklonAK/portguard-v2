@@ -24,7 +24,7 @@ function connectSSE() {
   const token = getToken()
   if (!token || sse) return
   sse = new EventSource(api.eventsUrl())
-  for (const topic of ['system', 'conns', 'scan', 'health', 'service']) {
+  for (const topic of ['system', 'conns', 'scan', 'health', 'service', 'alert']) {
     sse.addEventListener(topic, () => {
       window.dispatchEvent(new Event(`pg-sse-${topic}`))
     })

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -28,9 +29,15 @@ func NewAuth(st *store.Store, secret string) *Auth {
 }
 
 func (a *Auth) Issue(username string, uid int64) (string, error) {
+	return a.IssueRole(username, uid, "owner")
+}
+
+// IssueRole signs a session token carrying the caller's RBAC role.
+func (a *Auth) IssueRole(username string, uid int64, role string) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":  username,
 		"uid":  uid,
+		"role": role,
 		"iat":  time.Now().Unix(),
 		"exp":  time.Now().Add(a.Expire).Unix(),
 		"iss":  "portguard",
@@ -89,8 +96,44 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		ctx := withActor(r.Context(), toString(claims["sub"]))
+		// attach the role for RBAC checks downstream
+		if role := toString(claims["role"]); role != "" {
+			ctx = withRole(ctx, role)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// RequireRole wraps handlers with a minimum-role check. Viewers can read,
+// operators can deploy, admins manage everything operational, owners hold
+// security/user management.
+func (a *Auth) RequireRole(min string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		role := roleFrom(r.Context())
+		if store.RoleRank(role) < store.RoleRank(min) {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error": "your role (" + role + ") is not allowed to perform this action (needs " + min + ")",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+// ctxRoleKey carries the caller's RBAC role through the request context.
+type ctxRoleKeyType int
+
+const ctxRoleKey ctxRoleKeyType = 1
+
+func withRole(ctx context.Context, role string) context.Context {
+	return context.WithValue(ctx, ctxRoleKey, role)
+}
+
+func roleFrom(ctx context.Context) string {
+	if v, ok := ctx.Value(ctxRoleKey).(string); ok {
+		return v
+	}
+	return "viewer"
 }
 
 func toString(v any) string {

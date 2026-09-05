@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Network, ArrowLeftRight, ShieldCheck, Activity, ScrollText, Settings as SettingsIcon,
-  ShieldHalf, Moon, Sun, LogOut, Wrench, Gauge, History, Stethoscope, Waypoints, Radio, Server, Package, GaugeCircle,
+  ShieldHalf, Moon, Sun, LogOut, Wrench, Gauge, History, Stethoscope, Waypoints, Radio, Server, Package, GaugeCircle, GitBranch, Bell, UsersRound, Terminal,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -18,11 +18,15 @@ const nav = [
   { to: '/runtime', label: 'HAProxy Runtime', icon: Gauge },
   { to: '/certs', label: 'SSL Certs', icon: ShieldCheck },
   { to: '/backups', label: 'Backups', icon: History },
+  { to: '/versions', label: 'Versions', icon: GitBranch },
   { to: '/diagnostics', label: 'Diagnostics', icon: Stethoscope },
+  { to: '/logs', label: 'Logs', icon: Terminal },
   { to: '/tools', label: 'Tools', icon: Package },
   { to: '/bandwidth', label: 'Bandwidth', icon: GaugeCircle },
   { to: '/monitoring', label: 'Monitoring', icon: Activity },
+  { to: '/alerts', label: 'Alerts', icon: Bell },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
+  { to: '/users', label: 'Users', icon: UsersRound },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]
 

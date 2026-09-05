@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +43,15 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	pgTokenSet := pgToken != ""
 	rlEnabled := a.St.GetSettingOr("rate_limiting_enabled", "false")
 	rlSync := a.St.GetSettingOr("rate_limiting_sync_interval", "60")
+	// alerting
+	alertsEnabled := a.St.GetSettingOr("alerts_enabled", "true")
+	alertCooldown := a.St.GetSettingOr("alert_cooldown_min", "10")
+	alertTGTokenSet := a.St.GetSettingOr("alert_telegram_token", "") != ""
+	alertTGChat := a.St.GetSettingOr("alert_telegram_chat", "")
+	alertHookSet := a.St.GetSettingOr("alert_webhook_url", "") != ""
+	alertCPU := a.St.GetSettingOr("alert_cpu_min", "0")
+	alertRAM := a.St.GetSettingOr("alert_ram_min", "0")
+	alertDisk := a.St.GetSettingOr("alert_disk_min", "0")
 	if v, err := a.St.GetSetting("check_interval"); err == nil && v != "" {
 		interval = v
 	}
@@ -63,6 +73,14 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"pasarguard_token_set":       pgTokenSet,
 		"rate_limiting_enabled":      rlEnabled,
 		"rate_limiting_sync_interval": rlSync,
+		"alerts_enabled":              alertsEnabled,
+		"alert_cooldown_min":          alertCooldown,
+		"alert_telegram_token_set":    alertTGTokenSet,
+		"alert_telegram_chat":          alertTGChat,
+		"alert_webhook_set":           alertHookSet,
+		"alert_cpu_min":               alertCPU,
+		"alert_ram_min":               alertRAM,
+		"alert_disk_min":              alertDisk,
 	})
 }
 
@@ -78,6 +96,14 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		PasarGuardToken *string     `json:"pasarguard_token"`
 		RateLimitingEnabled *string `json:"rate_limiting_enabled"`
 		RateLimitingSyncInterval *string `json:"rate_limiting_sync_interval"`
+		AlertsEnabled  *string       `json:"alerts_enabled"`
+		AlertCooldownMin *string     `json:"alert_cooldown_min"`
+		AlertTelegramToken *string  `json:"alert_telegram_token"`
+		AlertTelegramChat *string    `json:"alert_telegram_chat"`
+		AlertWebhookURL *string      `json:"alert_webhook_url"`
+		AlertCPUMin    *int           `json:"alert_cpu_min"`
+		AlertRAMMin    *int           `json:"alert_ram_min"`
+		AlertDiskMin   *int           `json:"alert_disk_min"`
 	}
 	if !readJSON(w, r, &body) {
 		return
@@ -169,6 +195,44 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// alerting
+	if body.AlertsEnabled != nil {
+		v := "false"
+		if *body.AlertsEnabled == "true" || *body.AlertsEnabled == "1" {
+			v = "true"
+		}
+		_ = a.St.SetSetting("alerts_enabled", v)
+	}
+	if body.AlertCooldownMin != nil {
+		if n, err := fmtAtoi(*body.AlertCooldownMin); err == nil && n >= 1 && n <= 1440 {
+			_ = a.St.SetSetting("alert_cooldown_min", *body.AlertCooldownMin)
+		} else {
+			errJSON(w, errors.New("alert_cooldown_min must be 1-1440 minutes"), http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	if body.AlertTelegramToken != nil && *body.AlertTelegramToken != "" {
+		_ = a.St.SetSetting("alert_telegram_token", strings.TrimSpace(*body.AlertTelegramToken))
+	}
+	if body.AlertTelegramChat != nil {
+		_ = a.St.SetSetting("alert_telegram_chat", strings.TrimSpace(*body.AlertTelegramChat))
+	}
+	if body.AlertWebhookURL != nil && *body.AlertWebhookURL != "" {
+		if !strings.HasPrefix(*body.AlertWebhookURL, "http://") && !strings.HasPrefix(*body.AlertWebhookURL, "https://") {
+			errJSON(w, errors.New("alert_webhook_url must be an http(s) URL"), http.StatusUnprocessableEntity)
+			return
+		}
+		_ = a.St.SetSetting("alert_webhook_url", strings.TrimSpace(*body.AlertWebhookURL))
+	}
+	if body.AlertCPUMin != nil {
+		_ = a.St.SetSetting("alert_cpu_min", strconv.Itoa(clampPct(*body.AlertCPUMin)))
+	}
+	if body.AlertRAMMin != nil {
+		_ = a.St.SetSetting("alert_ram_min", strconv.Itoa(clampPct(*body.AlertRAMMin)))
+	}
+	if body.AlertDiskMin != nil {
+		_ = a.St.SetSetting("alert_disk_min", strconv.Itoa(clampPct(*body.AlertDiskMin)))
+	}
 	a.St.Audit(actorFrom(r.Context()), "settings.update", "settings changed", "ok")
 	a.handleGetSettings(w, r)
 }
@@ -186,6 +250,17 @@ func fmtAtoi(s string) (int, error) {
 		n = n*10 + int(c-'0')
 	}
 	return n, nil
+}
+
+// clampPct keeps resource alert thresholds in 0..100 (0 = disabled).
+func clampPct(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }
 
 // ---- cert helpers ----

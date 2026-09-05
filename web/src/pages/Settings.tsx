@@ -23,6 +23,14 @@ export default function Settings() {
   const [pgToken, setPgToken] = useState('')
   const [rlEnabled, setRlEnabled] = useState(false)
   const [rlSync, setRlSync] = useState('60')
+  const [alertsEnabled, setAlertsEnabled] = useState(true)
+  const [alertCooldown, setAlertCooldown] = useState('10')
+  const [tgToken, setTgToken] = useState('')
+  const [tgChat, setTgChat] = useState('')
+  const [webhookURL, setWebhookURL] = useState('')
+  const [cpuMin, setCpuMin] = useState('0')
+  const [ramMin, setRamMin] = useState('0')
+  const [diskMin, setDiskMin] = useState('0')
 
   const [pw, setPw] = useState({ old: '', new: '', confirm: '' })
 
@@ -37,6 +45,12 @@ export default function Settings() {
       setPgURL(settings.data.pasarguard_url || '')
       setRlEnabled(settings.data.rate_limiting_enabled === 'true')
       setRlSync(settings.data.rate_limiting_sync_interval || '60')
+      setAlertsEnabled((settings.data.alerts_enabled ?? 'true') === 'true')
+      setAlertCooldown(settings.data.alert_cooldown_min || '10')
+      setTgChat(settings.data.alert_telegram_chat || '')
+      setCpuMin(settings.data.alert_cpu_min || '0')
+      setRamMin(settings.data.alert_ram_min || '0')
+      setDiskMin(settings.data.alert_disk_min || '0')
     }
   }, [settings.data])
 
@@ -53,6 +67,14 @@ export default function Settings() {
         ...(pgToken.trim() ? { pasarguard_token: pgToken.trim() } : {}),
         rate_limiting_enabled: rlEnabled ? 'true' : 'false',
         rate_limiting_sync_interval: rlSync,
+        alerts_enabled: alertsEnabled ? 'true' : 'false',
+        alert_cooldown_min: alertCooldown,
+        ...(tgToken.trim() ? { alert_telegram_token: tgToken.trim() } : {}),
+        alert_telegram_chat: tgChat,
+        ...(webhookURL.trim() ? { alert_webhook_url: webhookURL.trim() } : {}),
+        alert_cpu_min: cpuMin,
+        alert_ram_min: ramMin,
+        alert_disk_min: diskMin,
       }),
     onSuccess: () => {
       push('success', 'Settings saved')
@@ -195,6 +217,45 @@ export default function Settings() {
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save settings'}
           </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Alerting"
+          desc="Node offline, backend down, certificate expiry, resource thresholds — Telegram and webhook channels"
+        />
+        <div className="space-y-3 p-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex items-center gap-2 pb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+              <Toggle checked={alertsEnabled} onChange={setAlertsEnabled} /> Enable alerting
+            </label>
+            <Field label="Cooldown (minutes, 1-1440)" hint="min gap between repeat alerts of the same event">
+              <Input type="number" value={alertCooldown} min={1} onChange={(e) => setAlertCooldown(e.target.value)} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field
+              label="Telegram bot token"
+              hint={settings.data?.alert_telegram_token_set ? 'configured — type a new one to rotate' : 'from @BotFather'}
+            >
+              <Input type="password" value={tgToken} onChange={(e) => setTgToken(e.target.value)} placeholder="123456:ABC-DEF…" />
+            </Field>
+            <Field label="Telegram chat ID" hint="the chat/group that receives alerts">
+              <Input value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="-1001234567890" />
+            </Field>
+          </div>
+          <Field
+            label="Webhook URL"
+            hint={settings.data?.alert_webhook_set ? 'configured — a new URL replaces it (Discord/Slack/generic)' : 'POSTs JSON {severity,title,detail,…}'}
+          >
+            <Input type="password" value={webhookURL} onChange={(e) => setWebhookURL(e.target.value)} placeholder="https://hooks.example.com/…" />
+          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field label="CPU ≥ % (0=off)"><Input type="number" value={cpuMin} min={0} max={100} onChange={(e) => setCpuMin(e.target.value || '0')} /></Field>
+            <Field label="RAM ≥ % (0=off)"><Input type="number" value={ramMin} min={0} max={100} onChange={(e) => setRamMin(e.target.value || '0')} /></Field>
+            <Field label="Disk ≥ % (0=off)"><Input type="number" value={diskMin} min={0} max={100} onChange={(e) => setDiskMin(e.target.value || '0')} /></Field>
+          </div>
         </div>
       </Card>
 

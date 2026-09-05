@@ -42,19 +42,21 @@ func migrate(db *sql.DB) error {
 		}
 	}
 	// v2.0.0 mappings gained balance/path_prefix/access_rules columns; v2.1.0 added
-	// path_routes; v2.2.0 added host_header/decoy/decoy_html. ALTER for older DBs.
-	for _, col := range []struct{ name, ddl string }{
-		{"balance", `ALTER TABLE mappings ADD COLUMN balance TEXT NOT NULL DEFAULT ''`},
-		{"path_prefix", `ALTER TABLE mappings ADD COLUMN path_prefix TEXT NOT NULL DEFAULT ''`},
-		{"access_rules", `ALTER TABLE mappings ADD COLUMN access_rules TEXT NOT NULL DEFAULT '[]'`},
-		{"path_routes", `ALTER TABLE mappings ADD COLUMN path_routes TEXT NOT NULL DEFAULT '[]'`},
-		{"host_header", `ALTER TABLE mappings ADD COLUMN host_header TEXT NOT NULL DEFAULT ''`},
-		{"decoy", `ALTER TABLE mappings ADD COLUMN decoy TEXT NOT NULL DEFAULT ''`},
-		{"decoy_html", `ALTER TABLE mappings ADD COLUMN decoy_html TEXT NOT NULL DEFAULT ''`},
+	// path_routes; v2.2.0 added host_header/decoy/decoy_html; v2.7.0 added admins.role.
+	// ALTER for older DBs.
+	for _, col := range []struct{ table, name, ddl string }{
+		{"mappings", "balance", `ALTER TABLE mappings ADD COLUMN balance TEXT NOT NULL DEFAULT ''`},
+		{"mappings", "path_prefix", `ALTER TABLE mappings ADD COLUMN path_prefix TEXT NOT NULL DEFAULT ''`},
+		{"mappings", "access_rules", `ALTER TABLE mappings ADD COLUMN access_rules TEXT NOT NULL DEFAULT '[]'`},
+		{"mappings", "path_routes", `ALTER TABLE mappings ADD COLUMN path_routes TEXT NOT NULL DEFAULT '[]'`},
+		{"mappings", "host_header", `ALTER TABLE mappings ADD COLUMN host_header TEXT NOT NULL DEFAULT ''`},
+		{"mappings", "decoy", `ALTER TABLE mappings ADD COLUMN decoy TEXT NOT NULL DEFAULT ''`},
+		{"mappings", "decoy_html", `ALTER TABLE mappings ADD COLUMN decoy_html TEXT NOT NULL DEFAULT ''`},
+		{"admins", "role", `ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT 'owner'`},
 	} {
-		var mCols string
-		if err := db.QueryRow(`SELECT group_concat(name) FROM pragma_table_info('mappings')`).Scan(&mCols); err == nil {
-			if !strings.Contains(mCols, col.name) {
+		var cols string
+		if err := db.QueryRow(`SELECT group_concat(name) FROM pragma_table_info(?)`, col.table).Scan(&cols); err == nil {
+			if !strings.Contains(cols, col.name) {
 				_, _ = db.Exec(col.ddl)
 			}
 		}
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS admins (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	username TEXT NOT NULL UNIQUE,
 	password_hash TEXT NOT NULL,
+	role TEXT NOT NULL DEFAULT 'owner',
 	created_at INTEGER NOT NULL,
 	last_login_at INTEGER
 );
@@ -197,7 +200,30 @@ CREATE INDEX IF NOT EXISTS idx_rlp_uuid ON rate_limit_policies(uuid);
 CREATE INDEX IF NOT EXISTS idx_rlp_node ON rate_limit_policies(node_id);
 CREATE INDEX IF NOT EXISTS idx_rlp_status ON rate_limit_policies(status);
 CREATE INDEX IF NOT EXISTS idx_pgu_uuid ON pasarguard_users(uuid);
-CREATE TABLE IF NOT EXISTS ports (
+CREATE TABLE IF NOT EXISTS config_versions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	version INTEGER NOT NULL UNIQUE,
+	author TEXT NOT NULL DEFAULT '',
+	description TEXT NOT NULL DEFAULT '',
+	mappings_json TEXT NOT NULL DEFAULT '[]',
+	relays_json TEXT NOT NULL DEFAULT '[]',
+	node_count INTEGER NOT NULL DEFAULT 0,
+	deploy_result TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS alerts (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	severity TEXT NOT NULL DEFAULT 'info',
+	category TEXT NOT NULL DEFAULT '',
+	title TEXT NOT NULL,
+	detail TEXT NOT NULL DEFAULT '',
+	target TEXT NOT NULL DEFAULT '',
+	dedup_key TEXT NOT NULL DEFAULT '',
+	acknowledged INTEGER NOT NULL DEFAULT 0,
+	created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alerts_dedup ON alerts(dedup_key);CREATE TABLE IF NOT EXISTS ports (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	port INTEGER NOT NULL,
 	proto TEXT NOT NULL,
@@ -286,8 +312,12 @@ func (s *Store) AdminCount() (int, error) {
 }
 
 func (s *Store) CreateAdmin(username, hash string) (int64, error) {
-	res, err := s.DB.Exec(`INSERT INTO admins(username,password_hash,created_at) VALUES(?,?,?)`,
-		username, hash, nowTS())
+	return s.CreateAdminRole(username, hash, "owner")
+}
+
+func (s *Store) CreateAdminRole(username, hash, role string) (int64, error) {
+	res, err := s.DB.Exec(`INSERT INTO admins(username,password_hash,role,created_at) VALUES(?,?,?,?)`,
+		username, hash, role, nowTS())
 	if err != nil {
 		return 0, err
 	}
@@ -298,8 +328,8 @@ func (s *Store) GetAdminByUsername(username string) (Admin, error) {
 	var a Admin
 	var createdTS int64
 	var lastLogin sql.NullInt64
-	err := s.DB.QueryRow(`SELECT id, username, password_hash, created_at, last_login_at FROM admins WHERE username=?`, username).
-		Scan(&a.ID, &a.Username, &a.PasswordHash, &createdTS, &lastLogin)
+	err := s.DB.QueryRow(`SELECT id, username, password_hash, role, created_at, last_login_at FROM admins WHERE username=?`, username).
+		Scan(&a.ID, &a.Username, &a.PasswordHash, &a.Role, &createdTS, &lastLogin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -318,8 +348,8 @@ func (s *Store) GetAdminByID(id int64) (Admin, error) {
 	var a Admin
 	var createdTS int64
 	var lastLogin sql.NullInt64
-	err := s.DB.QueryRow(`SELECT id, username, password_hash, created_at, last_login_at FROM admins WHERE id=?`, id).
-		Scan(&a.ID, &a.Username, &a.PasswordHash, &createdTS, &lastLogin)
+	err := s.DB.QueryRow(`SELECT id, username, password_hash, role, created_at, last_login_at FROM admins WHERE id=?`, id).
+		Scan(&a.ID, &a.Username, &a.PasswordHash, &a.Role, &createdTS, &lastLogin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -337,6 +367,47 @@ func (s *Store) GetAdminByID(id int64) (Admin, error) {
 func (s *Store) SetAdminPassword(id int64, hash string) error {
 	_, err := s.DB.Exec(`UPDATE admins SET password_hash=? WHERE id=?`, hash, id)
 	return err
+}
+
+// SetAdminRole changes a user's RBAC role.
+func (s *Store) SetAdminRole(id int64, role string) error {
+	_, err := s.DB.Exec(`UPDATE admins SET role=? WHERE id=?`, role, id)
+	return err
+}
+
+func (s *Store) DeleteAdmin(id int64) error {
+	res, err := s.DB.Exec(`DELETE FROM admins WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListAdmins returns users without password hashes.
+func (s *Store) ListAdmins() ([]Admin, error) {
+	rows, err := s.DB.Query(`SELECT id, username, role, created_at, COALESCE(last_login_at, 0) FROM admins ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Admin
+	for rows.Next() {
+		var a Admin
+		var c, ll int64
+		if err := rows.Scan(&a.ID, &a.Username, &a.Role, &c, &ll); err != nil {
+			return nil, err
+		}
+		a.CreatedAt = time.Unix(c, 0)
+		if ll > 0 {
+			t := time.Unix(ll, 0)
+			a.LastLoginAt = &t
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) TouchAdminLogin(id int64) {
@@ -654,6 +725,130 @@ func (s *Store) GetSettingOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// ---- alerts ----
+
+func (s *Store) InsertAlert(a Alert) error {
+	_, err := s.DB.Exec(`INSERT INTO alerts(severity, category, title, detail, target, dedup_key, created_at)
+		VALUES(?,?,?,?,?,?,?)`, a.Severity, a.Category, a.Title, a.Detail, a.Target, a.DedupKey, nowTS())
+	return err
+}
+
+func (s *Store) ListAlerts(limit int) ([]Alert, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.DB.Query(`SELECT id, severity, category, title, detail, target, dedup_key, acknowledged, created_at
+		FROM alerts ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Alert
+	for rows.Next() {
+		var a Alert
+		var ack, c int64
+		if err := rows.Scan(&a.ID, &a.Severity, &a.Category, &a.Title, &a.Detail, &a.Target, &a.DedupKey, &ack, &c); err != nil {
+			return nil, err
+		}
+		a.Ack = ack == 1
+		a.CreatedAt = time.Unix(c, 0)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// LastAlertByDedup returns the timestamp of the most recent alert with the
+// given dedup key (0 when none) — the alerter uses it for cooldowns.
+func (s *Store) LastAlertByDedup(key string) (int64, error) {
+	var ts int64
+	err := s.DB.QueryRow(`SELECT COALESCE(MAX(created_at), 0) FROM alerts WHERE dedup_key=?`, key).Scan(&ts)
+	return ts, err
+}
+
+func (s *Store) AckAlert(id int64) error {
+	_, err := s.DB.Exec(`UPDATE alerts SET acknowledged=1 WHERE id=?`, id)
+	return err
+}
+
+func (s *Store) UnackedAlertCount() int {
+	var n int
+	_ = s.DB.QueryRow(`SELECT COUNT(*) FROM alerts WHERE acknowledged=0`).Scan(&n)
+	return n
+}
+
+// ---- config versions ----
+
+// CreateConfigVersion snapshots the current mappings/relays with a monotonic version.
+func (s *Store) CreateConfigVersion(author, description, deployResult string) (int64, error) {
+	mappings, err := s.ListMappings()
+	if err != nil {
+		return 0, err
+	}
+	mj, _ := json.Marshal(mappings)
+	relays, err := s.ListTunnelRelays()
+	if err != nil {
+		return 0, err
+	}
+	rj, _ := json.Marshal(relays)
+	nodes, _ := s.ListServerNodesPublic()
+	var ver int64
+	if err := s.DB.QueryRow(`SELECT COALESCE(MAX(version), 0) + 1 FROM config_versions`).Scan(&ver); err != nil {
+		return 0, err
+	}
+	_, err = s.DB.Exec(`INSERT INTO config_versions(version, author, description, mappings_json, relays_json, node_count, deploy_result, created_at)
+		VALUES(?,?,?,?,?,?,?,?)`,
+		ver, author, description, string(mj), string(rj), len(nodes), deployResult, nowTS())
+	if err != nil {
+		return 0, err
+	}
+	// retention: keep the most recent 50 versions
+	_, _ = s.DB.Exec(`DELETE FROM config_versions WHERE version <= (SELECT MAX(version) - 50 FROM config_versions)`)
+	return ver, nil
+}
+
+func (s *Store) ListConfigVersions() ([]ConfigVersion, error) {
+	rows, err := s.DB.Query(`SELECT id, version, author, description, node_count, deploy_result, created_at
+		FROM config_versions ORDER BY version DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ConfigVersion
+	for rows.Next() {
+		var v ConfigVersion
+		var c int64
+		if err := rows.Scan(&v.ID, &v.Version, &v.Author, &v.Description, &v.NodeCount, &v.DeployResult, &c); err != nil {
+			return nil, err
+		}
+		v.CreatedAt = time.Unix(c, 0)
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetConfigVersion(version int64) (ConfigVersion, string, string, error) {
+	var v ConfigVersion
+	var mj, rj string
+	var c int64
+	err := s.DB.QueryRow(`SELECT id, version, author, description, mappings_json, relays_json, node_count, deploy_result, created_at
+		FROM config_versions WHERE version=?`, version).
+		Scan(&v.ID, &v.Version, &v.Author, &v.Description, &mj, &rj, &v.NodeCount, &v.DeployResult, &c)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, "", "", ErrNotFound
+	}
+	if err != nil {
+		return v, "", "", err
+	}
+	v.CreatedAt = time.Unix(c, 0)
+	return v, mj, rj, nil
+}
+
+// SetConfigVersionDeployResult stamps ok/rollback/error on a version row.
+func (s *Store) SetConfigVersionDeployResult(version int64, result string) error {
+	_, err := s.DB.Exec(`UPDATE config_versions SET deploy_result=? WHERE version=?`, result, version)
+	return err
 }
 
 // ---- rate limiting ----

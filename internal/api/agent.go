@@ -3,7 +3,10 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -88,6 +91,9 @@ func (ag *Agent) Router() http.Handler {
 	r.Post("/ratelimit/apply", ag.ratelimitApply)
 	r.Get("/ratelimit/state", ag.ratelimitState)
 	r.Post("/ratelimit/clear", ag.ratelimitClear)
+
+	// logs: bounded tails of allowlisted sources only — no free-form paths
+	r.Get("/logs/{source}", ag.logs)
 
 	return r
 }
@@ -395,4 +401,80 @@ func (ag *Agent) ratelimitClear(w http.ResponseWriter, r *http.Request) {
 	}
 	ag.App.St.Audit("master", "ratelimit.clear", "all bandwidth rules removed", "ok")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// ---- logs: bounded tails of allowlisted sources only ----
+
+// logSources is the fixed allowlist the master can tail. No free-form
+// filesystem access: paths never come from the request.
+var logSources = map[string]struct {
+	args    []string // journalctl args or a static file path
+	isFile  bool
+}{
+	"nginx":    {isFile: true},
+	"haproxy":  {isFile: true},
+	"agent":    {args: []string{"journalctl", "-u", "portguard-agent", "-n", "200", "--no-pager"}},
+	"panel":    {args: []string{"journalctl", "-u", "portguard", "-n", "200", "--no-pager"}},
+	"syslog":   {args: []string{"journalctl", "-n", "200", "--no-pager"}},
+	"xray":     {args: []string{"journalctl", "-u", "xray", "-n", "200", "--no-pager"}},
+	"hedioum":  {args: []string{"journalctl", "-u", "hedioum", "-n", "200", "--no-pager"}},
+	"bridge":   {args: []string{"journalctl", "-u", "portguard-tunnel-bridge", "-n", "200", "--no-pager"}},
+}
+
+var logFilePaths = map[string]string{
+	"nginx":   "/var/log/nginx/error.log",
+	"haproxy": "/var/log/haproxy/haproxy.log",
+}
+
+// logs returns the tail of one allowlisted source. maxLines is clamped so a
+// master can never demand unbounded output.
+func (ag *Agent) logs(w http.ResponseWriter, r *http.Request) {
+	source := chi.URLParam(r, "source")
+	src, ok := logSources[source]
+	if !ok {
+		errJSON(w, errString("unknown log source"), http.StatusNotFound)
+		return
+	}
+	maxLines := 200
+	if v := r.URL.Query().Get("lines"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 500 {
+			maxLines = n
+		}
+	}
+
+	var out string
+	if src.isFile {
+		path := logFilePaths[source]
+		data, err := os.ReadFile(path)
+		if err != nil {
+			out = "(log file not readable: " + path + ")"
+		} else {
+			out = tailLines(string(data), maxLines)
+		}
+	} else {
+		args := append([]string{}, src.args...)
+		// patch the -n value for the requested size
+		for i, a := range args {
+			if a == "200" {
+				args[i] = strconv.Itoa(maxLines)
+			}
+		}
+		cmd := exec.Command(args[0], args[1:]...)
+		data, err := cmd.Output()
+		if err != nil {
+			out = "(source unavailable: " + err.Error() + ")"
+		} else {
+			out = tailLines(string(data), maxLines)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"source": source, "lines": out})
+}
+
+// tailLines keeps the last n lines of s.
+func tailLines(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }

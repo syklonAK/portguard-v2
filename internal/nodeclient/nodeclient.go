@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -179,6 +180,21 @@ func (c *Client) Delete(path string) (json.RawMessage, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// Logs fetches a bounded tail of one allowlisted log source from the node.
+func (c *Client) Logs(source string, lines int) (string, error) {
+	var out struct {
+		Lines string `json:"lines"`
+	}
+	path := "/logs/" + source
+	if lines > 0 {
+		path += "?lines=" + strconv.Itoa(lines)
+	}
+	if err := c.do(http.MethodGet, path, nil, &out); err != nil {
+		return "", err
+	}
+	return out.Lines, nil
 }
 
 // InstallTool runs the official installer for one tool on the node.

@@ -10,8 +10,29 @@ type Admin struct {
 	ID           int64      `json:"id"`
 	Username     string     `json:"username"`
 	PasswordHash string     `json:"-"`
+	Role         string     `json:"role"` // owner | admin | operator | viewer
 	CreatedAt    time.Time  `json:"created_at"`
 	LastLoginAt  *time.Time `json:"last_login_at"`
+}
+
+// ValidRole reports whether r is one of the RBAC roles.
+func ValidRole(r string) bool {
+	return r == "owner" || r == "admin" || r == "operator" || r == "viewer"
+}
+
+// RoleRank orders roles for hierarchy checks (higher = more powerful).
+func RoleRank(r string) int {
+	switch r {
+	case "owner":
+		return 4
+	case "admin":
+		return 3
+	case "operator":
+		return 2
+	case "viewer":
+		return 1
+	}
+	return 0
 }
 
 type Cert struct {
@@ -177,6 +198,33 @@ type RateLimitPolicy struct {
 	LastPushedVer int64     `json:"last_pushed_version"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// ConfigVersion is an immutable snapshot of the entire mapping set, taken
+// before every apply (and on manual changes). version is monotonic.
+type ConfigVersion struct {
+	ID           int64     `json:"id"`
+	Version      int64     `json:"version"`
+	Author       string    `json:"author"`
+	Description  string    `json:"description"`
+	MappingsJSON string    `json:"-"` // not exposed; use the API projection
+	RelaysJSON   string    `json:"-"`
+	NodeCount    int       `json:"node_count"`
+	DeployResult string    `json:"deploy_result"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// Alert is one recorded alert event (deduplicated by dedup_key + cooldown).
+type Alert struct {
+	ID        int64     `json:"id"`
+	Severity  string    `json:"severity"` // info | warning | critical
+	Category  string    `json:"category"` // node | backend | cert | apply | sync | system
+	Title     string    `json:"title"`
+	Detail    string    `json:"detail"`
+	Target    string    `json:"target"`
+	DedupKey  string    `json:"-"`
+	Ack       bool      `json:"acknowledged"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // TunnelRelay is one Iran-side relay entry (Hedioum Pool Tunnel topology):

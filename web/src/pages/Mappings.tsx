@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Plus, Pencil, Trash2, Zap, Power, FileDiff, Wand2, Route, Braces, Sparkles, ChevronDown, ChevronUp,
+  Plus, Pencil, Trash2, Zap, Power, FileDiff, Wand2, Route, Braces, Sparkles, ChevronDown, ChevronUp, Download,
 } from 'lucide-react'
 import {
   api, type Mapping, type Target, type ACLRule, type PathRoute, type PathTransport,
-  type MappingTemplate, type EngineValidation,
+  type MappingTemplate, type EngineValidation, type ImportScan,
 } from '../api'
 import {
   Badge, Button, Card, CardHeader, CodeBlock, CodeEditor, Empty, Field, Input, Modal, Select,
@@ -212,6 +212,35 @@ export default function Mappings() {
   const [jsonText, setJsonText] = useState('')
   const [jsonInvalid, setJsonInvalid] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [importModal, setImportModal] = useState<ImportScan | null>(null)
+  const [importChecked, setImportChecked] = useState<number[]>([])
+  const [importing, setImporting] = useState(false)
+
+  const runImportScan = async () => {
+    try {
+      const res = await api.importScan()
+      setImportModal(res)
+      setImportChecked(res.mappings.map((_, i) => i))
+    } catch (e: any) {
+      push('error', e.message)
+    }
+  }
+
+  const confirmImport = async () => {
+    if (!importModal) return
+    setImporting(true)
+    try {
+      const res = await api.importConfirm(importChecked)
+      push(res.created ? 'success' : 'warning',
+        `Imported ${res.created} mapping(s)${res.skipped ? `, ${res.skipped} skipped` : ''} — all disabled. Review then Apply.`)
+      setImportModal(null)
+      refresh()
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   // prefill from ports page (?new=1&port=N)
   useEffect(() => {
@@ -369,6 +398,10 @@ export default function Mappings() {
           <Button variant="success" onClick={() => apply.mutate()} disabled={apply.isPending}>
             <Zap className={`h-4 w-4 ${apply.isPending ? 'animate-pulse' : ''}`} />
             {apply.isPending ? 'Applying…' : 'Apply'}
+          </Button>
+          <Button variant="secondary" onClick={runImportScan} title="Import existing nginx/haproxy configs">
+            <Download className="h-4 w-4" />
+            Import existing
           </Button>
           <Button
             onClick={() => {
@@ -714,6 +747,69 @@ export default function Mappings() {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* Import existing configs modal */}
+      <Modal open={importModal !== null} onClose={() => setImportModal(null)} wide
+        title="Import existing nginx / HAProxy configs">
+        {importModal && (
+          <div className="space-y-4">
+            {!importModal.found ? (
+              <Empty message="No existing nginx/HAProxy configuration found on this server — nothing to import." />
+            ) : (
+              <>
+                <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                  Found {importModal.mappings.length} importable server block(s). Everything imports <b>disabled</b> —
+                  review, fix any gaps flagged below, enable what you want, then Apply. PortGuard never overwrites
+                  your live config until you press Apply.
+                </p>
+                {importModal.mappings.length > 0 && (
+                  <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                    <table className="w-full text-xs">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {importModal.mappings.map((m, i) => (
+                          <tr key={i}>
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                checked={importChecked.includes(i)}
+                                onChange={(e) =>
+                                  setImportChecked((prev) =>
+                                    e.target.checked ? [...prev, i] : prev.filter((x) => x !== i)
+                                  )
+                                }
+                              />
+                            </td>
+                            <td className="px-3 py-2 font-medium">{m.name}</td>
+                            <td className="px-3 py-2">{m.engine}</td>
+                            <td className="px-3 py-2">{m.protocol}</td>
+                            <td className="px-3 py-2 font-mono">:{m.listen_port}</td>
+                            <td className="px-3 py-2 text-slate-500">
+                              {(m as any).targets?.map((t: any) => `${t.host}:${t.port}`).join(', ') || (m as any).redirect_to || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {importModal.issues.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-2xs leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                    {importModal.issues.map((iss, i) => (
+                      <div key={i}>• <b>{iss.section}</b>: {iss.reason}</div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+                  <Button variant="secondary" onClick={() => setImportModal(null)}>Cancel</Button>
+                  <Button onClick={confirmImport} disabled={importing || importChecked.length === 0}>
+                    {importing ? 'Importing…' : `Import ${importChecked.length} mapping(s)`}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* Validate / diff modal */}
