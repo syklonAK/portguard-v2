@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, RefreshCw, ShieldCheck, Globe, ArrowRight, CheckCircle2, XCircle, Zap } from 'lucide-react'
+import { Plus, Pencil, Trash2, RefreshCw, ShieldCheck, ArrowRight, CheckCircle2, XCircle, Zap, RadioTower, Globe2 } from 'lucide-react'
 import { api, type TunnelRelay, type TunnelStatus } from '../api'
 import { Badge, Button, Card, CardHeader, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
@@ -55,6 +55,7 @@ export default function Tunnels() {
   const status = useQuery({ queryKey: ['tunnel-status'], queryFn: () => api.tunnelStatus() })
   const relays = useQuery({ queryKey: ['relays'], queryFn: () => api.listRelays() })
   const certs = useQuery({ queryKey: ['certs'], queryFn: () => api.listCerts() })
+  const selfInfo = useQuery({ queryKey: ['node-self'], queryFn: () => api.nodeSelf() })
 
   const [modal, setModal] = useState<null | 'create' | 'edit'>(null)
   const [draft, setDraft] = useState<Partial<TunnelRelay>>(emptyRelay())
@@ -114,6 +115,16 @@ export default function Tunnels() {
   })
 
   const st: TunnelStatus | undefined = status.data
+  const myRole = selfInfo.data?.role || 'standalone'
+
+  const setRole = useMutation({
+    mutationFn: (role: string) => api.putNodeSelf({ role }),
+    onSuccess: () => {
+      push('success', 'This server\'s tunnel role saved.')
+      qc.invalidateQueries({ queryKey: ['node-self'] })
+    },
+    onError: (e: any) => push('error', e.message),
+  })
 
   return (
     <div className="space-y-4">
@@ -150,9 +161,45 @@ export default function Tunnels() {
         </div>
       )}
 
+      <Card>
+        <CardHeader
+          title="This server's tunnel role"
+          desc="Declare which side of the 2-server topology this box plays (also shown on the master's Servers page)"
+        />
+        <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-3">
+          <RoleCard
+            active={myRole === 'iran'}
+            icon={<RadioTower className="h-5 w-5" />}
+            title="Iran hub (ingress)"
+            desc="Users connect here. Configure relays below; traffic rides the tunnel to the foreign egress."
+            onClick={() => setRole.mutate('iran')}
+          />
+          <RoleCard
+            active={myRole === 'foreign'}
+            icon={<Globe2 className="h-5 w-5" />}
+            title="Foreign egress"
+            desc="Traffic exits here. Run the Hedioum egress setup on this box; its token feeds the Iran side."
+            onClick={() => setRole.mutate('foreign')}
+          />
+          <RoleCard
+            active={myRole !== 'iran' && myRole !== 'foreign'}
+            icon={<CheckCircle2 className="h-5 w-5" />}
+            title="Not a tunnel server"
+            desc="This panel is standalone or a plain managed server."
+            onClick={() => setRole.mutate('standalone')}
+          />
+        </div>
+        {myRole === 'foreign' && (
+          <div className="border-t border-slate-200 px-5 py-4 text-2xs leading-relaxed text-amber-600 dark:border-slate-800 dark:text-amber-400">
+            This box is the egress: relays configured below are meaningless here — set up the egress with the official
+            hedioum-tunnel script and give the printed token to the Iran hub. Relay management belongs on the Iran server.
+          </div>
+        )}
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Relays" desc="Each relay forwards one public entry to a foreign node through the tunnel" />
+          <CardHeader title="Relays" desc="Each relay forwards one public entry to a foreign node through the tunnel (Iran side)" />
           {relays.isLoading ? (
             <div className="flex justify-center py-12"><Spinner /></div>
           ) : !relays.data?.length ? (
@@ -323,5 +370,33 @@ export default function Tunnels() {
         </div>
       </Modal>
     </div>
+  )
+}
+
+function RoleCard({ active, icon, title, desc, onClick }: {
+  active: boolean
+  icon: React.ReactNode
+  title: string
+  desc: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border p-4 text-left transition-all ${
+        active
+          ? 'border-indigo-400 bg-indigo-50 dark:border-indigo-500/60 dark:bg-indigo-500/10'
+          : 'border-slate-200 hover:border-indigo-300 dark:border-slate-700 dark:hover:border-indigo-500/40'
+      }`}
+    >
+      <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-lg ${
+        active ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+      }`}>
+        {icon}
+      </div>
+      <div className="text-xs font-bold">{title}</div>
+      <p className="mt-1 text-2xs leading-relaxed text-slate-500 dark:text-slate-400">{desc}</p>
+    </button>
   )
 }

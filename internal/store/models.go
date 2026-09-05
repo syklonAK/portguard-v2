@@ -112,6 +112,23 @@ type Mapping struct {
 	UpdatedAt    time.Time         `json:"updated_at"`
 }
 
+// ServerNode is a managed remote server profile: another PortGuard panel
+// installation this master can configure and monitor over its node API.
+type ServerNode struct {
+	ID          int64      `json:"id"`
+	Name        string     `json:"name"`
+	Host        string     `json:"host"`       // public address of the node panel
+	Port        int        `json:"port"`       // node panel port
+	APIToken    string     `json:"-"`          // shared secret for the node API (never exposed)
+	Role        string     `json:"role"`       // standalone | master | iran | foreign | generic
+	Enabled     bool       `json:"enabled"`
+	Notes       string     `json:"notes"`
+	Status      string     `json:"status"`      // online | offline | unknown (last probe)
+	LastSeen    *time.Time `json:"last_seen"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
 // TunnelRelay is one Iran-side relay entry (Hedioum Pool Tunnel topology):
 // users hit this server and traffic is relayed to the foreign node through
 // the Hedioum SOCKS5 hub. mode: raw (passthrough) | tls (terminate here).

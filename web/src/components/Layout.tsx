@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Network, ArrowLeftRight, ShieldCheck, Activity, ScrollText, Settings as SettingsIcon,
-  ShieldHalf, Moon, Sun, LogOut, Wrench, Gauge, History, Stethoscope, Waypoints, Radio,
+  ShieldHalf, Moon, Sun, LogOut, Wrench, Gauge, History, Stethoscope, Waypoints, Radio, Server,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -9,6 +9,7 @@ import { api, setToken } from '../api'
 
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/servers', label: 'Servers', icon: Server },
   { to: '/ports', label: 'Ports', icon: Network },
   { to: '/connections', label: 'Connections', icon: Radio },
   { to: '/mappings', label: 'Mappings', icon: ArrowLeftRight },

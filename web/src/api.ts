@@ -380,7 +380,61 @@ export const api = {
     return req<ConnectionsData>('GET', '/api/connections' + (qs ? `?${qs}` : ''))
   },
 
+  // v2.3: multi-server management
+  listNodes: () => req<ServerNode[]>('GET', '/api/nodes'),
+  createNode: (n: Partial<ServerNode>) => req<{ id: number }>('POST', '/api/nodes', n),
+  updateNode: (id: number, n: Partial<ServerNode>) => req<{ ok: boolean }>('PUT', `/api/nodes/${id}`, n),
+  deleteNode: (id: number) => req<{ ok: boolean }>('DELETE', `/api/nodes/${id}`),
+  nodeAction: (id: number, action: 'probe' | 'summary' | 'apply') =>
+    req<any>('POST', `/api/nodes/${id}/${action}`),
+  nodeSelf: () => req<{ configured: boolean; role: string }>('GET', '/api/node-self'),
+  putNodeSelf: (body: { token?: string; role?: string }) =>
+    req<{ configured: boolean; role: string }>('PUT', '/api/node-self', body),
+
   eventsUrl: () => `/api/events?token=${encodeURIComponent(getToken() || '')}`,
+}
+
+// ---- v2.3 multi-server types ----
+
+export interface ServerNode {
+  id: number
+  name: string
+  host: string
+  port: number
+  role: 'standalone' | 'master' | 'iran' | 'foreign' | 'generic'
+  enabled: boolean
+  notes: string
+  status: 'online' | 'offline' | 'unknown'
+  last_seen: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface NodeSummary {
+  version: string
+  role: string
+  system: {
+    cpu_percent: number
+    mem_total: number
+    mem_used: number
+    mem_percent: number
+    disk_percent: number
+    load1: number
+    uptime: number
+    platform: string
+    num_cpu: number
+  }
+  mappings: { total: number; enabled: number }
+  ports: { total: number; unmanaged: number }
+  health: { up: number; down: number }
+  tunnel: {
+    hedioum_installed: boolean
+    hedioum_active: string
+    xray_installed: boolean
+    bridge_active: string
+    socks_listening?: string
+    role: string
+  }
 }
 
 // ---- v2.2 live connections ----

@@ -1,0 +1,125 @@
+// Package nodeclient talks to remote PortGuard nodes over their node API:
+// GET/POST /api/node/* endpoints authenticated with the shared node token.
+package nodeclient
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// Client is an authenticated client for one remote node.
+type Client struct {
+	BaseURL string
+	Token   string
+	HTTP    *http.Client
+}
+
+func New(host string, port int, token string) *Client {
+	scheme := "http"
+	base := strings.TrimSuffix(host, "/")
+	if strings.HasPrefix(host, "https://") {
+		scheme = "https"
+		base = strings.TrimPrefix(host, "https://")
+	} else if strings.HasPrefix(host, "http://") {
+		base = strings.TrimPrefix(host, "http://")
+	}
+	return &Client{
+		BaseURL: fmt.Sprintf("%s://%s:%d", scheme, base, port),
+		Token:   token,
+		HTTP:    &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
+func (c *Client) do(method, path string, body any, out any) error {
+	var rd io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, c.BaseURL+path, rd)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 400 {
+		msg := strings.TrimSpace(string(raw))
+		if len(msg) > 300 {
+			msg = msg[:300]
+		}
+		return fmt.Errorf("node returned %d: %s", resp.StatusCode, msg)
+	}
+	if out != nil {
+		if err := json.Unmarshal(raw, out); err != nil {
+			return fmt.Errorf("node response parse error: %v", err)
+		}
+	}
+	return nil
+}
+
+// Ping checks reachability + token validity.
+func (c *Client) Ping() error {
+	return c.do(http.MethodGet, "/api/node/ping", nil, nil)
+}
+
+// Summary is the aggregated node overview.
+type Summary struct {
+	Version   string `json:"version"`
+	Role      string `json:"role"`
+	System    map[string]any `json:"system"`
+	Mappings  map[string]any `json:"mappings"`
+	Ports     map[string]any `json:"ports"`
+	Health    map[string]any `json:"health"`
+	Tunnel    map[string]any `json:"tunnel"`
+}
+
+func (c *Client) GetSummary() (*Summary, error) {
+	var s Summary
+	if err := c.do(http.MethodGet, "/api/node/summary", nil, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// ListMappings fetches the node's mappings.
+func (c *Client) ListMappings() (json.RawMessage, error) {
+	var out struct {
+		Mappings json.RawMessage `json:"mappings"`
+	}
+	if err := c.do(http.MethodGet, "/api/node/mappings", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Mappings, nil
+}
+
+// Apply triggers config apply on the node.
+func (c *Client) Apply() error {
+	return c.do(http.MethodPost, "/api/node/apply", nil, nil)
+}
+
+// Connections fetches the node's live connection log.
+func (c *Client) Connections() (json.RawMessage, error) {
+	var out struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := c.do(http.MethodGet, "/api/node/connections", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Data, nil
+}

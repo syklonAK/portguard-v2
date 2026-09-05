@@ -90,7 +90,7 @@ export function Badge({
   color = 'slate',
   children,
 }: {
-  color?: 'slate' | 'green' | 'red' | 'amber' | 'blue' | 'purple'
+  color?: 'slate' | 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'cyan'
   children: ReactNode
 }) {
   const colors = {
@@ -100,6 +100,7 @@ export function Badge({
     amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     blue: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
     purple: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+    cyan: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
   }
   return (
     <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-medium ${colors[color]}`}>

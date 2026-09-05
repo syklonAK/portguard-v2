@@ -18,6 +18,7 @@ import Audit from './pages/Audit'
 import Settings from './pages/Settings'
 import Tunnels from './pages/Tunnels'
 import Connections from './pages/Connections'
+import Servers from './pages/Servers'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
@@ -94,6 +95,7 @@ export default function App() {
         }
       >
         <Route path="/" element={<Dashboard />} />
+        <Route path="/servers" element={<Servers />} />
         <Route path="/ports" element={<Ports />} />
         <Route path="/connections" element={<Connections />} />
         <Route path="/mappings" element={<Mappings />} />

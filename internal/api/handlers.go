@@ -126,7 +126,23 @@ func (a *App) Router() http.Handler {
 
 		// v2.2: self-updater
 		pr.Post("/api/update", a.handleUpdate)
+
+		// v2.3: multi-server management (master side)
+		pr.Get("/api/nodes", a.handleListNodes)
+		pr.Post("/api/nodes", a.handleCreateNode)
+		pr.Put("/api/nodes/{id}", a.handleUpdateNode)
+		pr.Delete("/api/nodes/{id}", a.handleDeleteNode)
+		pr.Post("/api/nodes/{id}/{action}", a.handleNodeAction)
+		pr.Get("/api/node-self", a.handleNodeTokenInfo)
+		pr.Put("/api/node-self", a.handlePutNodeToken)
 	})
+
+	// node API (master→node, token-authenticated, no admin JWT)
+	r.Get("/api/node/ping", a.handleNodePing)
+	r.Get("/api/node/summary", a.handleNodeSummary)
+	r.Get("/api/node/mappings", a.handleNodeMappings)
+	r.Post("/api/node/apply", a.handleNodeApply)
+	r.Get("/api/node/connections", a.handleNodeConnections)
 
 	// SPA (embedded)
 	dist, err := fs.Sub(web.Dist, "dist")
