@@ -56,7 +56,7 @@ export default function Audit() {
                 {audit.data.map((l) => (
                   <tr key={l.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                     <td className="px-5 py-2.5 whitespace-nowrap font-mono text-xs text-slate-500">
-                      {new Date(l.created_at * 1000).toLocaleString()}
+                      {new Date(l.created_at).toLocaleString()}
                     </td>
                     <td className="px-3 py-2.5 font-medium">{l.actor}</td>
                     <td className="px-3 py-2.5"><Badge color={actionColor[l.action] || 'slate'}>{l.action}</Badge></td>

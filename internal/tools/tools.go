@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -200,6 +201,11 @@ type InstallResult struct {
 	Elapsed string `json:"elapsed"`
 }
 
+// installMu serializes installs: apt/dpkg and the xray installer both use
+// exclusive locks, and two concurrent installs (local page + remote master
+// trigger) would randomly fail on lock contention.
+var installMu sync.Mutex
+
 // Install runs the tool's official installer and returns combined output.
 // The command is executed as the panel user (root) with a generous timeout.
 func Install(id string) (*InstallResult, error) {
@@ -207,9 +213,14 @@ func Install(id string) (*InstallResult, error) {
 	if t == nil {
 		return nil, fmt.Errorf("unknown tool: %s", id)
 	}
+	installMu.Lock()
+	defer installMu.Unlock()
+
+	// remember pre-install state so a failed reinstall isn't reported as ok
+	preInstalled := toolPresent(t)
+
 	start := time.Now()
 	cmd := exec.Command("bash", "-c", t.InstallCmd)
-	// large output possible (apt), cap at 2MB
 	out, err := cmd.CombinedOutput()
 	res := &InstallResult{
 		ToolID:  id,
@@ -220,23 +231,29 @@ func Install(id string) (*InstallResult, error) {
 	if err != nil {
 		res.Output += fmt.Sprintf("\n[exit error: %v]", err)
 	}
-	// verify: did the binaries actually land?
-	for _, bin := range t.VerifyBins {
-		if p, _ := exec.Command(bin, "--help").CombinedOutput(); len(p) >= 0 {
-			if fileExists(bin) {
-				res.OK = true
-				return res, nil
-			}
-		}
-	}
-	if path, _ := exec.LookPath(t.ID); path != "" {
-		res.OK = true
+	// post-condition: the installer must have actually produced the binary
+	// (or it must already have been present when the command succeeded)
+	if !res.OK && preInstalled && toolPresent(t) {
+		// installer failed but the tool was and still is present: report a
+		// clear failure, not a masked success
+		res.Output += "\n[installer failed; tool was already present — state unchanged]"
+	} else {
+		res.OK = toolPresent(t)
 	}
 	return res, nil
 }
 
-func fileExists(p string) bool {
-	return exec.Command("test", "-x", p).Run() == nil
+// toolPresent checks whether any of the tool's verify binaries is executable.
+func toolPresent(t *Tool) bool {
+	for _, bin := range t.VerifyBins {
+		if exec.Command("test", "-x", bin).Run() == nil {
+			return true
+		}
+	}
+	if path, _ := exec.LookPath(t.ID); path != "" {
+		return true
+	}
+	return false
 }
 
 func tail(s string, n int) string {

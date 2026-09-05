@@ -68,6 +68,8 @@ type ConnEntry struct {
 	Managed    bool   `json:"managed"`
 	Inner      bool   `json:"inner"` // portguard panel / loopback-only services
 	Self       bool   `json:"self"`  // connection to the panel itself
+	FirstSeen  int64  `json:"first_seen"`
+	LastSeen   int64  `json:"last_seen"`
 }
 
 // TopTalker aggregates live connections per source IP.

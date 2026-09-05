@@ -188,6 +188,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_ports_port ON ports(port);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conns_src ON connections(src_ip);
+CREATE INDEX IF NOT EXISTS idx_conns_dst ON connections(dst_port);
+CREATE INDEX IF NOT EXISTS idx_health_mapping ON target_health(mapping_id, target_index);
 `
 	_, err := db.Exec(schema)
 	return err
@@ -480,9 +483,15 @@ func (s *Store) UpsertHealth(h TargetHealth) error {
 	_, err := s.DB.Exec(`INSERT INTO target_health(mapping_id, target_index, host, port, status, latency_ms, fail_count, last_check_at)
 		VALUES(?,?,?,?,?,?,?,?)
 		ON CONFLICT(mapping_id, target_index) DO UPDATE SET
-		  host=excluded.host, port=excluded.port, status=excluded.status, latency_ms=excluded.latency_ms,
-		  fail_count=excluded.fail_count, last_check_at=excluded.last_check_at`,
-		h.MappingID, h.TargetIndex, h.Host, h.Port, h.Status, h.LatencyMS, h.FailCount, nullTime(h.LastCheckAt))
+		host=excluded.host, port=excluded.port, status=excluded.status,
+		latency_ms=excluded.latency_ms, fail_count=excluded.fail_count, last_check_at=excluded.last_check_at`,
+		h.MappingID, h.TargetIndex, h.Host, h.Port, h.Status, h.LatencyMS, h.FailCount, h.LastCheckAt.Unix())
+	return err
+}
+
+// DeleteHealth removes one target's health row (pruning stale targets).
+func (s *Store) DeleteHealth(mappingID, targetIndex int) error {
+	_, err := s.DB.Exec(`DELETE FROM target_health WHERE mapping_id=? AND target_index=?`, mappingID, targetIndex)
 	return err
 }
 
@@ -780,6 +789,8 @@ func (s *Store) ListConnections() ([]ConnEntry, error) {
 		c.Managed = managed == 1
 		c.Inner = inner == 1
 		c.Self = self == 1
+		c.FirstSeen = firstSeen
+		c.LastSeen = lastSeen
 		out = append(out, c)
 	}
 	return out, rows.Err()

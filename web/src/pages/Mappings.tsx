@@ -235,24 +235,28 @@ export default function Mappings() {
     qc.invalidateQueries({ queryKey: ['system'] })
   }
 
-  const applyJson = (): boolean => {
+  const applyJson = (): Partial<Mapping> | null => {
     try {
       const parsed = JSON.parse(jsonText) as Partial<Mapping>
       delete (parsed as Record<string, unknown>).id
       delete (parsed as Record<string, unknown>).created_at
       delete (parsed as Record<string, unknown>).updated_at
-      setDraft((d) => ({ ...d, ...parsed }))
-      return true
+      const merged = { ...draft, ...parsed }
+      setDraft(merged)
+      return merged
     } catch {
       push('error', 'Invalid JSON — fix the syntax and try again')
-      return false
+      return null
     }
   }
 
   const save = async () => {
     let payload = draft
-    if (formTab === 'json' && !applyJson()) return
-    if (formTab === 'json') payload = draft // applyJson already merged
+    if (formTab === 'json') {
+      const merged = applyJson()
+      if (!merged) return
+      payload = merged
+    }
     setSaving(true)
     try {
       if (modal === 'create') {

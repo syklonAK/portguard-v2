@@ -85,7 +85,7 @@ export interface AuditLog {
   action: string
   detail: string
   status: 'ok' | 'error'
-  created_at: number // unix seconds
+  created_at: string // RFC3339
 }
 
 export interface SystemInfo {
@@ -475,6 +475,8 @@ export interface ConnEntry {
   managed: boolean
   inner: boolean
   self: boolean
+  first_seen: number
+  last_seen: number
 }
 
 export interface TopTalker {

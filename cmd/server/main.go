@@ -142,25 +142,28 @@ func main() {
 	checker := health.New(st, interval, broker)
 	go checker.Run(ctx)
 
-	// periodic + initial port scan
+	// periodic + initial port scan (interval re-read each round so Settings
+	// changes apply without a restart)
 	go func() {
-		scanEvery := 5 * time.Minute
-		if v, err := st.GetSetting("scan_interval"); err == nil && v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n >= 30 {
-				scanEvery = time.Duration(n) * time.Second
+		scanEvery := func() time.Duration {
+			if v, err := st.GetSetting("scan_interval"); err == nil && v != "" {
+				if n, err := strconv.Atoi(v); err == nil && n >= 30 {
+					return time.Duration(n) * time.Second
+				}
 			}
+			return 5 * time.Minute
 		}
 		time.Sleep(3 * time.Second)
 		runScan(st, scn, *port, broker)
-		t := time.NewTicker(scanEvery)
-		defer t.Stop()
 		for {
+			t := time.NewTimer(scanEvery())
 			select {
 			case <-ctx.Done():
+				t.Stop()
 				return
 			case <-t.C:
-				runScan(st, scn, *port, broker)
 			}
+			runScan(st, scn, *port, broker)
 		}
 	}()
 

@@ -304,21 +304,22 @@ WantedBy=multi-user.target
 	return exec.Command("systemctl", "daemon-reload").Run()
 }
 
-// BackupBridge copies the current live bridge config (if any) with a
-// timestamp suffix, like the nginx/haproxy backup pipeline.
+// BackupBridge copies the current live bridge config (if any) into a
+// timestamp-named backup directory — the same layout the Backups page and
+// its retention pruning expect.
 func BackupBridge(backupsDir string) (string, error) {
 	if !fileExists(BridgeConfPath) {
 		return "", nil
 	}
-	if err := os.MkdirAll(backupsDir, 0o755); err != nil {
+	dir := filepath.Join(backupsDir, time.Now().UTC().Format("20060102-150405"))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("bridge-%s.json", time.Now().UTC().Format("20060102-150405"))
-	dst := filepath.Join(backupsDir, name)
 	data, err := os.ReadFile(BridgeConfPath)
 	if err != nil {
 		return "", err
 	}
+	dst := filepath.Join(dir, filepath.Base(BridgeConfPath))
 	if err := os.WriteFile(dst, data, 0o600); err != nil {
 		return "", err
 	}

@@ -356,6 +356,7 @@ func (a *App) handleImport(w http.ResponseWriter, r *http.Request) {
 			errorsList = append(errorsList, fmt.Sprintf("%s: %v", m.Name, err))
 			continue
 		}
+		m.ID = id // keep the conflict check aware of imported mappings
 		all = append(all, m)
 		existing[m.Name] = true
 		created++

@@ -31,18 +31,31 @@ func New(st *store.Store, interval time.Duration, broker EventSink) *Checker {
 	return &Checker{St: st, Interval: interval, Broker: broker}
 }
 
+// currentInterval re-reads the check_interval setting so Settings changes
+// apply live without a service restart. Falls back to the boot interval.
+func (c *Checker) currentInterval() time.Duration {
+	if v, err := c.St.GetSetting("check_interval"); err == nil && v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 5 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return c.Interval
+}
+
 func (c *Checker) Run(ctx context.Context) {
-	// first round promptly, then on the ticker
+	// first round promptly, then on a timer whose interval is re-read every
+	// round so settings changes apply without a restart
 	c.Round()
-	t := time.NewTicker(c.Interval)
-	defer t.Stop()
 	for {
+		d := c.currentInterval()
+		t := time.NewTimer(d)
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
 		case <-t.C:
-			c.Round()
 		}
+		c.Round()
 	}
 }
 
@@ -80,6 +93,21 @@ func (c *Checker) Round() {
 		}
 	}
 	wg.Wait()
+
+	// prune rows for targets that no longer exist (shrunk target lists,
+	// deleted mappings) so dashboards don't count phantom backends
+	currentKeys := make(map[string]bool, len(results))
+	for _, h := range results {
+		currentKeys[fmt.Sprintf("%d:%d", h.MappingID, h.TargetIndex)] = true
+	}
+	for key := range prev {
+		if !currentKeys[key] {
+			var mid, idx int
+			if _, err := fmt.Sscanf(key, "%d:%d", &mid, &idx); err == nil {
+				_ = c.St.DeleteHealth(mid, idx)
+			}
+		}
+	}
 
 	for _, h := range results {
 		if err := c.St.UpsertHealth(h); err != nil {

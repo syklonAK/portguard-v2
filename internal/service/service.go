@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -189,19 +190,34 @@ func (s *Service) ApplyAll(actor string) error {
 		return err
 	}
 
-	// 3) backup current live files
+	// 3) backup current live files (recording which ones did NOT exist —
+	// those must be deleted, not restored, during rollback)
 	backupDir := filepath.Join(s.Paths.BackupsDir, time.Now().Format("20060102-150405"))
 	if err := s.backupFiles(backupDir, livePaths); err != nil {
 		s.St.Audit(actor, "apply", "backup failed: "+err.Error(), "error")
 		return err
+	}
+	wasNew := map[string]bool{}
+	for _, live := range livePaths {
+		if _, err := os.Stat(live); os.IsNotExist(err) {
+			wasNew[live] = true
+		}
 	}
 
 	// 4) stage + atomically apply all files
 	var applied []string
 	restore := func() {
 		for _, livePath := range applied {
+			if wasNew[livePath] {
+				// the file did not exist before this apply: remove it instead
+				// of restoring a stale copy (the backup dir has none)
+				_ = os.Remove(livePath)
+				continue
+			}
 			bak := filepath.Join(backupDir, livePath)
-			_ = copyFile(bak, livePath) // best-effort restore
+			if err := copyFile(bak, livePath); err != nil {
+				s.St.Audit("system", "apply.rollback", "restore failed for "+livePath+": "+err.Error(), "error")
+			}
 		}
 	}
 	for _, se := range stagedList {
@@ -221,12 +237,17 @@ func (s *Service) ApplyAll(actor string) error {
 		if err := se.engine.Reload(s.Paths); err != nil {
 			restore()
 			for _, eng := range s.Engines {
-				_ = eng.Reload(s.Paths) // restore service state with old configs
+				if rerr := eng.Reload(s.Paths); rerr != nil {
+					s.St.Audit("system", "apply.rollback", "reload after rollback failed for "+rerr.Error(), "error")
+				}
 			}
 			s.St.Audit(actor, "apply", "reload failed for "+se.name+", rolled back: "+err.Error(), "error")
 			return fmt.Errorf("reload %s (rolled back): %w", se.name, err)
 		}
 	}
+
+	// 6) prune old apply backups: keep the most recent 20
+	pruneBackups(s.Paths.BackupsDir, 20)
 
 	s.St.Audit(actor, "apply", fmt.Sprintf("applied %d mappings (nginx=%d, haproxy=%d)",
 		countEnabled(mappings), countEngine(mappings, "nginx"), countEngine(mappings, "haproxy")), "ok")
@@ -235,6 +256,30 @@ func (s *Service) ApplyAll(actor string) error {
 
 func (s *Service) absPath(eng proxy.Engine, rel string) string {
 	return eng.LivePath(s.Paths, rel)
+}
+
+// pruneBackups removes the oldest timestamp-named backup directories beyond
+// keep, so the backups dir doesn't grow unboundedly with every apply.
+func pruneBackups(dir string, keep int) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	var dirs []string
+	for _, e := range entries {
+		if e.IsDir() && len(e.Name()) == len("20060102-150405") {
+			if _, err := time.Parse("20060102-150405", e.Name()); err == nil {
+				dirs = append(dirs, e.Name())
+			}
+		}
+	}
+	if len(dirs) <= keep {
+		return
+	}
+	sort.Strings(dirs) // timestamp names sort chronologically
+	for _, d := range dirs[:len(dirs)-keep] {
+		_ = os.RemoveAll(filepath.Join(dir, d))
+	}
 }
 
 func (s *Service) writeCertFiles(certs map[int64]store.Cert) error {

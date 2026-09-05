@@ -114,6 +114,30 @@ func ValidateMapping(m store.Mapping, all []store.Mapping, panelPort int) error 
 	if strings.TrimSpace(m.Name) == "" {
 		return fmt.Errorf("name is required")
 	}
+	if hasControlChars(m.Name) {
+		return fmt.Errorf("name must not contain control characters or newlines")
+	}
+	for _, h := range m.ServerNames {
+		if hasControlChars(h) {
+			return fmt.Errorf("server_names must not contain control characters or newlines")
+		}
+	}
+	if hasControlChars(m.HostHeader) {
+		return fmt.Errorf("host_header must not contain control characters or newlines")
+	}
+	if hasControlChars(m.RedirectTo) {
+		return fmt.Errorf("redirect_to must not contain control characters or newlines")
+	}
+	for k, v := range m.ExtraHeaders {
+		if hasControlChars(k) || hasControlChars(v) {
+			return fmt.Errorf("extra_headers must not contain control characters or newlines")
+		}
+	}
+	for _, pr := range m.PathRoutes {
+		if hasControlChars(pr.Prefix) {
+			return fmt.Errorf("path route prefix must not contain control characters")
+		}
+	}
 	if !ValidEngine(m.Engine) {
 		return fmt.Errorf("engine must be nginx or haproxy")
 	}
@@ -203,17 +227,53 @@ func ValidateMapping(m store.Mapping, all []store.Mapping, panelPort int) error 
 	if m.ListenPort == panelPort {
 		return fmt.Errorf("listen_port %d is the PortGuard panel port", panelPort)
 	}
-	// conflict check against all other enabled mappings
+	// conflict check against all other enabled mappings. A wildcard bind
+	// (0.0.0.0 / :: / empty) conflicts with ANY ip on the same port, since
+	// only one socket can own it.
 	for _, other := range all {
 		if other.ID == m.ID || !other.Enabled || !m.Enabled {
 			continue
 		}
-		if other.ListenIP == m.ListenIP && other.ListenPort == m.ListenPort {
+		if other.ListenPort == m.ListenPort && listenIPsOverlap(other.ListenIP, m.ListenIP) {
 			return fmt.Errorf("listen conflict: mapping #%d (%s) already uses %s:%d",
-				other.ID, other.Name, m.ListenIP, m.ListenPort)
+				other.ID, other.Name, other.ListenIP, other.ListenPort)
 		}
 	}
 	return nil
+}
+
+// listenIPsOverlap reports whether two listen addresses would fight for the
+// same socket: equal addresses, or either side being a wildcard.
+func listenIPsOverlap(a, b string) bool {
+	norm := func(ip string) string {
+		if ip == "" || ip == "*" {
+			return "0.0.0.0"
+		}
+		return ip
+	}
+	a, b = norm(a), norm(b)
+	if a == b {
+		return true
+	}
+	wildA := a == "0.0.0.0" || a == "::"
+	wildB := b == "0.0.0.0" || b == "::"
+	// v4 wildcard vs v6 wildcard both try to own every port on all
+	// interfaces — treat any wildcard pair as overlapping for the same port
+	return wildA || wildB
+}
+
+// hasControlChars reports whether s contains characters that could break out
+// of a config directive line (newline, CR, NUL or other control bytes).
+func hasControlChars(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 func validHostname(h string) bool {

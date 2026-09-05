@@ -281,6 +281,10 @@ func bindIP(ip string) string {
 	if ip == "::" {
 		return "*"
 	}
+	// bracket IPv6 literals so the port split is unambiguous
+	if strings.Contains(ip, ":") {
+		return "[" + ip + "]"
+	}
 	return ip
 }
 

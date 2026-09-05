@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"portguard/internal/store"
 )
@@ -38,6 +39,7 @@ func New() *Scanner { return &Scanner{} }
 // Scan returns listening TCP/UDP sockets with owning process info.
 // Primary source is `ss -H -tulnp`; falls back to /proc parsing.
 func (s *Scanner) Scan(selfPort int) ([]store.PortEntry, error) {
+	ResetPidUserCache()
 	entries, err := scanSS()
 	if err != nil {
 		entries, err = scanProc()
@@ -236,19 +238,40 @@ func normalizeIP(h string) string {
 	return h
 }
 
-var pidUserCache = map[int]string{}
+var (
+	pidUserCache = map[int]string{}
+	pidUserMu    sync.Mutex
+)
 
-// psUser resolves the owner of a PID via ps (cached).
+// psUser resolves the owner of a PID via ps (cached; PIDs are re-resolved
+// when their cache entry is older than the cache generation, which resets
+// each scan so recycled PIDs don't keep stale owners).
+var psUserCacheGen uint64
+
 func psUser(pid int) string {
+	pidUserMu.Lock()
 	if n, ok := pidUserCache[pid]; ok {
+		pidUserMu.Unlock()
 		return n
 	}
+	pidUserMu.Unlock()
 	name := ""
 	if out, err := exec.Command("ps", "-o", "user=", "-p", strconv.Itoa(pid)).Output(); err == nil {
 		name = strings.TrimSpace(string(out))
 	}
+	pidUserMu.Lock()
 	pidUserCache[pid] = name
+	pidUserMu.Unlock()
 	return name
+}
+
+// ResetPidUserCache clears the owner cache; called at the start of every
+// scan so recycled PIDs resolve to their current owners.
+func ResetPidUserCache() {
+	pidUserMu.Lock()
+	pidUserCache = map[int]string{}
+	psUserCacheGen++
+	pidUserMu.Unlock()
 }
 
 // scanProc is the no-ss fallback: /proc/net/{tcp,tcp6,udp,udp6} + inode->pid map.

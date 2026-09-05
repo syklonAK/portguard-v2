@@ -119,8 +119,11 @@ stream {
 
 func renderHTTPServer(m store.Mapping, p Paths) (string, error) {
 	var b strings.Builder
-	listen := m.ListenIP + ":" + itoa(m.ListenPort)
-	fmt.Fprintf(&b, "    # mapping #%d: %s\n    server {\n", m.ID, m.Name)
+	listen := nginxListenAddr(m.ListenIP, m.ListenPort)
+	// a specific IP only listens on that family; the [::] companion line is
+	// added only for wildcard listeners
+	wildcard := m.ListenIP == "" || m.ListenIP == "0.0.0.0" || m.ListenIP == "::"
+	fmt.Fprintf(&b, "    # mapping #%d: %s\n    server {\n", m.ID, escapeNginxComment(m.Name))
 
 	if m.Protocol == "https" {
 		if m.SSLCertID == nil {
@@ -132,10 +135,16 @@ func renderHTTPServer(m store.Mapping, p Paths) (string, error) {
 		if m.HTTP2 {
 			h2 = " http2"
 		}
-		fmt.Fprintf(&b, "        listen %s ssl%s;\n        listen [::]:%d ssl%s;\n", listen, h2, m.ListenPort, h2)
+		fmt.Fprintf(&b, "        listen %s ssl%s;\n", listen, h2)
+		if wildcard {
+			fmt.Fprintf(&b, "        listen [::]:%d ssl%s;\n", m.ListenPort, h2)
+		}
 		fmt.Fprintf(&b, "        ssl_certificate     %s;\n        ssl_certificate_key %s;\n", certPath, keyPath)
 	} else {
-		fmt.Fprintf(&b, "        listen %s;\n        listen [::]:%d;\n", listen, m.ListenPort)
+		fmt.Fprintf(&b, "        listen %s;\n", listen)
+		if wildcard {
+			fmt.Fprintf(&b, "        listen [::]:%d;\n", m.ListenPort)
+		}
 	}
 
 	if len(m.ServerNames) > 0 {
@@ -339,7 +348,7 @@ func renderStreamServer(m store.Mapping) string {
 	if m.Protocol == "udp" {
 		protoTag = " udp"
 	}
-	fmt.Fprintf(&b, "    # mapping #%d: %s\n    upstream pg_stream_%d {\n", m.ID, m.Name, m.ID)
+	fmt.Fprintf(&b, "    # mapping #%d: %s\n    upstream pg_stream_%d {\n", m.ID, escapeNginxComment(m.Name), m.ID)
 	switch m.Balance {
 	case "least_conn":
 		b.WriteString("        least_conn;\n")
@@ -354,8 +363,8 @@ func renderStreamServer(m store.Mapping) string {
 		fmt.Fprintf(&b, "        server %s:%d%s;\n", escapeNginx(t.Host), t.Port, w)
 	}
 	b.WriteString("    }\n")
-	fmt.Fprintf(&b, "    server {\n        listen %s:%d%s;\n        proxy_pass pg_stream_%d;\n        proxy_connect_timeout 5s;\n    }\n\n",
-		m.ListenIP, m.ListenPort, protoTag, m.ID)
+	fmt.Fprintf(&b, "    server {\n        listen %s%s;\n        proxy_pass pg_stream_%d;\n        proxy_connect_timeout 5s;\n    }\n\n",
+		nginxListenAddr(m.ListenIP, m.ListenPort), protoTag, m.ID)
 	return b.String()
 }
 
@@ -439,11 +448,48 @@ func renderNginxAccessRules(m store.Mapping) string {
 	return b.String()
 }
 
+// escapeNginx neutralises directive-breaking characters. Control characters
+// and newlines are stripped entirely (validation rejects them anyway, but
+// this is the render-time last line of defence against config injection).
 func escapeNginx(s string) string {
-	return strings.NewReplacer(";", "\\;", "{", "\\{", "}", "\\}", "\"", "\\\"", "\\", "\\\\").Replace(s)
+	// strip control chars first, then escape the structural ones
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return strings.NewReplacer(";", "\\;", "{", "\\{", "}", "\\}", "\"", "\\\"", "\\", "\\\\").Replace(b.String())
 }
 
-func itoa(n int) string { return fmt.Sprintf("%d", n) }
+// escapeNginxComment makes arbitrary text safe inside a `# comment` line:
+// newlines would end the comment and inject directives, so they are removed.
+func escapeNginxComment(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\n' || r == '\r' || r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// nginxListenAddr renders a listen address:port for the given IP. IPv6
+// literals are bracketed (except the bare "::" wildcard which becomes plain
+// [::]).
+func nginxListenAddr(ip string, port int) string {
+	if ip == "::" || ip == "" {
+		return fmt.Sprintf("[::]:%d", port)
+	}
+	if strings.Contains(ip, ":") { // IPv6 literal
+		return fmt.Sprintf("[%s]:%d", ip, port)
+	}
+	return fmt.Sprintf("%s:%d", ip, port)
+}
 
 func (NginxEngine) Validate(staged map[string]string, p Paths) error {
 	tmp, err := os.MkdirTemp("", "portguard-nginx-*")

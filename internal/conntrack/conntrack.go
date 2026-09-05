@@ -48,6 +48,10 @@ func (s *Sampler) sample() {
 	if err != nil {
 		return
 	}
+	// enrich before persisting so the DB flags (managed/inner/self) and the
+	// top-talker SQL filters are meaningful
+	mappings, _ := s.st.ListMappings()
+	EnrichManaged(conns, mappings, s.panelPort)
 	now := time.Now().Unix()
 	if err := s.st.ReplaceConnections(conns, now); err != nil {
 		return

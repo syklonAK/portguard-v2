@@ -50,10 +50,14 @@ func actorFrom(ctx context.Context) string {
 
 func (a *App) Router() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
 
+	r.Use(middleware.RequestID)
+	// NOTE: middleware.RealIP is intentionally NOT used: trusting
+	// X-Forwarded-For from arbitrary clients would let attackers bypass the
+	// login rate limiter and poison audit entries with fake IPs. The panel
+	// is meant to be exposed directly; put a trusted reverse proxy in front
+	// only if you accept that trade-off.
+	r.Use(middleware.Recoverer)
 	r.Get("/api/healthz", a.handleHealthz)
 	r.Get("/api/setup-status", a.handleSetupStatus)
 	r.Post("/api/setup", a.handleSetup)
@@ -442,6 +446,9 @@ func (a *App) handleCreateMapping(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !a.certExists(w, m) {
+		return
+	}
 	all, err := a.St.ListMappings()
 	if err != nil {
 		errJSON(w, err, 500)
@@ -473,6 +480,9 @@ func (a *App) handleUpdateMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.ID = id
+	if !a.certExists(w, m) {
+		return
+	}
 	all, err := a.St.ListMappings()
 	if err != nil {
 		errJSON(w, err, 500)
@@ -489,6 +499,20 @@ func (a *App) handleUpdateMapping(w http.ResponseWriter, r *http.Request) {
 	a.St.Audit(actorFrom(r.Context()), "mapping.update", "mapping #"+itoa(id)+" "+m.Name, "ok")
 	a.maybeAutoApply(actorFrom(r.Context()))
 	writeJSON(w, http.StatusOK, m)
+}
+
+// certExists verifies that an https mapping's certificate actually exists,
+// so a deleted/stale cert id is rejected at save time (422) instead of
+// exploding at nginx -t / haproxy -c during apply.
+func (a *App) certExists(w http.ResponseWriter, m store.Mapping) bool {
+	if m.Protocol != "https" || m.SSLCertID == nil {
+		return true
+	}
+	if _, err := a.St.GetCert(*m.SSLCertID); err != nil {
+		errJSON(w, errors.New("ssl_cert_id points to a certificate that no longer exists"), http.StatusUnprocessableEntity)
+		return false
+	}
+	return true
 }
 
 func (a *App) handleDeleteMapping(w http.ResponseWriter, r *http.Request) {

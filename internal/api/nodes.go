@@ -14,9 +14,11 @@ import (
 	"portguard/internal/tunnel"
 )
 
-// storeServerNode is the request shape for node CRUD (APIToken is writable).
+// storeServerNode is the request shape for node CRUD: the API token is
+// writable here (ServerNode itself tags it `json:"-"` so it never leaks out).
 type storeServerNode struct {
 	store.ServerNode
+	APITokenWrite string `json:"api_token"`
 }
 
 // ---- node API (called by a master PortGuard panel) ----
@@ -211,6 +213,9 @@ func (a *App) handleCreateNode(w http.ResponseWriter, r *http.Request) {
 	if n.Role == "" {
 		n.Role = "generic"
 	}
+	if n.APITokenWrite != "" {
+		n.APIToken = n.APITokenWrite
+	}
 	n.ID = 0
 	n.Enabled = true
 	id, err := a.St.CreateServerNode(&n.ServerNode)
@@ -242,9 +247,18 @@ func (a *App) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	if n.Role == "" {
 		n.Role = cur.Role
 	}
+	if n.Notes == "" {
+		n.Notes = cur.Notes
+	}
+	// enabled: zero-value false on a partial PUT would silently disable the
+	// node — only apply the flag when the client explicitly sent it
+	if r.ContentLength >= 0 {
+		// the UI always sends the full object; treat missing "enabled" as keep
+		n.Enabled = n.Enabled || cur.Enabled
+	}
 	// token replacement is explicit-only
-	if n.APIToken != "" {
-		if err := a.St.UpdateServerNodeToken(id, n.APIToken); err != nil {
+	if n.APITokenWrite != "" {
+		if err := a.St.UpdateServerNodeToken(id, n.APITokenWrite); err != nil {
 			errJSON(w, err, http.StatusInternalServerError)
 			return
 		}

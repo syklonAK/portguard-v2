@@ -18,12 +18,12 @@ export default function Connections() {
     refetchInterval: live ? 4000 : false,
   })
 
-  // instant refresh on SSE conns events
+  // instant refresh on SSE conns events (bridged in main.tsx)
   useEffect(() => {
     if (!live) return
     const handler = () => qc.invalidateQueries({ queryKey: ['connections'] })
-    window.addEventListener('pg-conns', handler)
-    return () => window.removeEventListener('pg-conns', handler)
+    window.addEventListener('pg-sse-conns', handler)
+    return () => window.removeEventListener('pg-sse-conns', handler)
   }, [live, qc])
 
   const data = conns.data
@@ -121,7 +121,7 @@ export default function Connections() {
                         {c.process ? <span className="font-mono">{c.process}</span> : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-3 py-2.5 text-2xs text-slate-400">
-                        {ago(firstSeenOf(data, c))}
+                        {ago(c.first_seen)}
                       </td>
                       <td className="px-5 py-2.5">
                         {c.self ? (
@@ -170,13 +170,6 @@ export default function Connections() {
       </div>
     </div>
   )
-}
-
-// first_seen isn't on ConnEntry (kept server-side); approximate from the
-// talker list when the same src appears there, else use the snapshot time.
-function firstSeenOf(data: import('../api').ConnectionsData | undefined, c: ConnEntry): number {
-  const t = data?.top_talkers?.find((x) => x.src_ip === c.src_ip)
-  return t?.first_seen ?? 0
 }
 
 function ago(ts: number): string {
