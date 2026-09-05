@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Network, ArrowLeftRight, ShieldCheck, Activity, ScrollText, Settings as SettingsIcon,
-  ShieldHalf, Moon, Sun, LogOut, Wrench, Gauge, History, Stethoscope, Waypoints, Radio, Server,
+  ShieldHalf, Moon, Sun, LogOut, Wrench, Gauge, History, Stethoscope, Waypoints, Radio, Server, Package,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -19,6 +19,7 @@ const nav = [
   { to: '/certs', label: 'SSL Certs', icon: ShieldCheck },
   { to: '/backups', label: 'Backups', icon: History },
   { to: '/diagnostics', label: 'Diagnostics', icon: Stethoscope },
+  { to: '/tools', label: 'Tools', icon: Package },
   { to: '/monitoring', label: 'Monitoring', icon: Activity },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },

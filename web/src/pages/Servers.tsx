@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Pencil, Trash2, RefreshCw, Server, Globe2, KeyRound, Zap, Activity,
-  RadioTower, Landmark, Cpu, HardDrive, HeartPulse, Waypoints,
+  RadioTower, Landmark, Cpu, HardDrive, HeartPulse, Waypoints, Wrench, Download,
 } from 'lucide-react'
-import { api, type ServerNode, type NodeSummary } from '../api'
-import { Badge, Button, Card, CardHeader, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
+import { api, type ServerNode, type NodeSummary, type ToolState, type ToolInstallResult } from '../api'
+import { Badge, Button, Card, CardHeader, CodeBlock, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
 
 const ROLES: { value: ServerNode['role']; label: string; desc: string }[] = [
@@ -49,6 +49,11 @@ export default function Servers() {
   const [tokenDraft, setTokenDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [summaryModal, setSummaryModal] = useState<{ node: ServerNode; data: NodeSummary } | null>(null)
+  const [toolsModal, setToolsModal] = useState<ServerNode | null>(null)
+  const [remoteTools, setRemoteTools] = useState<ToolState[] | null>(null)
+  const [toolsLoading, setToolsLoading] = useState(false)
+  const [installingTool, setInstallingTool] = useState<string | null>(null)
+  const [toolOutput, setToolOutput] = useState<ToolInstallResult | null>(null)
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['nodes'] })
 
@@ -108,6 +113,43 @@ export default function Servers() {
       refresh()
     } catch (e: any) {
       push('error', e.message)
+    }
+  }
+
+  const openTools = async (n: ServerNode) => {
+    setToolsModal(n)
+    setRemoteTools(null)
+    setToolOutput(null)
+    setToolsLoading(true)
+    try {
+      const res = await api.nodeTools(n.id)
+      setRemoteTools(res.tools)
+    } catch (e: any) {
+      push('error', e.message)
+      setToolsModal(null)
+    } finally {
+      setToolsLoading(false)
+    }
+  }
+
+  const installRemote = async (toolId: string) => {
+    if (!toolsModal) return
+    setInstallingTool(toolId)
+    setToolOutput(null)
+    try {
+      const res = await api.nodeInstallTool(toolsModal.id, toolId)
+      setToolOutput(res)
+      if (res.ok) {
+        push('success', `${toolId} installed on ${toolsModal.name} (${res.elapsed}).`)
+        const refreshed = await api.nodeTools(toolsModal.id)
+        setRemoteTools(refreshed.tools)
+      } else {
+        push('error', `${toolId} install reported problems on ${toolsModal.name}.`)
+      }
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setInstallingTool(null)
     }
   }
 
@@ -249,6 +291,9 @@ export default function Servers() {
                 <Button variant="secondary" size="sm" onClick={() => openSummary(n)}>
                   <Cpu className="h-3.5 w-3.5" /> Overview
                 </Button>
+                <Button variant="secondary" size="sm" onClick={() => openTools(n)}>
+                  <Wrench className="h-3.5 w-3.5" /> Tools
+                </Button>
                 <Button variant="secondary" size="sm" onClick={() => remoteApply.mutate(n)} disabled={remoteApply.isPending}>
                   <Zap className="h-3.5 w-3.5" /> Apply
                 </Button>
@@ -318,6 +363,71 @@ export default function Servers() {
             <Button onClick={save} disabled={saving || !draft.name || !draft.host}>{saving ? 'Saving…' : 'Save server'}</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* remote tools modal */}
+      <Modal open={toolsModal !== null} onClose={() => setToolsModal(null)} wide
+        title={toolsModal ? `Tools on ${toolsModal.name} (${toolsModal.host})` : ''}>
+        {toolsModal && (
+          <div className="space-y-4">
+            {toolsLoading ? (
+              <div className="flex justify-center py-12"><Spinner /></div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                      <th className="px-2 py-2.5 font-medium">Tool</th>
+                      <th className="px-2 py-2.5 font-medium">State</th>
+                      <th className="px-2 py-2.5 font-medium">Binary</th>
+                      <th className="px-2 py-2.5 text-right font-medium">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                    {(remoteTools ?? []).map((t) => (
+                      <tr key={t.id}>
+                        <td className="px-2 py-2.5 font-medium">{t.name}</td>
+                        <td className="px-2 py-2.5">
+                          {t.installed ? (
+                            <Badge color="green">{t.version || 'installed'}</Badge>
+                          ) : (
+                            <Badge color="red">missing</Badge>
+                          )}
+                        </td>
+                        <td className="px-2 py-2.5 font-mono text-2xs text-slate-400">{t.binary || '—'}</td>
+                        <td className="px-2 py-2.5">
+                          <Button
+                            size="sm"
+                            variant={t.installed ? 'secondary' : 'primary'}
+                            disabled={installingTool === t.id}
+                            onClick={() => installRemote(t.id)}
+                          >
+                            <Download className={`h-3.5 w-3.5 ${installingTool === t.id ? 'animate-bounce' : ''}`} />
+                            {installingTool === t.id ? 'Installing…' : t.installed ? 'Reinstall' : 'Install'}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {toolOutput && (
+              <div>
+                <div className="mb-1.5 flex items-center gap-2">
+                  <Badge color={toolOutput.ok ? 'green' : 'red'}>{toolOutput.ok ? 'ok' : 'error'}</Badge>
+                  <span className="text-2xs text-slate-400">finished in {toolOutput.elapsed}</span>
+                </div>
+                <CodeBlock code={toolOutput.output || '(no output)'} />
+              </div>
+            )}
+            <p className="text-2xs leading-relaxed text-slate-400">
+              The installer runs on the remote server through its node API (official installers only).
+              After installing <b>xray</b> for the tunnel bridge, disable the default xray service there
+              (<code>systemctl disable --now xray</code>) — PortGuard runs the bridge as its own unit.
+            </p>
+          </div>
+        )}
       </Modal>
 
       {/* remote overview modal */}

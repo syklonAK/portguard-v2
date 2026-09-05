@@ -35,6 +35,9 @@ type Status struct {
 	XrayInstalled     bool   `json:"xray_installed"`
 	XrayVersion       string `json:"xray_version,omitempty"`
 	XrayBinary        string `json:"xray_binary,omitempty"`
+	XrayPorts         string `json:"xray_ports,omitempty"`  // ports xray is listening on (public+loopback)
+	XrayPublicBind    string `json:"xray_public_bind,omitempty"` // first non-loopback listener (host:port)
+	XrayLoopbackOnly  bool   `json:"xray_loopback_only"`   // every xray inbound is 127.0.0.1
 	BridgeActive      string `json:"bridge_active"`     // active | inactive | absent
 	SocksListening    string `json:"socks_listening,omitempty"` // host:port of a local 40xxx SOCKS listener
 	Role              string `json:"role"`             // iran | foreign | unknown
@@ -71,6 +74,38 @@ func Detect() Status {
 	}
 	if out, err := exec.Command("systemctl", "is-active", "portguard-tunnel-bridge").Output(); err == nil {
 		st.BridgeActive = strings.TrimSpace(string(out))
+	}
+
+	// xray inbound discovery (ss-based): every listening xray port, plus the
+	// first publicly-bound one — mirrors hedioum-suite's node_public_bind check.
+	if out, err := exec.Command("ss", "-ltnp").CombinedOutput(); err == nil {
+		var ports []string
+		seen := map[string]bool{}
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.Contains(line, "xray") {
+				continue
+			}
+			fields := strings.Fields(line)
+			if len(fields) < 4 {
+				continue
+			}
+			// listening socket: LocalAddr:Port is field 3
+			bind := fields[3]
+			port := bind[strings.LastIndex(bind, ":")+1:]
+			if port == "" || seen[port] {
+				continue
+			}
+			seen[port] = true
+			ports = append(ports, port)
+			host := bind[:strings.LastIndex(bind, ":")]
+			if host != "127.0.0.1" && host != "[::1]" && st.XrayPublicBind == "" {
+				st.XrayPublicBind = bind
+			}
+		}
+		if len(ports) > 0 {
+			st.XrayPorts = strings.Join(ports, " ")
+			st.XrayLoopbackOnly = st.XrayPublicBind == ""
+		}
 	}
 
 	// SOCKS hub on loopback 40000-49999?

@@ -123,3 +123,41 @@ func (c *Client) Connections() (json.RawMessage, error) {
 	}
 	return out.Data, nil
 }
+
+// ToolState mirrors internal/tools.State over the wire.
+type ToolState struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Installed bool   `json:"installed"`
+	Version   string `json:"version,omitempty"`
+	Binary    string `json:"binary,omitempty"`
+	Category  string `json:"category"`
+}
+
+// Tools lists the managed-tool state on the node.
+func (c *Client) Tools() ([]ToolState, error) {
+	var out struct {
+		Tools []ToolState `json:"tools"`
+	}
+	if err := c.do(http.MethodGet, "/api/node/tools", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Tools, nil
+}
+
+// InstallTool runs the official installer for one tool on the node.
+func (c *Client) InstallTool(id string) (*InstallResult, error) {
+	var out InstallResult
+	if err := c.do(http.MethodPost, "/api/node/tools/"+id+"/install", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// InstallResult mirrors internal/tools.InstallResult over the wire.
+type InstallResult struct {
+	ToolID  string `json:"tool_id"`
+	OK      bool   `json:"ok"`
+	Output  string `json:"output"`
+	Elapsed string `json:"elapsed"`
+}

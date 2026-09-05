@@ -371,6 +371,13 @@ export const api = {
   // v2.2: self-updater
   selfUpdate: () => req<{ ok: boolean; note: string }>('POST', '/api/update'),
 
+  // v2.4: tools (local + remote)
+  tools: () => req<{ tools: ToolState[] }>('GET', '/api/tools'),
+  installTool: (id: string) => req<ToolInstallResult>('POST', `/api/tools/${id}/install`),
+  nodeTools: (nodeId: number) => req<{ tools: ToolState[] }>('POST', `/api/nodes/${nodeId}/tools`),
+  nodeInstallTool: (nodeId: number, tool: string) =>
+    req<ToolInstallResult>('POST', `/api/nodes/${nodeId}/install`, { tool }),
+
   // v2.2: live connections
   connections: (params?: { dst_port?: string; managed?: '1' | '0' }) => {
     const q = new URLSearchParams()
@@ -408,6 +415,24 @@ export interface ServerNode {
   last_seen: string | null
   created_at: string
   updated_at: string
+}
+
+// ---- v2.4 tools ----
+
+export interface ToolState {
+  id: string
+  name: string
+  installed: boolean
+  version?: string
+  binary?: string
+  category: 'proxy' | 'tunnel' | 'security' | 'infra'
+}
+
+export interface ToolInstallResult {
+  tool_id: string
+  ok: boolean
+  output: string
+  elapsed: string
 }
 
 export interface NodeSummary {

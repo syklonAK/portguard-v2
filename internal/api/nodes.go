@@ -10,6 +10,7 @@ import (
 	"portguard/internal/nodeclient"
 	"portguard/internal/store"
 	"portguard/internal/sysinfo"
+	"portguard/internal/tools"
 	"portguard/internal/tunnel"
 )
 
@@ -130,6 +131,58 @@ func (a *App) handleNodeConnections(w http.ResponseWriter, r *http.Request) {
 			"total":       len(conns),
 		},
 	})
+}
+
+// ---- node-side tools API ----
+
+// handleNodeTools reports which managed tools are installed on this server.
+func (a *App) handleNodeTools(w http.ResponseWriter, r *http.Request) {
+	if !a.nodeAuthed(r) {
+		unauthorized(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tools": tools.DetectAll()})
+}
+
+// handleNodeToolInstall installs a tool on this server (official installer).
+func (a *App) handleNodeToolInstall(w http.ResponseWriter, r *http.Request) {
+	if !a.nodeAuthed(r) {
+		unauthorized(w)
+		return
+	}
+	id := chi.URLParam(r, "tool")
+	res, err := tools.Install(id)
+	if err != nil {
+		errJSON(w, err, http.StatusNotFound)
+		return
+	}
+	status := "ok"
+	if !res.OK {
+		status = "error"
+	}
+	a.St.Audit("node", "tool.install "+id, "via master", status)
+	writeJSON(w, http.StatusOK, res)
+}
+
+// handleTools is the local (admin JWT) view of the tool registry.
+func (a *App) handleTools(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"tools": tools.DetectAll()})
+}
+
+// handleToolInstall is the local (admin JWT) install trigger.
+func (a *App) handleToolInstall(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "tool")
+	res, err := tools.Install(id)
+	if err != nil {
+		errJSON(w, err, http.StatusNotFound)
+		return
+	}
+	status := "ok"
+	if !res.OK {
+		status = "error"
+	}
+	a.St.Audit(actorFrom(r.Context()), "tool.install "+id, res.Elapsed, status)
+	writeJSON(w, http.StatusOK, res)
 }
 
 // ---- master-side node CRUD ----
@@ -266,6 +319,38 @@ func (a *App) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 		}
 		a.St.Audit(actorFrom(r.Context()), "node.apply", "server "+n.Name, "ok")
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	case "tools":
+		list, err := cli.Tools()
+		if err != nil {
+			_ = a.St.TouchServerNode(id, "offline")
+			errJSON(w, errString("unreachable: "+err.Error()), http.StatusBadGateway)
+			return
+		}
+		_ = a.St.TouchServerNode(id, "online")
+		writeJSON(w, http.StatusOK, map[string]any{"tools": list})
+	case "install":
+		// tool id comes from the body: {"tool": "xray"}
+		var body struct {
+			Tool string `json:"tool"`
+		}
+		if !readJSON(w, r, &body) {
+			return
+		}
+		if body.Tool == "" {
+			errJSON(w, errString("tool is required"), http.StatusUnprocessableEntity)
+			return
+		}
+		res, err := cli.InstallTool(body.Tool)
+		if err != nil {
+			errJSON(w, errString(err.Error()), http.StatusBadGateway)
+			return
+		}
+		status := "ok"
+		if !res.OK {
+			status = "error"
+		}
+		a.St.Audit(actorFrom(r.Context()), "node.tool.install "+body.Tool, "server "+n.Name, status)
+		writeJSON(w, http.StatusOK, res)
 	default:
 		errJSON(w, errString("unknown action"), http.StatusNotFound)
 	}

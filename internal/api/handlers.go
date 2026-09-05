@@ -135,6 +135,10 @@ func (a *App) Router() http.Handler {
 		pr.Post("/api/nodes/{id}/{action}", a.handleNodeAction)
 		pr.Get("/api/node-self", a.handleNodeTokenInfo)
 		pr.Put("/api/node-self", a.handlePutNodeToken)
+
+		// v2.4: tools (local)
+		pr.Get("/api/tools", a.handleTools)
+		pr.Post("/api/tools/{tool}/install", a.handleToolInstall)
 	})
 
 	// node API (master→node, token-authenticated, no admin JWT)
@@ -143,6 +147,8 @@ func (a *App) Router() http.Handler {
 	r.Get("/api/node/mappings", a.handleNodeMappings)
 	r.Post("/api/node/apply", a.handleNodeApply)
 	r.Get("/api/node/connections", a.handleNodeConnections)
+	r.Get("/api/node/tools", a.handleNodeTools)
+	r.Post("/api/node/tools/{tool}/install", a.handleNodeToolInstall)
 
 	// SPA (embedded)
 	dist, err := fs.Sub(web.Dist, "dist")
