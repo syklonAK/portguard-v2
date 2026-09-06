@@ -1,13 +1,13 @@
 package api
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -57,8 +57,10 @@ func (c *pasarguardClient) login() error {
 	if c.username == "" {
 		return fmt.Errorf("no pasarguard token and no username/password configured (Settings → PasarGuard)")
 	}
-	body, _ := json.Marshal(map[string]string{"username": c.username, "password": c.password})
-	resp, err := c.transport().Post(c.baseURL+"/api/admin/token", "application/json", bytes.NewReader(body))
+	// PasarGuard/Marzban implement the OAuth2 password flow: form-encoded
+	// fields, not JSON
+	form := url.Values{"username": {c.username}, "password": {c.password}}
+	resp, err := c.transport().PostForm(c.baseURL+"/api/admin/token", form)
 	if err != nil {
 		return err
 	}

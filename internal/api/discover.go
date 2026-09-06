@@ -51,10 +51,17 @@ func knownPanelKind(name string) string {
 func (a *App) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	seen := map[string]*discoveredPanel{}
 	add := func(p discoveredPanel) {
-		key := p.Kind + "|" + p.Source + "|" + p.Name
-		if _, ok := seen[key]; !ok {
-			seen[key] = &p
+		// the same panel is often visible via docker AND its .env — one
+		// integration per kind+URL, keeping the entry with the .env path
+		// (it carries server-side applicable credentials)
+		key := p.Kind + "|" + p.URL
+		if old, ok := seen[key]; ok {
+			if old.EnvPath == "" && p.EnvPath != "" {
+				seen[key] = &p
+			}
+			return
 		}
+		seen[key] = &p
 	}
 
 	// 1) docker containers (host-network panels bind ports directly; mapped
