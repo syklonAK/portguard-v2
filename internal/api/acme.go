@@ -644,8 +644,8 @@ func execStream(cmd *exec.Cmd, sink func(string)) (string, error) {
 	}
 	waitErr := cmd.Wait()
 	_ = pipe.Close()
-	return tailLines(strings.Join(lines, "
-"), 15), waitErr
+	nl := "\n"
+	return tailLines(strings.Join(lines, nl), 15), waitErr
 }
 
 func fileReadable(path string) bool {
