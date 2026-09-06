@@ -135,11 +135,11 @@ func ValidateLimits(l Limits) error {
 // Rule is one enforceable limit on a node: a user's traffic identified by
 // the public source IP their Xray connections originate from.
 type Rule struct {
-	UUID        string  `json:"uuid"`
-	Username    string  `json:"username"`
-	SourceIP    string  `json:"source_ip"`
-	DownloadBPS int64   `json:"download_bps"`
-	UploadBPS   int64   `json:"upload_bps"`
+	UUID        string `json:"uuid"`
+	Username    string `json:"username"`
+	SourceIP    string `json:"source_ip"`
+	DownloadBPS int64  `json:"download_bps"`
+	UploadBPS   int64  `json:"upload_bps"`
 }
 
 // Plan is the complete desired tc state for one node (versioned so agents

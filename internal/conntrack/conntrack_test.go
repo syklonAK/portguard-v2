@@ -8,9 +8,9 @@ import (
 
 func TestAddr(t *testing.T) {
 	cases := []struct {
-		in         string
-		ip, port   string
-		wantPort   int
+		in       string
+		ip, port string
+		wantPort int
 	}{
 		{"1.2.3.4:5678", "1.2.3.4", "", 5678},
 		{"[::1]:22", "::1", "", 22},

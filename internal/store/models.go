@@ -57,9 +57,9 @@ type Target struct {
 type PathTransport string
 
 const (
-	PathTransportWS      PathTransport = "ws"        // WebSocket (requires Upgrade header)
-	PathTransportHU      PathTransport = "httpupgrade" // HTTPUpgrade (requires Upgrade header)
-	PathTransportXHTTP   PathTransport = "xhttp"     // XHTTP / split HTTP (no Upgrade, streaming)
+	PathTransportWS    PathTransport = "ws"          // WebSocket (requires Upgrade header)
+	PathTransportHU    PathTransport = "httpupgrade" // HTTPUpgrade (requires Upgrade header)
+	PathTransportXHTTP PathTransport = "xhttp"       // XHTTP / split HTTP (no Upgrade, streaming)
 )
 
 // ValidPathTransport reports whether t is one of the supported transports.
@@ -71,26 +71,26 @@ func ValidPathTransport(t string) bool {
 // (port-in-path dynamic forwarding, like Xray inbound behind one domain).
 type PathRoute struct {
 	Transport PathTransport `json:"transport"` // ws | httpupgrade | xhttp
-	Prefix    string       `json:"prefix"`    // e.g. "ws" -> /ws/<port>
-	MinPort   int          `json:"min_port"`  // allowed local port range
-	MaxPort   int          `json:"max_port"`
+	Prefix    string        `json:"prefix"`    // e.g. "ws" -> /ws/<port>
+	MinPort   int           `json:"min_port"`  // allowed local port range
+	MaxPort   int           `json:"max_port"`
 }
 
 // ConnEntry is one live TCP connection observed on the host (snapshot).
 type ConnEntry struct {
-	SrcIP      string `json:"src_ip"`
-	SrcPort    int    `json:"src_port"`
-	DstIP      string `json:"dst_ip"`
-	DstPort    int    `json:"dst_port"`
-	Process    string `json:"process"`
-	PID        int    `json:"pid"`
-	UID        int    `json:"uid"`
-	State      string `json:"state"` // ESTAB mostly; listener entries show LISTEN
-	Managed    bool   `json:"managed"`
-	Inner      bool   `json:"inner"` // portguard panel / loopback-only services
-	Self       bool   `json:"self"`  // connection to the panel itself
-	FirstSeen  int64  `json:"first_seen"`
-	LastSeen   int64  `json:"last_seen"`
+	SrcIP     string `json:"src_ip"`
+	SrcPort   int    `json:"src_port"`
+	DstIP     string `json:"dst_ip"`
+	DstPort   int    `json:"dst_port"`
+	Process   string `json:"process"`
+	PID       int    `json:"pid"`
+	UID       int    `json:"uid"`
+	State     string `json:"state"` // ESTAB mostly; listener entries show LISTEN
+	Managed   bool   `json:"managed"`
+	Inner     bool   `json:"inner"` // portguard panel / loopback-only services
+	Self      bool   `json:"self"`  // connection to the panel itself
+	FirstSeen int64  `json:"first_seen"`
+	LastSeen  int64  `json:"last_seen"`
 }
 
 // TopTalker aggregates live connections per source IP.
@@ -130,7 +130,7 @@ type Mapping struct {
 	HostHeader   string            `json:"host_header"` // upstream Host header (proxy_set_header Host)
 	Decoy        string            `json:"decoy"`       // "" | builtin | custom — serve a real site on unmatched paths
 	DecoyHTML    string            `json:"decoy_html"`  // custom HTML when decoy == "custom"
-	Routes       []RouteRule       `json:"routes"`       // ordered path rules (advanced routing)
+	Routes       []RouteRule       `json:"routes"`      // ordered path rules (advanced routing)
 	ServiceID    *int64            `json:"service_id"`  // logical grouping
 	Notes        string            `json:"notes"`
 	CreatedAt    time.Time         `json:"created_at"`
@@ -140,18 +140,18 @@ type Mapping struct {
 // ServerNode is a managed remote server profile: another PortGuard panel
 // installation this master can configure and monitor over its node API.
 type ServerNode struct {
-	ID          int64      `json:"id"`
-	Name        string     `json:"name"`
-	Host        string     `json:"host"`       // public address of the node panel
-	Port        int        `json:"port"`       // node panel port
-	APIToken    string     `json:"-"`          // shared secret for the node API (never exposed)
-	Role        string     `json:"role"`       // standalone | master | iran | foreign | generic
-	Enabled     bool       `json:"enabled"`
-	Notes       string     `json:"notes"`
-	Status      string     `json:"status"`      // online | offline | unknown (last probe)
-	LastSeen    *time.Time `json:"last_seen"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID        int64      `json:"id"`
+	Name      string     `json:"name"`
+	Host      string     `json:"host"` // public address of the node panel
+	Port      int        `json:"port"` // node panel port
+	APIToken  string     `json:"-"`    // shared secret for the node API (never exposed)
+	Role      string     `json:"role"` // standalone | master | iran | foreign | generic
+	Enabled   bool       `json:"enabled"`
+	Notes     string     `json:"notes"`
+	Status    string     `json:"status"` // online | offline | unknown (last probe)
+	LastSeen  *time.Time `json:"last_seen"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 // ---- rate limiting (PasarGuard per-UUID bandwidth) ----
@@ -247,48 +247,48 @@ type Service struct {
 // requests go to its own targets (or a redirect). Rules are evaluated in
 // order; the mapping's own targets serve as the fallback ("/*").
 type RouteRule struct {
-	ID        int64    `json:"id"`
-	Path      string   `json:"path"`   // e.g. /ws/* — prefix match, * wildcard supported at the end
-	Enabled   bool     `json:"enabled"`
-	Targets   []Target `json:"targets"`
-	Redirect  string   `json:"redirect,omitempty"` // 301 target instead of proxying
-	Notes     string   `json:"notes,omitempty"`
+	ID       int64    `json:"id"`
+	Path     string   `json:"path"` // e.g. /ws/* — prefix match, * wildcard supported at the end
+	Enabled  bool     `json:"enabled"`
+	Targets  []Target `json:"targets"`
+	Redirect string   `json:"redirect,omitempty"` // 301 target instead of proxying
+	Notes    string   `json:"notes,omitempty"`
 }
 
 // MetricPoint is one sampled measurement for a node (0 = this panel).
 type MetricPoint struct {
-	NodeID     int64   `json:"node_id"`
-	CPUPercent float64 `json:"cpu_percent"`
-	MemPercent float64 `json:"mem_percent"`
+	NodeID      int64   `json:"node_id"`
+	CPUPercent  float64 `json:"cpu_percent"`
+	MemPercent  float64 `json:"mem_percent"`
 	DiskPercent float64 `json:"disk_percent"`
-	RxBytes    uint64  `json:"rx_bytes"` // cumulative
-	TxBytes    uint64  `json:"tx_bytes"`
-	RxBps      int64   `json:"rx_bps"`   // delta rate
-	TxBps      int64   `json:"tx_bps"`
-	Conns      int     `json:"conns"`
-	TS         int64   `json:"ts"`
+	RxBytes     uint64  `json:"rx_bytes"` // cumulative
+	TxBytes     uint64  `json:"tx_bytes"`
+	RxBps       int64   `json:"rx_bps"` // delta rate
+	TxBps       int64   `json:"tx_bps"`
+	Conns       int     `json:"conns"`
+	TS          int64   `json:"ts"`
 }
 
 // TunnelRelay is one Iran-side relay entry (Hedioum Pool Tunnel topology):
 // users hit this server and traffic is relayed to the foreign node through
 // the Hedioum SOCKS5 hub. mode: raw (passthrough) | tls (terminate here).
 type TunnelRelay struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Mode        string    `json:"mode"` // raw | tls
-	Enabled     bool      `json:"enabled"`
-	TargetHost  string    `json:"target_host"`  // foreign node public address
-	TargetPort  int       `json:"target_port"`  // foreign node port
-	ListenIP    string    `json:"listen_ip"`    // raw mode: public listen IP
-	ListenPort  int       `json:"listen_port"`   // raw mode: public listen port
-	BridgePort  int       `json:"bridge_port"`   // tls mode: local dokodemo port
-	UDP         bool      `json:"udp"`
-	HostHeader  string    `json:"host_header"`  // tls mode: Host sent to the foreign node
-	Domain      string    `json:"domain"`       // tls mode: public server_name
-	SSLCertID   *int64    `json:"ssl_cert_id"`  // tls mode: cert for the local vhost
-	Notes       string    `json:"notes"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID         int64     `json:"id"`
+	Name       string    `json:"name"`
+	Mode       string    `json:"mode"` // raw | tls
+	Enabled    bool      `json:"enabled"`
+	TargetHost string    `json:"target_host"` // foreign node public address
+	TargetPort int       `json:"target_port"` // foreign node port
+	ListenIP   string    `json:"listen_ip"`   // raw mode: public listen IP
+	ListenPort int       `json:"listen_port"` // raw mode: public listen port
+	BridgePort int       `json:"bridge_port"` // tls mode: local dokodemo port
+	UDP        bool      `json:"udp"`
+	HostHeader string    `json:"host_header"` // tls mode: Host sent to the foreign node
+	Domain     string    `json:"domain"`      // tls mode: public server_name
+	SSLCertID  *int64    `json:"ssl_cert_id"` // tls mode: cert for the local vhost
+	Notes      string    `json:"notes"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type PortEntry struct {

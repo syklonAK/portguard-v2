@@ -2,8 +2,8 @@ package store
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 )
 
@@ -24,6 +24,7 @@ func (s *Store) SetSetting(key, value string) error {
 		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
 	return err
 }
+
 // Secret returns a persisted random secret, generating it on first use.
 func (s *Store) Secret(key string) (string, error) {
 	v, err := s.GetSetting(key)

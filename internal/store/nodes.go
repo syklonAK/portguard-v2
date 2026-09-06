@@ -28,9 +28,11 @@ func scanServerNode(row interface{ Scan(...any) error }) (ServerNode, error) {
 	n.UpdatedAt = time.Unix(updatedTS, 0)
 	return n, nil
 }
+
 const serverNodeCols = `id, name, host, port, api_token, role, enabled, notes, status, last_seen, created_at, updated_at`
+
 func (s *Store) ListServerNodesPaged(limit, offset int) ([]ServerNode, error) {
-	rows, err := s.DB.Query(`SELECT ` + serverNodeCols + ` FROM server_nodes ORDER BY id LIMIT ? OFFSET ?`, limit, offset)
+	rows, err := s.DB.Query(`SELECT `+serverNodeCols+` FROM server_nodes ORDER BY id LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, err
 	}

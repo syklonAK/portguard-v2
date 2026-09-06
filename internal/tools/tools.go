@@ -15,13 +15,13 @@ import (
 
 // Tool describes one manageable software package.
 type Tool struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Category    string `json:"category"` // proxy | tunnel | security | infra
-	InstallCmd  string `json:"-"`        // shell command run as root
-	VerifyBins  []string `json:"-"`       // binaries that must exist afterwards
-	DocsURL     string `json:"docs_url"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Category    string   `json:"category"` // proxy | tunnel | security | infra
+	InstallCmd  string   `json:"-"`        // shell command run as root
+	VerifyBins  []string `json:"-"`        // binaries that must exist afterwards
+	DocsURL     string   `json:"docs_url"`
 }
 
 // State is the per-tool detection result.
@@ -61,7 +61,7 @@ var Registry = []Tool{
 		Name: "Certbot (Let's Encrypt)",
 		Description: "Issues and renews real TLS certificates via the ACME protocol. Used for HTTPS mappings on " +
 			"domains with public DNS.",
-		Category:  "security",
+		Category: "security",
 		InstallCmd: `DEBIAN_FRONTEND=noninteractive apt-get update -y -qq && ` +
 			`DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot`,
 		VerifyBins: []string{"/usr/bin/certbot"},
@@ -73,36 +73,36 @@ var Registry = []Tool{
 		Description: "Zero-dependency shell ACME client with the widest DNS-01 provider support " +
 			"(Cloudflare, ArvanCloud, Hetzner, Route53, ...) — required to issue wildcard certificates " +
 			"from the Certs page. Installs to /root/.acme.sh.",
-		Category:  "security",
+		Category:   "security",
 		InstallCmd: `curl -fsSL https://get.acme.sh | sh -s email=portguard@localhost`,
 		VerifyBins: []string{"/root/.acme.sh/acme.sh"},
 		DocsURL:    "https://github.com/acmesh-official/acme.sh",
 	},
 	{
-		ID:   "wireguard",
-		Name: "WireGuard",
+		ID:          "wireguard",
+		Name:        "WireGuard",
 		Description: "Kernel VPN backend used by PasarGuard wireguard nodes (apt: wireguard tools + dkms module).",
-		Category:  "infra",
+		Category:    "infra",
 		InstallCmd: `DEBIAN_FRONTEND=noninteractive apt-get update -y -qq && ` +
 			`DEBIAN_FRONTEND=noninteractive apt-get install -y -qq wireguard wireguard-tools`,
 		VerifyBins: []string{"/usr/bin/wg"},
 		DocsURL:    "https://www.wireguard.com/",
 	},
 	{
-		ID:   "nginx",
-		Name: "nginx (with stream module)",
+		ID:          "nginx",
+		Name:        "nginx (with stream module)",
 		Description: "Web/proxy engine with TCP/UDP stream forwarding. Usually already installed by PortGuard's installer.",
-		Category:  "infra",
+		Category:    "infra",
 		InstallCmd: `DEBIAN_FRONTEND=noninteractive apt-get update -y -qq && ` +
 			`DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx libnginx-mod-stream`,
 		VerifyBins: []string{"/usr/sbin/nginx"},
 		DocsURL:    "https://nginx.org/",
 	},
 	{
-		ID:   "haproxy",
-		Name: "HAProxy",
+		ID:          "haproxy",
+		Name:        "HAProxy",
 		Description: "TCP/HTTP load balancer and the second PortGuard engine. Usually already installed by PortGuard's installer.",
-		Category:  "infra",
+		Category:    "infra",
 		InstallCmd: `DEBIAN_FRONTEND=noninteractive apt-get update -y -qq && ` +
 			`DEBIAN_FRONTEND=noninteractive apt-get install -y -qq haproxy`,
 		VerifyBins: []string{"/usr/sbin/haproxy"},
@@ -210,7 +210,7 @@ func looksLikeVersion(s string) bool {
 type InstallResult struct {
 	ToolID  string `json:"tool_id"`
 	OK      bool   `json:"ok"`
-	Output  string `json:"output"` // tail of the installer output
+	Output  string `json:"output"`          // tail of the installer output
 	Error   string `json:"error,omitempty"` // exit error / post-condition notes
 	Elapsed string `json:"elapsed"`
 }

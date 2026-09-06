@@ -10,10 +10,10 @@ import (
 // NginxSites is the structured result of parsing live nginx http/stream
 // config: each server{} or stream server{} becomes a mapping candidate.
 type NginxSites struct {
-	HTTPServers       []NginxServer       `json:"http_servers"`
-	StreamServers     []NginxServer       `json:"stream_servers"`
-	Skipped           []string            `json:"skipped"` // unparseable/foreign blocks
-	UpstreamsByName   map[string][]string `json:"upstreams"` // upstream name -> host:port list
+	HTTPServers     []NginxServer       `json:"http_servers"`
+	StreamServers   []NginxServer       `json:"stream_servers"`
+	Skipped         []string            `json:"skipped"`   // unparseable/foreign blocks
+	UpstreamsByName map[string][]string `json:"upstreams"` // upstream name -> host:port list
 }
 
 // NginxServer is one server block (http) or server{} in stream{}.
@@ -40,8 +40,8 @@ type NginxLocation struct {
 func ParseNginxConfig(text string) NginxSites {
 	out := NginxSites{UpstreamsByName: map[string][]string{}}
 	var (
-		inUpstream string            // "" = not in upstream
-		inStream   bool              // inside stream{}
+		inUpstream string // "" = not in upstream
+		inStream   bool   // inside stream{}
 		curServer  *NginxServer
 		curLoc     *NginxLocation
 	)
@@ -232,12 +232,12 @@ func NginxSitesToMappings(sites NginxSites, unknown map[string]bool) (out []stor
 			continue
 		}
 		m := store.Mapping{
-			Enabled:    false, // imports start disabled until reviewed
-			Engine:     "nginx",
-			ListenIP:   "0.0.0.0",
-			ListenPort: s.ListenPort,
+			Enabled:     false, // imports start disabled until reviewed
+			Engine:      "nginx",
+			ListenIP:    "0.0.0.0",
+			ListenPort:  s.ListenPort,
 			ServerNames: s.ServerNames,
-			Notes:      "imported from the existing nginx config",
+			Notes:       "imported from the existing nginx config",
 		}
 		if s.ListenSSL {
 			m.Protocol = "https"

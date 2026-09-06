@@ -74,6 +74,7 @@ func (s *Store) DeleteMapping(id int64) error {
 	}
 	return err
 }
+
 // ---- ports (scan snapshot) ----
 // ReplacePorts synchronizes the ports table to the scanner's snapshot.
 func (s *Store) ReplacePorts(entries []PortEntry) error {
@@ -84,9 +85,9 @@ func (s *Store) ReplacePorts(entries []PortEntry) error {
 	defer tx.Rollback()
 
 	type portRow struct {
-		port, pid      int
+		port, pid                    int
 		proto, ip, proc, user, class string
-		managed, self  int
+		managed, self                int
 	}
 	const us = "\x1f" // unit separator: process names may contain any byte
 	rowKey := func(r portRow) string {
@@ -207,6 +208,7 @@ func (s *Store) ListHealth() ([]TargetHealth, error) {
 	}
 	return out, rows.Err()
 }
+
 // ---- live connections ----
 func (s *Store) ReplaceConnections(conns []ConnEntry, now int64) error {
 	tx, err := s.DB.Begin()
@@ -301,6 +303,7 @@ func (s *Store) ListConnections() ([]ConnEntry, error) {
 	}
 	return out, rows.Err()
 }
+
 // TopTalkers aggregates current live connections per external source IP,
 func (s *Store) TopTalkers(limit int) ([]TopTalker, error) {
 	if limit <= 0 {

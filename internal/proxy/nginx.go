@@ -206,9 +206,9 @@ func renderNginxRouteRules(m store.Mapping) string {
 		return ""
 	}
 	type ruleUp struct {
-		loc    string
-		up     string
-		targets []store.Target
+		loc      string
+		up       string
+		targets  []store.Target
 		redirect string
 	}
 	var rules []ruleUp
@@ -389,15 +389,15 @@ func renderHTTPUpstream(m store.Mapping) string {
 	case "random":
 		b.WriteString("        random;\n")
 	case "round_robin":
-		// nginx default — no directive
-		default:
-			// legacy default: sticky for websockets, least connections otherwise
-			if m.WebSocket {
-				b.WriteString("        ip_hash;\n")
-			} else {
-				b.WriteString("        least_conn;\n")
-			}
+	// nginx default — no directive
+	default:
+		// legacy default: sticky for websockets, least connections otherwise
+		if m.WebSocket {
+			b.WriteString("        ip_hash;\n")
+		} else {
+			b.WriteString("        least_conn;\n")
 		}
+	}
 	for _, t := range m.Targets {
 		w := ""
 		if t.Weight > 0 && t.Weight != 1 {

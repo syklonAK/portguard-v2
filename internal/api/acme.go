@@ -39,11 +39,11 @@ type credLine struct{ Template, EnvKey string } // credentials-file line templat
 type acmeProvider struct {
 	ID           string     `json:"id"`
 	Name         string     `json:"name"`
-	AcmeShDNS    string     `json:"acmesh_dns,omitempty"`    // acme.sh --dns plugin (empty = acme.sh unsupported)
-	Env          []envField `json:"env,omitempty"`            // credential fields
-	CertbotPkg   string     `json:"certbot_pkg,omitempty"`    // apt package (empty = certbot unsupported)
-	CertbotFlag  string     `json:"certbot_flag,omitempty"`   // e.g. --dns-cloudflare
-	CertbotCreds []credLine `json:"-"`                        // credentials file template
+	AcmeShDNS    string     `json:"acmesh_dns,omitempty"`   // acme.sh --dns plugin (empty = acme.sh unsupported)
+	Env          []envField `json:"env,omitempty"`          // credential fields
+	CertbotPkg   string     `json:"certbot_pkg,omitempty"`  // apt package (empty = certbot unsupported)
+	CertbotFlag  string     `json:"certbot_flag,omitempty"` // e.g. --dns-cloudflare
+	CertbotCreds []credLine `json:"-"`                      // credentials file template
 }
 
 var acmeProviders = []acmeProvider{
@@ -172,7 +172,7 @@ func acmeProviderByID(id string) *acmeProvider {
 var acmeDomainRe = regexp.MustCompile(`(?i)^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
 
 const (
-	acmeShBin = "/root/.acme.sh/acme.sh"
+	acmeShBin  = "/root/.acme.sh/acme.sh"
 	acmeCABase = "https://acme-v02.api.letsencrypt.org/directory"
 )
 

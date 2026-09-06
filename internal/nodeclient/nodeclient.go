@@ -91,13 +91,13 @@ func (c *Client) Ping() error {
 
 // Summary is the aggregated node overview.
 type Summary struct {
-	Version   string `json:"version"`
-	Role      string `json:"role"`
-	System    map[string]any `json:"system"`
-	Mappings  map[string]any `json:"mappings"`
-	Ports     map[string]any `json:"ports"`
-	Health    map[string]any `json:"health"`
-	Tunnel    map[string]any `json:"tunnel"`
+	Version  string         `json:"version"`
+	Role     string         `json:"role"`
+	System   map[string]any `json:"system"`
+	Mappings map[string]any `json:"mappings"`
+	Ports    map[string]any `json:"ports"`
+	Health   map[string]any `json:"health"`
+	Tunnel   map[string]any `json:"tunnel"`
 }
 
 func (c *Client) GetSummary() (*Summary, error) {

@@ -14,20 +14,20 @@ import (
 )
 
 type Snapshot struct {
-	CPUPercent   float64 `json:"cpu_percent"`
-	MemTotal     uint64  `json:"mem_total"`
-	MemUsed      uint64  `json:"mem_used"`
-	MemPercent   float64 `json:"mem_percent"`
-	DiskTotal    uint64  `json:"disk_total"`
-	DiskUsed     uint64  `json:"disk_used"`
-	DiskPercent  float64 `json:"disk_percent"`
-	Load1        float64 `json:"load1"`
-	Uptime       uint64  `json:"uptime"`
-	OS           string  `json:"os"`
-	Platform     string  `json:"platform"`
-	Kernel       string  `json:"kernel"`
-	NumCPU       int     `json:"num_cpu"`
-	GoVersion    string  `json:"go_version"`
+	CPUPercent  float64 `json:"cpu_percent"`
+	MemTotal    uint64  `json:"mem_total"`
+	MemUsed     uint64  `json:"mem_used"`
+	MemPercent  float64 `json:"mem_percent"`
+	DiskTotal   uint64  `json:"disk_total"`
+	DiskUsed    uint64  `json:"disk_used"`
+	DiskPercent float64 `json:"disk_percent"`
+	Load1       float64 `json:"load1"`
+	Uptime      uint64  `json:"uptime"`
+	OS          string  `json:"os"`
+	Platform    string  `json:"platform"`
+	Kernel      string  `json:"kernel"`
+	NumCPU      int     `json:"num_cpu"`
+	GoVersion   string  `json:"go_version"`
 	// cumulative network counters (bytes) across all interfaces
 	NetRxTotal uint64 `json:"net_rx_total"`
 	NetTxTotal uint64 `json:"net_tx_total"`

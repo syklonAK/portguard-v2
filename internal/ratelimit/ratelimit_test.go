@@ -18,7 +18,7 @@ func TestParseBandwidth(t *testing.T) {
 		{"unlimited", 0},
 		{"", 0},
 		{"0", 0},
-		{"2.5Mbps", 0,}, // fractions rejected: bps are integers
+		{"2.5Mbps", 0}, // fractions rejected: bps are integers
 		{"-5Mbps", 0},
 		{"abc", 0},
 	}
@@ -68,8 +68,8 @@ func TestUUIDValidation(t *testing.T) {
 	invalid := []string{
 		"",
 		"not-a-uuid",
-		"550e8400e29b41d4a716446655440000",   // no dashes
-		"550e8400-e29b-41d4-a716-4466554400zz", // non-hex
+		"550e8400e29b41d4a716446655440000",      // no dashes
+		"550e8400-e29b-41d4-a716-4466554400zz",  // non-hex
 		"550e8400-e29b-41d4-a716-4466554400000", // too long
 	}
 	for _, u := range invalid {
@@ -90,9 +90,9 @@ func TestDiff(t *testing.T) {
 		{SourceIP: "2.2.2.2", UUID: "b", DownloadBPS: 10_000_000, UploadBPS: 5_000_000},
 	}
 	desired := []Rule{
-		{SourceIP: "1.1.1.1", UUID: "a", DownloadBPS: 5_000_000, UploadBPS: 2_000_000}, // unchanged
+		{SourceIP: "1.1.1.1", UUID: "a", DownloadBPS: 5_000_000, UploadBPS: 2_000_000},  // unchanged
 		{SourceIP: "2.2.2.2", UUID: "b", DownloadBPS: 20_000_000, UploadBPS: 5_000_000}, // changed
-		{SourceIP: "3.3.3.3", UUID: "c", DownloadBPS: 1_000_000, UploadBPS: 500_000},  // new
+		{SourceIP: "3.3.3.3", UUID: "c", DownloadBPS: 1_000_000, UploadBPS: 500_000},    // new
 	}
 	add, update, remove := Diff(current, desired)
 	if len(add) != 1 || add[0].SourceIP != "3.3.3.3" {

@@ -77,12 +77,12 @@ func TLSCheck(host string, port int, timeout time.Duration) map[string]any {
 		certInfo["sans"] = c.DNSNames
 	}
 	return map[string]any{
-		"success":   true,
+		"success":    true,
 		"latency_ms": latency,
-		"protocol":  tls.VersionName(cs.Version),
-		"cipher":    tls.CipherSuiteName(cs.CipherSuite),
-		"cert":      certInfo,
-		"error":     nil,
+		"protocol":   tls.VersionName(cs.Version),
+		"cipher":     tls.CipherSuiteName(cs.CipherSuite),
+		"cert":       certInfo,
+		"error":      nil,
 	}
 }
 

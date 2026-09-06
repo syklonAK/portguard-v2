@@ -64,23 +64,23 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		autoApply = v
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"paths":                     paths,
-		"check_interval":            interval,
-		"scan_interval":             scanInterval,
-		"auto_apply":                autoApply,
-		"panel_port":                a.PanelPort,
-		"tunnel_socks_host":          socksHost,
-		"tunnel_socks_port":          socksPort,
-		"pasarguard_url":             pgURL,
+		"paths":                       paths,
+		"check_interval":              interval,
+		"scan_interval":               scanInterval,
+		"auto_apply":                  autoApply,
+		"panel_port":                  a.PanelPort,
+		"tunnel_socks_host":           socksHost,
+		"tunnel_socks_port":           socksPort,
+		"pasarguard_url":              pgURL,
 		"pasarguard_username":         pgUsername,
 		"pasarguard_password_set":     pgPasswordSet,
-		"pasarguard_token_set":       pgTokenSet,
-		"rate_limiting_enabled":      rlEnabled,
+		"pasarguard_token_set":        pgTokenSet,
+		"rate_limiting_enabled":       rlEnabled,
 		"rate_limiting_sync_interval": rlSync,
 		"alerts_enabled":              alertsEnabled,
 		"alert_cooldown_min":          alertCooldown,
 		"alert_telegram_token_set":    alertTGTokenSet,
-		"alert_telegram_chat":          alertTGChat,
+		"alert_telegram_chat":         alertTGChat,
 		"alert_webhook_set":           alertHookSet,
 		"alert_cpu_min":               alertCPU,
 		"alert_ram_min":               alertRAM,
@@ -90,26 +90,26 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Paths          *proxy.Paths `json:"paths"`
-		CheckInterval  string       `json:"check_interval"`
-		ScanInterval   string       `json:"scan_interval"`
-		AutoApply      *string      `json:"auto_apply"`
-		TunnelSocksHost *string     `json:"tunnel_socks_host"`
-		TunnelSocksPort *string     `json:"tunnel_socks_port"`
-		PasarGuardURL  *string      `json:"pasarguard_url"`
-		PasarGuardToken *string     `json:"pasarguard_token"`
-		PasarGuardUsername *string  `json:"pasarguard_username"`
-		PasarGuardPassword *string  `json:"pasarguard_password"`
-		RateLimitingEnabled *string `json:"rate_limiting_enabled"`
-		RateLimitingSyncInterval *string `json:"rate_limiting_sync_interval"`
-		AlertsEnabled  *string       `json:"alerts_enabled"`
-		AlertCooldownMin *string     `json:"alert_cooldown_min"`
-		AlertTelegramToken *string  `json:"alert_telegram_token"`
-		AlertTelegramChat *string    `json:"alert_telegram_chat"`
-		AlertWebhookURL *string      `json:"alert_webhook_url"`
-		AlertCPUMin    *int           `json:"alert_cpu_min"`
-		AlertRAMMin    *int           `json:"alert_ram_min"`
-		AlertDiskMin   *int           `json:"alert_disk_min"`
+		Paths                    *proxy.Paths `json:"paths"`
+		CheckInterval            string       `json:"check_interval"`
+		ScanInterval             string       `json:"scan_interval"`
+		AutoApply                *string      `json:"auto_apply"`
+		TunnelSocksHost          *string      `json:"tunnel_socks_host"`
+		TunnelSocksPort          *string      `json:"tunnel_socks_port"`
+		PasarGuardURL            *string      `json:"pasarguard_url"`
+		PasarGuardToken          *string      `json:"pasarguard_token"`
+		PasarGuardUsername       *string      `json:"pasarguard_username"`
+		PasarGuardPassword       *string      `json:"pasarguard_password"`
+		RateLimitingEnabled      *string      `json:"rate_limiting_enabled"`
+		RateLimitingSyncInterval *string      `json:"rate_limiting_sync_interval"`
+		AlertsEnabled            *string      `json:"alerts_enabled"`
+		AlertCooldownMin         *string      `json:"alert_cooldown_min"`
+		AlertTelegramToken       *string      `json:"alert_telegram_token"`
+		AlertTelegramChat        *string      `json:"alert_telegram_chat"`
+		AlertWebhookURL          *string      `json:"alert_webhook_url"`
+		AlertCPUMin              *int         `json:"alert_cpu_min"`
+		AlertRAMMin              *int         `json:"alert_ram_min"`
+		AlertDiskMin             *int         `json:"alert_disk_min"`
 	}
 	if !readJSON(w, r, &body) {
 		return
@@ -196,7 +196,7 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	// rotating credentials invalidates the cached token; drop it so the
 	// next sync logs in fresh
-	if (body.PasarGuardUsername != nil || (body.PasarGuardPassword != nil && *body.PasarGuardPassword != "")) {
+	if body.PasarGuardUsername != nil || (body.PasarGuardPassword != nil && *body.PasarGuardPassword != "") {
 		_ = a.St.SetSetting("pasarguard_token", "")
 	}
 	if body.RateLimitingEnabled != nil {

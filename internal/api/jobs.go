@@ -20,11 +20,11 @@ const maxJobLines = 500
 
 // Job is one tracked long-running operation.
 type Job struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"` // running | success | failed
-	Error     string    `json:"error,omitempty"`
-	StartedAt time.Time `json:"started_at"`
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Status    string     `json:"status"` // running | success | failed
+	Error     string     `json:"error,omitempty"`
+	StartedAt time.Time  `json:"started_at"`
 	Finished  *time.Time `json:"finished_at,omitempty"`
 
 	mu    sync.Mutex

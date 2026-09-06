@@ -13,22 +13,22 @@ import (
 // (ported from haproxy-manager's config/parser.py). It preserves unknown
 // directives so the config view can show them.
 type HAProxyCfg struct {
-	Global    GlobalCfg    `json:"global"`
-	Defaults  DefaultsCfg  `json:"defaults"`
+	Global    GlobalCfg     `json:"global"`
+	Defaults  DefaultsCfg   `json:"defaults"`
 	Frontends []FrontendCfg `json:"frontends"`
 	Backends  []BackendCfg  `json:"backends"`
 	Listens   []ListenCfg   `json:"listens"`
-	Raw       []string     `json:"raw"` // header comments / unparsed lines
+	Raw       []string      `json:"raw"` // header comments / unparsed lines
 }
 
 type GlobalCfg struct {
-	Directives   map[string]string `json:"directives"`
-	RawLines     []string         `json:"raw_lines"`
-	Maxconn      string           `json:"maxconn,omitempty"`
-	StatsSocket  string           `json:"stats_socket,omitempty"`
-	User         string           `json:"user,omitempty"`
-	Group        string           `json:"group,omitempty"`
-	Nbthread     string           `json:"nbthread,omitempty"`
+	Directives  map[string]string `json:"directives"`
+	RawLines    []string          `json:"raw_lines"`
+	Maxconn     string            `json:"maxconn,omitempty"`
+	StatsSocket string            `json:"stats_socket,omitempty"`
+	User        string            `json:"user,omitempty"`
+	Group       string            `json:"group,omitempty"`
+	Nbthread    string            `json:"nbthread,omitempty"`
 }
 
 type DefaultsCfg struct {
@@ -39,13 +39,13 @@ type DefaultsCfg struct {
 }
 
 type FrontendCfg struct {
-	Name          string    `json:"name"`
-	Binds         []BindCfg `json:"binds"`
-	Mode          string    `json:"mode,omitempty"`
-	DefaultBackend string   `json:"default_backend,omitempty"`
-	ACLs          []ACLLine `json:"acls"`
-	Rules         []RuleLine `json:"rules"`
-	Other         []string  `json:"other"` // any directive we don't model
+	Name           string     `json:"name"`
+	Binds          []BindCfg  `json:"binds"`
+	Mode           string     `json:"mode,omitempty"`
+	DefaultBackend string     `json:"default_backend,omitempty"`
+	ACLs           []ACLLine  `json:"acls"`
+	Rules          []RuleLine `json:"rules"`
+	Other          []string   `json:"other"` // any directive we don't model
 }
 
 type BackendCfg struct {
@@ -440,13 +440,13 @@ func HAProxyCfgToMappings(cfg HAProxyCfg, unknown map[string]bool) (out []store.
 			continue
 		}
 		m := store.Mapping{
-			Enabled:      true,
-			Engine:       "haproxy",
-			ListenIP:     normalizeBindIP(b.IP),
-			ListenPort:   b.Port,
-			Targets:      serverLinesToTargets(be.Servers),
-			Balance:      be.Balance,
-			Notes:        "imported from haproxy.cfg: frontend " + fe.Name + " → backend " + beName,
+			Enabled:    true,
+			Engine:     "haproxy",
+			ListenIP:   normalizeBindIP(b.IP),
+			ListenPort: b.Port,
+			Targets:    serverLinesToTargets(be.Servers),
+			Balance:    be.Balance,
+			Notes:      "imported from haproxy.cfg: frontend " + fe.Name + " → backend " + beName,
 		}
 		switch {
 		case b.SSL:

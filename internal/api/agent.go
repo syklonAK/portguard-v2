@@ -379,10 +379,10 @@ func (ag *Agent) ratelimitApply(w http.ResponseWriter, r *http.Request) {
 	}
 	ag.App.St.Audit("master", "ratelimit.apply", fmt.Sprintf("%d rules active", len(st.Rules)), "ok")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
-		"iface":    st.Iface,
-		"rules":    len(st.Rules),
-		"version":  plan.Version,
+		"ok":      true,
+		"iface":   st.Iface,
+		"rules":   len(st.Rules),
+		"version": plan.Version,
 	})
 }
 
@@ -408,17 +408,17 @@ func (ag *Agent) ratelimitClear(w http.ResponseWriter, r *http.Request) {
 // logSources is the fixed allowlist the master can tail. No free-form
 // filesystem access: paths never come from the request.
 var logSources = map[string]struct {
-	args    []string // journalctl args or a static file path
-	isFile  bool
+	args   []string // journalctl args or a static file path
+	isFile bool
 }{
-	"nginx":    {isFile: true},
-	"haproxy":  {isFile: true},
-	"agent":    {args: []string{"journalctl", "-u", "portguard-agent", "-n", "200", "--no-pager"}},
-	"panel":    {args: []string{"journalctl", "-u", "portguard", "-n", "200", "--no-pager"}},
-	"syslog":   {args: []string{"journalctl", "-n", "200", "--no-pager"}},
-	"xray":     {args: []string{"journalctl", "-u", "xray", "-n", "200", "--no-pager"}},
-	"hedioum":  {args: []string{"journalctl", "-u", "hedioum", "-n", "200", "--no-pager"}},
-	"bridge":   {args: []string{"journalctl", "-u", "portguard-tunnel-bridge", "-n", "200", "--no-pager"}},
+	"nginx":   {isFile: true},
+	"haproxy": {isFile: true},
+	"agent":   {args: []string{"journalctl", "-u", "portguard-agent", "-n", "200", "--no-pager"}},
+	"panel":   {args: []string{"journalctl", "-u", "portguard", "-n", "200", "--no-pager"}},
+	"syslog":  {args: []string{"journalctl", "-n", "200", "--no-pager"}},
+	"xray":    {args: []string{"journalctl", "-u", "xray", "-n", "200", "--no-pager"}},
+	"hedioum": {args: []string{"journalctl", "-u", "hedioum", "-n", "200", "--no-pager"}},
+	"bridge":  {args: []string{"journalctl", "-u", "portguard-tunnel-bridge", "-n", "200", "--no-pager"}},
 }
 
 var logFilePaths = map[string]string{

@@ -1,7 +1,6 @@
 package api
 
 import (
-	
 	"errors"
 	"fmt"
 	"net/http"
@@ -396,16 +395,16 @@ func validateCertPEMAndKey(certPEM, keyPEM string) map[string]any {
 	now := timeNow()
 	daysLeft := int(cert.NotAfter.Sub(now).Hours() / 24)
 	certInfo := map[string]any{
-		"subject":        cert.Subject.String(),
-		"issuer":         cert.Issuer.String(),
-		"not_before":     cert.NotBefore.Format("2006-01-02"),
-		"not_after":      cert.NotAfter.Format("2006-01-02"),
-		"days_left":      daysLeft,
-		"expired":        now.After(cert.NotAfter),
-		"near_expiry":    daysLeft >= 0 && daysLeft < 30,
-		"dns_names":      cert.DNSNames,
-		"key_algorithm":  cert.PublicKeyAlgorithm.String(),
-		"serial_number":  cert.SerialNumber.String(),
+		"subject":       cert.Subject.String(),
+		"issuer":        cert.Issuer.String(),
+		"not_before":    cert.NotBefore.Format("2006-01-02"),
+		"not_after":     cert.NotAfter.Format("2006-01-02"),
+		"days_left":     daysLeft,
+		"expired":       now.After(cert.NotAfter),
+		"near_expiry":   daysLeft >= 0 && daysLeft < 30,
+		"dns_names":     cert.DNSNames,
+		"key_algorithm": cert.PublicKeyAlgorithm.String(),
+		"serial_number": cert.SerialNumber.String(),
 	}
 	res["cert"] = certInfo
 

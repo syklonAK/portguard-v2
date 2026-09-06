@@ -20,8 +20,8 @@ type Auth struct {
 	Secret []byte
 	Expire time.Duration
 
-	failMu    sync.Mutex
-	failIPs   map[string][]time.Time
+	failMu  sync.Mutex
+	failIPs map[string][]time.Time
 }
 
 func NewAuth(st *store.Store, secret string) *Auth {

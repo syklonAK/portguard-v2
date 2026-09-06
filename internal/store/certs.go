@@ -329,6 +329,7 @@ func (s *Store) CreateCert(c *Cert) (int64, error) {
 	}
 	return res.LastInsertId()
 }
+
 // refreshed so the Certs page shows the new validity window.
 func (s *Store) UpdateCertPEM(id int64, certPEM, keyPEM string, expiresAt *time.Time) error {
 	res, err := s.DB.Exec(`UPDATE ssl_certs SET cert_pem=?, key_pem=?, expires_at=? WHERE id=?`,
@@ -341,7 +342,8 @@ func (s *Store) UpdateCertPEM(id int64, certPEM, keyPEM string, expiresAt *time.
 	}
 	return nil
 }
-func (s *Store) DeleteCert(id int64) error {	var n int
+func (s *Store) DeleteCert(id int64) error {
+	var n int
 	if err := s.DB.QueryRow(`SELECT COUNT(*) FROM mappings WHERE ssl_cert_id=?`, id).Scan(&n); err != nil {
 		return err
 	}

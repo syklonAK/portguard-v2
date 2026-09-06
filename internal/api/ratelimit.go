@@ -142,13 +142,13 @@ func (c *pasarguardClient) attempt(path string, out any) (int, error) {
 // panels carry a top-level uuid/enabled/expired; PasarGuard-style panels
 // keep the Xray UUIDs inside proxy_settings and express state via `status`.
 type pgUser struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	UUID     string `json:"uuid"`
-	Enabled  bool   `json:"enabled"`
-	Expired  bool   `json:"expired"`
-	Status   string `json:"status"`
-	NodeIDs  []int64 `json:"node_ids"`
+	ID            int64   `json:"id"`
+	Username      string  `json:"username"`
+	UUID          string  `json:"uuid"`
+	Enabled       bool    `json:"enabled"`
+	Expired       bool    `json:"expired"`
+	Status        string  `json:"status"`
+	NodeIDs       []int64 `json:"node_ids"`
 	ProxySettings struct {
 		Vmess struct {
 			ID string `json:"id"`

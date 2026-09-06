@@ -3,9 +3,9 @@ package proxy
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"

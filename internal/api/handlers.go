@@ -27,16 +27,16 @@ import (
 )
 
 type App struct {
-	St        *store.Store
-	Svc       *service.Service
-	Auth      *Auth
-	Broker    *Broker
-	Scanner   *scanner.Scanner
-	PanelPort int
-	Version   string
+	St                 *store.Store
+	Svc                *service.Service
+	Auth               *Auth
+	Broker             *Broker
+	Scanner            *scanner.Scanner
+	PanelPort          int
+	Version            string
 	RateApplierFactory func() *ratelimit.Applier // set by main; lazily builds the node applier
-	Alerter   *alerter.Alerter                   // optional (nil until main wires it)
-	Jobs      *JobManager                        // long shell ops with live terminal output
+	Alerter            *alerter.Alerter          // optional (nil until main wires it)
+	Jobs               *JobManager               // long shell ops with live terminal output
 }
 
 // RateApplier returns the bandwidth applier for this host (agent or panel).
@@ -440,11 +440,11 @@ func (a *App) handleSystem(w http.ResponseWriter, r *http.Request) {
 	}
 	summary, _ := health.Summary(mappings, healths)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"system":    s,
-		"mappings":  map[string]any{"total": len(mappings), "enabled": countEnabled(mappings)},
-		"ports":     map[string]any{"managed": managedPorts, "unmanaged": unmanaged, "total": len(ports)},
-		"health":    map[string]any{"up": up, "down": down, "unknown": unknown, "summary": summary},
-		"version":   a.Version,
+		"system":   s,
+		"mappings": map[string]any{"total": len(mappings), "enabled": countEnabled(mappings)},
+		"ports":    map[string]any{"managed": managedPorts, "unmanaged": unmanaged, "total": len(ports)},
+		"health":   map[string]any{"up": up, "down": down, "unknown": unknown, "summary": summary},
+		"version":  a.Version,
 	})
 }
 

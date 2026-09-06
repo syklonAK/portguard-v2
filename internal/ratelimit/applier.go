@@ -32,8 +32,8 @@ type Applier struct {
 // AppliedState is persisted so the agent can rebuild the exact tc state
 // after restarts and diff against the desired plan.
 type AppliedState struct {
-	Iface  string           `json:"iface"`
-	Rules  map[string]Rule  `json:"rules"` // sourceIP -> rule
+	Iface string          `json:"iface"`
+	Rules map[string]Rule `json:"rules"` // sourceIP -> rule
 }
 
 // DetectIface returns the default-route interface (first column of `ip route`).

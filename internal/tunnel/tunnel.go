@@ -29,18 +29,18 @@ const (
 // Status is the detected tunnel environment snapshot.
 type Status struct {
 	HedioumInstalled bool   `json:"hedioum_installed"`
-	HedioumVersion    string `json:"hedioum_version,omitempty"`
-	HedioumActive     string `json:"hedioum_active"`    // active | inactive | absent
-	HedioumBinary     string `json:"hedioum_binary,omitempty"`
-	XrayInstalled     bool   `json:"xray_installed"`
-	XrayVersion       string `json:"xray_version,omitempty"`
-	XrayBinary        string `json:"xray_binary,omitempty"`
-	XrayPorts         string `json:"xray_ports,omitempty"`  // ports xray is listening on (public+loopback)
-	XrayPublicBind    string `json:"xray_public_bind,omitempty"` // first non-loopback listener (host:port)
-	XrayLoopbackOnly  bool   `json:"xray_loopback_only"`   // every xray inbound is 127.0.0.1
-	BridgeActive      string `json:"bridge_active"`     // active | inactive | absent
-	SocksListening    string `json:"socks_listening,omitempty"` // host:port of a local 40xxx SOCKS listener
-	Role              string `json:"role"`             // iran | foreign | unknown
+	HedioumVersion   string `json:"hedioum_version,omitempty"`
+	HedioumActive    string `json:"hedioum_active"` // active | inactive | absent
+	HedioumBinary    string `json:"hedioum_binary,omitempty"`
+	XrayInstalled    bool   `json:"xray_installed"`
+	XrayVersion      string `json:"xray_version,omitempty"`
+	XrayBinary       string `json:"xray_binary,omitempty"`
+	XrayPorts        string `json:"xray_ports,omitempty"`       // ports xray is listening on (public+loopback)
+	XrayPublicBind   string `json:"xray_public_bind,omitempty"` // first non-loopback listener (host:port)
+	XrayLoopbackOnly bool   `json:"xray_loopback_only"`         // every xray inbound is 127.0.0.1
+	BridgeActive     string `json:"bridge_active"`              // active | inactive | absent
+	SocksListening   string `json:"socks_listening,omitempty"`  // host:port of a local 40xxx SOCKS listener
+	Role             string `json:"role"`                       // iran | foreign | unknown
 }
 
 // Detect gathers the current tunnel environment from the host.
@@ -148,10 +148,10 @@ type inboundCfg struct {
 	Port     int    `json:"port"`
 	Protocol string `json:"protocol"`
 	Settings struct {
-		Address         string `json:"address"`
-		Port            int    `json:"port"`
-		Network         string `json:"network"`
-		FollowRedirect  bool   `json:"followRedirect"`
+		Address        string `json:"address"`
+		Port           int    `json:"port"`
+		Network        string `json:"network"`
+		FollowRedirect bool   `json:"followRedirect"`
 	} `json:"settings"`
 	Sniffing struct {
 		Enabled bool `json:"enabled"`

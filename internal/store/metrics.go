@@ -13,6 +13,7 @@ func (s *Store) InsertMetric(p MetricPoint) error {
 		p.NodeID, p.CPUPercent, p.MemPercent, p.DiskPercent, p.RxBytes, p.TxBytes, p.RxBps, p.TxBps, p.Conns, p.TS)
 	return err
 }
+
 // QueryMetrics returns sampled points for a node in [from, to], downsampled
 func (s *Store) QueryMetrics(nodeID int64, from, to int64) ([]MetricPoint, error) {
 	rows, err := s.DB.Query(`SELECT node_id, cpu_percent, mem_percent, disk_percent, rx_bytes, tx_bytes, rx_bps, tx_bps, conns, ts
@@ -41,6 +42,7 @@ func (s *Store) QueryMetrics(nodeID int64, from, to int64) ([]MetricPoint, error
 	}
 	return out, rows.Err()
 }
+
 // PruneMetrics deletes samples older than the retention window (default 7d).
 func (s *Store) PruneMetrics(retention time.Duration) {
 	cutoff := time.Now().Add(-retention).Unix()

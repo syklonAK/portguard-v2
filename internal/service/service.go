@@ -19,9 +19,9 @@ import (
 )
 
 type Service struct {
-	St      *store.Store
-	Engines map[string]proxy.Engine
-	Paths   proxy.Paths
+	St        *store.Store
+	Engines   map[string]proxy.Engine
+	Paths     proxy.Paths
 	PanelPort int
 
 	applyMu sync.Mutex // one apply at a time

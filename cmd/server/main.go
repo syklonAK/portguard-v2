@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"portguard/internal/alerter"
-	"portguard/internal/config"
 	"portguard/internal/api"
+	"portguard/internal/config"
 	"portguard/internal/conntrack"
 	"portguard/internal/health"
 	"portguard/internal/proxy"

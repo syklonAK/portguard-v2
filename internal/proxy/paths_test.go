@@ -48,7 +48,7 @@ func TestNginxRenderPathRoutesRelayHost(t *testing.T) {
 		ID: 61, Name: "relay", Enabled: true, Engine: "nginx", Protocol: "http",
 		ListenIP: "0.0.0.0", ListenPort: 2053,
 		ServerNames: []string{"_"},
-		Targets:   []store.Target{{Host: "10.144.144.1", Port: 1}}, // host part is what matters
+		Targets:     []store.Target{{Host: "10.144.144.1", Port: 1}}, // host part is what matters
 		PathRoutes: []store.PathRoute{
 			{Transport: store.PathTransportWS, Prefix: "ws"},
 			{Transport: store.PathTransportXHTTP, Prefix: "xh"},

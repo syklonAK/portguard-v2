@@ -25,10 +25,10 @@ func (a *App) handleListServices(w http.ResponseWriter, r *http.Request) {
 	healths, _ := a.St.ListHealth()
 	type serviceView struct {
 		store.Service
-		MappingCount  int `json:"mapping_count"`
-		EnabledCount  int `json:"enabled_count"`
-		BackendsUp    int `json:"backends_up"`
-		BackendsDown  int `json:"backends_down"`
+		MappingCount int `json:"mapping_count"`
+		EnabledCount int `json:"enabled_count"`
+		BackendsUp   int `json:"backends_up"`
+		BackendsDown int `json:"backends_down"`
 	}
 	upSet := map[string]bool{}
 	for _, h := range healths {
@@ -198,12 +198,12 @@ func (a *App) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		lastConns = pts[len(pts)-1].Conns
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"node_id":    nodeID,
-		"points":     pts,
-		"rx_total":   rxTotal,
-		"tx_total":   txTotal,
-		"rx_peak":    rxBpsMax,
-		"tx_peak":    txBpsMax,
+		"node_id":      nodeID,
+		"points":       pts,
+		"rx_total":     rxTotal,
+		"tx_total":     txTotal,
+		"rx_peak":      rxBpsMax,
+		"tx_peak":      txBpsMax,
 		"active_conns": lastConns,
 	})
 }
@@ -215,7 +215,7 @@ func (a *App) SampleLocalMetrics(prev *store.MetricPoint) store.MetricPoint {
 	p := store.MetricPoint{
 		NodeID:      0,
 		CPUPercent:  s.CPUPercent,
-		MemPercent: s.MemPercent,
+		MemPercent:  s.MemPercent,
 		DiskPercent: s.DiskPercent,
 		RxBytes:     s.NetRxTotal,
 		TxBytes:     s.NetTxTotal,
@@ -253,8 +253,8 @@ func (a *App) SampleRemoteMetrics(nodeID int64, prev *store.MetricPoint) {
 		return
 	}
 	p := store.MetricPoint{
-		NodeID:   nodeID,
-		TS:       time.Now().Unix(),
+		NodeID: nodeID,
+		TS:     time.Now().Unix(),
 	}
 	getF := func(k string) float64 {
 		if v, ok := sys[k].(float64); ok {

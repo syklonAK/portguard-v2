@@ -68,7 +68,7 @@ func TestNginxRenderRouteRules(t *testing.T) {
 		ID: 70, Name: "router", Enabled: true, Engine: "nginx", Protocol: "https",
 		ListenIP: "0.0.0.0", ListenPort: 443, HTTP2: false, SSLCertID: int64Ptr(1),
 		ServerNames: []string{"edge.example.com"},
-		Targets: []store.Target{{Host: "127.0.0.1", Port: 8080}}, // fallback
+		Targets:     []store.Target{{Host: "127.0.0.1", Port: 8080}}, // fallback
 		Routes: []store.RouteRule{
 			{ID: 1, Path: "/api/*", Enabled: true, Targets: []store.Target{{Host: "10.0.0.1", Port: 9000}}},
 			{ID: 2, Path: "/ws/*", Enabled: true, Targets: []store.Target{{Host: "10.0.0.2", Port: 10001}, {Host: "10.0.0.3", Port: 10001}}},
@@ -115,7 +115,7 @@ func TestHAProxyRenderRouteRules(t *testing.T) {
 		ID: 71, Name: "router-ha", Enabled: true, Engine: "haproxy", Protocol: "http",
 		ListenIP: "0.0.0.0", ListenPort: 8081,
 		ServerNames: []string{"_"},
-		Targets: []store.Target{{Host: "127.0.0.1", Port: 8080}},
+		Targets:     []store.Target{{Host: "127.0.0.1", Port: 8080}},
 		Routes: []store.RouteRule{
 			{ID: 1, Path: "/api", Enabled: true, Targets: []store.Target{{Host: "10.0.0.1", Port: 9000}}},
 			{ID: 2, Path: "/ws", Enabled: true, Targets: []store.Target{{Host: "10.0.0.2", Port: 10001}}},

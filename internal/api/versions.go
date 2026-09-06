@@ -39,9 +39,9 @@ func (a *App) handleGetVersion(w http.ResponseWriter, r *http.Request) {
 	var relays []store.TunnelRelay
 	_ = json.Unmarshal([]byte(relaysJSON), &relays)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"version":   v,
-		"mappings":  mappings,
-		"relays":    relays,
+		"version":  v,
+		"mappings": mappings,
+		"relays":   relays,
 	})
 }
 
@@ -66,11 +66,11 @@ func (a *App) handleDiffVersions(w http.ResponseWriter, r *http.Request) {
 // two mapping snapshots (JSON-based, name keyed).
 func diffMappingSets(fromJSON, toJSON string) []string {
 	type light struct {
-		ID      int64    `json:"id"`
-		Name    string   `json:"name"`
-		Enabled bool     `json:"enabled"`
-		Engine  string   `json:"engine"`
-		Listen  string   `json:"-"`
+		ID      int64  `json:"id"`
+		Name    string `json:"name"`
+		Enabled bool   `json:"enabled"`
+		Engine  string `json:"engine"`
+		Listen  string `json:"-"`
 	}
 	var fa, ta []map[string]any
 	_ = json.Unmarshal([]byte(fromJSON), &fa)

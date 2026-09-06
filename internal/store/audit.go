@@ -32,6 +32,7 @@ func (s *Store) ListAudit(limit int) ([]AuditLog, error) {
 	}
 	return out, rows.Err()
 }
+
 // LastAlertByDedup returns the timestamp of the most recent alert with the
 func (s *Store) LastAlertByDedup(key string) (int64, error) {
 	var ts int64

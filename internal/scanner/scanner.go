@@ -390,7 +390,10 @@ func isTCPListening(st string) bool { return st == "0A" }
 // "FF" and "" never occur for live rows and never match.
 func isUDPListening(st string) bool { return st == "07" }
 
-type procOwner struct{ pid int; name, user string }
+type procOwner struct {
+	pid        int
+	name, user string
+}
 
 // mapInodeOwners walks /proc and maps socket inode -> owning process, but
 // only for the wanted inodes discovered from /proc/net/*: processes holding

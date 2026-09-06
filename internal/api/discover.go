@@ -20,13 +20,13 @@ import (
 
 // discoveredPanel is one detected integration candidate.
 type discoveredPanel struct {
-	Kind           string `json:"kind"`            // pasarguard | marzban | xui | unknown
-	Source         string `json:"source"`          // docker | env
-	Name           string `json:"name"`            // container name or directory
-	URL            string `json:"url"`             // probed base URL (scheme+127.0.0.1+port)
+	Kind           string `json:"kind"`   // pasarguard | marzban | xui | unknown
+	Source         string `json:"source"` // docker | env
+	Name           string `json:"name"`   // container name or directory
+	URL            string `json:"url"`    // probed base URL (scheme+127.0.0.1+port)
 	Port           int    `json:"port"`
 	TLS            bool   `json:"tls"`
-	Alive          bool   `json:"alive"`           // API answered (any status < 500)
+	Alive          bool   `json:"alive"` // API answered (any status < 500)
 	EnvPath        string `json:"env_path,omitempty"`
 	EnvUsername    string `json:"env_username,omitempty"` // SUDO_USERNAME if present
 	EnvHasPassword bool   `json:"env_has_password,omitempty"`
