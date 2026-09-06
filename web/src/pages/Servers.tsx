@@ -7,6 +7,7 @@ import {
 import { api, type ServerNode, type NodeSummary, type ToolState, type ToolInstallResult } from '../api'
 import { Badge, Button, Card, CardHeader, CodeBlock, CodeEditor, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
+import { fmtAgo, fmtUptimeShort } from '../lib/format'
 
 const ROLES: { value: ServerNode['role']; label: string; desc: string }[] = [
   { value: 'generic', label: 'Generic server', desc: 'Any managed PortGuard server (web/app/LB)' },
@@ -24,17 +25,6 @@ const ROLE_COLORS: Record<string, 'slate' | 'cyan' | 'blue' | 'purple' | 'green'
 
 function emptyNode(): Partial<ServerNode> {
   return { name: '', host: '', port: 8080, role: 'generic', enabled: true, notes: '' }
-}
-
-function fmtAgo(iso: string | null): string {
-  if (!iso) return '—'
-  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
 }
 
 export default function Servers() {
@@ -705,12 +695,4 @@ function Stat({ label, value, icon }: { label: string; value: string; icon?: Rea
       <div className="mt-1 text-sm font-bold">{value}</div>
     </div>
   )
-}
-
-function fmtUptimeShort(sec: number): string {
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  if (d > 0) return `${d}d ${h}h`
-  const m = Math.floor((sec % 3600) / 60)
-  return `${h}h ${m}m`
 }

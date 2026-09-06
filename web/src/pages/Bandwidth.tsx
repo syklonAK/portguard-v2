@@ -8,27 +8,11 @@ import {
 } from '../api'
 import { Badge, Button, Card, CardHeader, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
+import { fmtBps, parseBpsInput } from '../lib/format'
+import { useDebouncedValue } from '../lib/hooks'
 
-function fmt(bps: number): string {
-  if (bps <= 0) return '∞'
-  if (bps >= 1_000_000 && bps % 1_000_000 === 0) return `${bps / 1_000_000} Mbps`
-  if (bps >= 1_000) return `${Math.round(bps / 1_000)} Kbps`
-  return `${bps} bps`
-}
-
-function parseBpsInput(s: string): number {
-  const v = s.trim().toLowerCase()
-  if (!v || v === '∞' || v === 'unlimited' || v === '0') return 0
-  const m = v.match(/^(\d+)\s*(gbps|mbps|kbps|bps)?$/)
-  if (!m) return -1
-  const n = parseInt(m[1], 10)
-  switch (m[2]) {
-    case 'gbps': return n * 1_000_000_000
-    case 'kbps': return n * 1_000
-    case 'bps': return n
-    default: return n * 1_000_000 // bare number = Mbps
-  }
-}
+// unlimited renders as ∞ here; limits key on the Xray UUID
+const fmt = (bps: number): string => (bps <= 0 ? '∞' : fmtBps(bps))
 
 export default function Bandwidth() {
   const qc = useQueryClient()

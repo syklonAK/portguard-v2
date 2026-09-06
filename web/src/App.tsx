@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
@@ -5,28 +6,39 @@ import { api, getToken } from './api'
 import Layout from './components/Layout'
 import { Spinner } from './components/ui'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Ports from './pages/Ports'
-import Mappings from './pages/Mappings'
-import NginxServices from './pages/Services'
-import Runtime from './pages/Runtime'
-import Backups from './pages/Backups'
-import Diagnostics from './pages/Diagnostics'
-import Certs from './pages/Certs'
-import Monitoring from './pages/Monitoring'
-import Audit from './pages/Audit'
-import Settings from './pages/Settings'
-import Tunnels from './pages/Tunnels'
-import Connections from './pages/Connections'
-import Servers from './pages/Servers'
-import Tools from './pages/Tools'
-import Bandwidth from './pages/Bandwidth'
-import Versions from './pages/Versions'
-import Alerts from './pages/Alerts'
-import Users from './pages/Users'
-import Logs from './pages/Logs'
-import Analytics from './pages/Analytics'
-import ServicesPage from './pages/ServicesPage'
+
+// Every page is code-split: the initial bundle only carries the shell
+// (layout + login + router), and each page loads on first visit.
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Ports = lazy(() => import('./pages/Ports'))
+const Mappings = lazy(() => import('./pages/Mappings'))
+const NginxServices = lazy(() => import('./pages/Services'))
+const Runtime = lazy(() => import('./pages/Runtime'))
+const Backups = lazy(() => import('./pages/Backups'))
+const Diagnostics = lazy(() => import('./pages/Diagnostics'))
+const Certs = lazy(() => import('./pages/Certs'))
+const Monitoring = lazy(() => import('./pages/Monitoring'))
+const Audit = lazy(() => import('./pages/Audit'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Tunnels = lazy(() => import('./pages/Tunnels'))
+const Connections = lazy(() => import('./pages/Connections'))
+const Servers = lazy(() => import('./pages/Servers'))
+const Tools = lazy(() => import('./pages/Tools'))
+const Bandwidth = lazy(() => import('./pages/Bandwidth'))
+const Versions = lazy(() => import('./pages/Versions'))
+const Alerts = lazy(() => import('./pages/Alerts'))
+const Users = lazy(() => import('./pages/Users'))
+const Logs = lazy(() => import('./pages/Logs'))
+const Analytics = lazy(() => import('./pages/Analytics'))
+const AppServices = lazy(() => import('./pages/AppServices'))
+
+function Page() {
+  return (
+    <div className="flex h-64 items-center justify-center">
+      <Spinner className="h-7 w-7" />
+    </div>
+  )
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
@@ -102,28 +114,28 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/servers" element={<Servers />} />
-        <Route path="/ports" element={<Ports />} />
-        <Route path="/connections" element={<Connections />} />
-        <Route path="/mappings" element={<Mappings />} />
-        <Route path="/services" element={<ServicesPage />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/services/systemd" element={<NginxServices />} />
-        <Route path="/runtime" element={<Runtime />} />
-        <Route path="/backups" element={<Backups />} />
-        <Route path="/versions" element={<Versions />} />
-        <Route path="/diagnostics" element={<Diagnostics />} />
-        <Route path="/tools" element={<Tools />} />
-        <Route path="/bandwidth" element={<Bandwidth />} />
-        <Route path="/certs" element={<Certs />} />
-        <Route path="/tunnels" element={<Tunnels />} />
-        <Route path="/monitoring" element={<Monitoring />} />
-        <Route path="/alerts" element={<Alerts />} />
-        <Route path="/audit" element={<Audit />} />
-        <Route path="/users" element={<Users />} />
-        <Route path="/logs" element={<Logs />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/" element={<Suspense fallback={<Page />}><Dashboard /></Suspense>} />
+        <Route path="/servers" element={<Suspense fallback={<Page />}><Servers /></Suspense>} />
+        <Route path="/ports" element={<Suspense fallback={<Page />}><Ports /></Suspense>} />
+        <Route path="/connections" element={<Suspense fallback={<Page />}><Connections /></Suspense>} />
+        <Route path="/mappings" element={<Suspense fallback={<Page />}><Mappings /></Suspense>} />
+        <Route path="/services" element={<Suspense fallback={<Page />}><AppServices /></Suspense>} />
+        <Route path="/analytics" element={<Suspense fallback={<Page />}><Analytics /></Suspense>} />
+        <Route path="/services/systemd" element={<Suspense fallback={<Page />}><NginxServices /></Suspense>} />
+        <Route path="/runtime" element={<Suspense fallback={<Page />}><Runtime /></Suspense>} />
+        <Route path="/backups" element={<Suspense fallback={<Page />}><Backups /></Suspense>} />
+        <Route path="/versions" element={<Suspense fallback={<Page />}><Versions /></Suspense>} />
+        <Route path="/diagnostics" element={<Suspense fallback={<Page />}><Diagnostics /></Suspense>} />
+        <Route path="/tools" element={<Suspense fallback={<Page />}><Tools /></Suspense>} />
+        <Route path="/bandwidth" element={<Suspense fallback={<Page />}><Bandwidth /></Suspense>} />
+        <Route path="/certs" element={<Suspense fallback={<Page />}><Certs /></Suspense>} />
+        <Route path="/tunnels" element={<Suspense fallback={<Page />}><Tunnels /></Suspense>} />
+        <Route path="/monitoring" element={<Suspense fallback={<Page />}><Monitoring /></Suspense>} />
+        <Route path="/alerts" element={<Suspense fallback={<Page />}><Alerts /></Suspense>} />
+        <Route path="/audit" element={<Suspense fallback={<Page />}><Audit /></Suspense>} />
+        <Route path="/users" element={<Suspense fallback={<Page />}><Users /></Suspense>} />
+        <Route path="/logs" element={<Suspense fallback={<Page />}><Logs /></Suspense>} />
+        <Route path="/settings" element={<Suspense fallback={<Page />}><Settings /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

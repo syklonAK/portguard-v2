@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { fmtBps, fmtBytes } from '../lib/format'
 import { Activity, ArrowDown, ArrowUp, Gauge, Zap } from 'lucide-react'
 import { api, type MetricsData, type MetricPoint, type ServerNode } from '../api'
 import { Badge, Card, CardHeader, Select, Spinner } from '../components/ui'
@@ -11,20 +12,6 @@ const RANGES: { value: Range; label: string }[] = [
   { value: '24h', label: 'Last 24 hours' },
   { value: '7d', label: 'Last 7 days' },
 ]
-
-function fmtBytes(b: number): string {
-  if (b >= 1 << 30) return (b / (1 << 30)).toFixed(2) + ' GB'
-  if (b >= 1 << 20) return (b / (1 << 20)).toFixed(1) + ' MB'
-  if (b >= 1 << 10) return (b / (1 << 10)).toFixed(1) + ' KB'
-  return b + ' B'
-}
-
-function fmtBps(bps: number): string {
-  if (bps >= 1_000_000_000) return (bps / 1_000_000_000).toFixed(1) + ' Gbps'
-  if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(1) + ' Mbps'
-  if (bps >= 1_000) return (bps / 1_000).toFixed(1) + ' Kbps'
-  return bps + ' bps'
-}
 
 // Sparkline renders an SVG area chart from numeric points.
 function Sparkline({ points, color, height = 90 }: { points: number[]; color: string; height?: number }) {
