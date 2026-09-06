@@ -446,9 +446,10 @@ export default function Servers() {
         title="Deploy a new node — no panel install needed">
         <div className="space-y-4">
           <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-            Run this single command on the new Ubuntu server. It downloads <b>this master's own binary</b>,
-            installs it as a headless <b>portguard-agent</b> service and registers the token below.
-            Afterwards, click <b>Add server</b> with the same token — the node is fully managed from here.
+            Run this single command on the new Ubuntu server — that's the whole flow. It downloads
+            <b> this master's own binary</b>, installs it as a headless <b>portguard-agent</b> service
+            (no account, no panel setup) and <b>self-registers</b> with this master. When the command
+            finishes, the node appears in the list below as <b>online</b> and is fully managed from here.
           </p>
           <Field label="1. Node token (generated — copy it)">
             <div className="flex gap-2">
@@ -472,9 +473,9 @@ export default function Servers() {
             />
           </Field>
           <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-2xs leading-relaxed text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
-            The agent listens on port <b>8081</b> (override with <code>AGENT_PORT</code>). Make sure your firewall
-            allows the master to reach it. The binary download link
-            (<code>{'{origin}'}/api/node/binary</code>) is protected by this same token.
+            The agent listens on port <b>8081</b> (override with <code>-port</code>). Give it a friendly name with
+            <code className="mx-1">-name mynode</code>. Re-running the command on the same server just refreshes it.
+            The binary download and the registration are both protected by this same token.
           </div>
         </div>
       </Modal>

@@ -79,6 +79,32 @@ func (s *Store) GetServerNode(id int64) (ServerNode, error) {
 	}
 	return n, err
 }
+// UpsertServerNodeByHostPort creates or refreshes a node keyed on
+// (host, port) — used by the agent self-registration flow so re-running the
+// installer on the same server updates the row instead of duplicating it.
+// Returns (id, created).
+func (s *Store) UpsertServerNodeByHostPort(n *ServerNode) (int64, bool, error) {
+	var id int64
+	err := s.DB.QueryRow(`SELECT id FROM server_nodes WHERE host=? AND port=?`, n.Host, n.Port).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		ts := nowTS()
+		res, err := s.DB.Exec(`INSERT INTO server_nodes(name, host, port, api_token, role, enabled, notes, status, created_at, updated_at)
+			VALUES(?,?,?,?,?,?,?,'unknown',?,?)`,
+			n.Name, n.Host, n.Port, n.APIToken, n.Role, b2i(n.Enabled), n.Notes, ts, ts)
+		if err != nil {
+			return 0, false, err
+		}
+		id, err = res.LastInsertId()
+		return id, true, err
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	_, err = s.DB.Exec(`UPDATE server_nodes SET api_token=?, role=?, enabled=1, updated_at=? WHERE id=?`,
+		n.APIToken, n.Role, nowTS(), id)
+	return id, false, err
+}
+
 func (s *Store) CreateServerNode(n *ServerNode) (int64, error) {
 	ts := nowTS()
 	res, err := s.DB.Exec(`INSERT INTO server_nodes(name, host, port, api_token, role, enabled, notes, status, created_at, updated_at)

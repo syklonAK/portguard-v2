@@ -236,8 +236,25 @@ if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi "Status: 
 fi
 sleep 1
 systemctl is-active --quiet portguard-agent \
-  && say "agent running on port ${AGENT_PORT} (role: ${ROLE}) — now add this server in the master's Servers page" \
+  && say "agent running on port ${AGENT_PORT} (role: ${ROLE})" \
   || { journalctl -u portguard-agent -n 20 --no-pager; die "agent failed to start"; }
+
+# self-register: announce this server to the master so it appears in the
+# Servers page immediately - no account, no manual "Add server" step
+REG_NAME="${NAME:-$(hostname)}"
+REG_HOST="${HOSTIP:-$(curl -fsSL -m 8 "${MASTER}/api/node/myip" 2>/dev/null || true)}"
+REG_NAME="${REG_NAME//\"/}"
+if [ -n "$REG_HOST" ]; then
+  if curl -fsSL -m 10 -X POST -H "Authorization: Bearer ${TOKEN}" -H 'Content-Type: application/json' \
+      -d "{\"name\":\"${REG_NAME}\",\"host\":\"${REG_HOST}\",\"port\":${AGENT_PORT},\"role\":\"${ROLE}\"}" \
+      "${MASTER}/api/nodes/self-register" >/dev/null 2>&1; then
+    say "registered with the master (${REG_HOST}:${AGENT_PORT}) — manage it from the Servers page"
+  else
+    say "WARNING: self-register failed — add the node manually in the master's Servers page"
+  fi
+else
+  say "WARNING: could not determine this server's address — add the node manually in the master's Servers page"
+fi
 `
 
 // handleNodeTools reports which managed tools are installed on this server.
