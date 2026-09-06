@@ -132,7 +132,7 @@ func (m *JobManager) Get(id string) (*Job, bool) {
 
 // jobJSON is the API shape of a job with its transcript.
 type jobJSON struct {
-	Job
+	*Job
 	Output []string `json:"output"`
 }
 
