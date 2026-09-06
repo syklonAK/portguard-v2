@@ -5,7 +5,6 @@
 package api
 
 import (
-	"net"
 	"net/http"
 	"strings"
 
