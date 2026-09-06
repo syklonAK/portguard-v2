@@ -13,15 +13,17 @@ export function Button({
   size?: 'sm' | 'md'
 }) {
   const base =
-    'inline-flex items-center justify-center gap-1.5 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
+    'pg-press inline-flex items-center justify-center gap-1.5 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
   const sizes = { sm: 'h-8 px-3 text-xs', md: 'h-9.5 px-4 text-sm' }
   const variants = {
-    primary: 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-sm',
+    primary:
+      'bg-neutral-900 text-white hover:bg-neutral-700 shadow-sm dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200',
     secondary:
-      'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-700',
+      'bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-200 dark:border-neutral-700 dark:hover:bg-neutral-800',
     danger: 'bg-red-600 text-white hover:bg-red-500 shadow-sm',
-    success: 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm',
-    ghost: 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+    success:
+      'bg-neutral-900 text-white hover:bg-neutral-700 shadow-sm dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200',
+    ghost: 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
   }
   return (
     <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...props}>
@@ -33,7 +35,7 @@ export function Button({
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}
+      className={`pg-3d rounded-xl border border-neutral-200/80 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900 ${className}`}
     >
       {children}
     </div>
@@ -42,10 +44,10 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 
 export function CardHeader({ title, desc, right }: { title: string; desc?: string; right?: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+    <div className="flex items-start justify-between gap-4 border-b border-neutral-200/80 px-5 py-4 dark:border-neutral-800">
       <div>
         <h3 className="text-sm font-semibold">{title}</h3>
-        {desc && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{desc}</p>}
+        {desc && <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{desc}</p>}
       </div>
       {right}
     </div>
@@ -55,9 +57,9 @@ export function CardHeader({ title, desc, right }: { title: string; desc?: strin
 export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`h-9.5 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm placeholder:text-slate-400
-        focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20
-        dark:border-slate-600 dark:bg-slate-800 dark:placeholder:text-slate-500 ${className}`}
+      className={`h-9.5 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm transition-colors placeholder:text-neutral-400
+        focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10
+        dark:border-neutral-700 dark:bg-neutral-900 dark:placeholder:text-neutral-500 dark:focus:border-neutral-300 dark:focus:ring-neutral-100/10 ${className}`}
       {...props}
     />
   )
@@ -66,9 +68,9 @@ export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInpu
 export function Select({ className = '', children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`h-9.5 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm
-        focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20
-        dark:border-slate-600 dark:bg-slate-800 ${className}`}
+      className={`h-9.5 w-full rounded-lg border border-neutral-200 bg-white px-2.5 text-sm transition-colors
+        focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10
+        dark:border-neutral-700 dark:bg-neutral-900 dark:focus:border-neutral-300 dark:focus:ring-neutral-100/10 ${className}`}
       {...props}
     >
       {children}
@@ -79,9 +81,9 @@ export function Select({ className = '', children, ...props }: SelectHTMLAttribu
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-300">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-2xs text-slate-400">{hint}</span>}
+      {hint && <span className="mt-1 block text-2xs text-neutral-400">{hint}</span>}
     </label>
   )
 }
@@ -94,11 +96,11 @@ export function Badge({
   children: ReactNode
 }) {
   const colors = {
-    slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    slate: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300',
     green: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
     red: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
     amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    blue: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+    blue: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200',
     purple: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
     cyan: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
   }
@@ -124,15 +126,15 @@ export function Modal({
 }) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div className="pg-modal-bg fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className={`relative max-h-[90vh] w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} overflow-y-auto rounded-xl border
-          border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900`}
+        className={`pg-modal-card relative max-h-[90vh] w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} overflow-y-auto rounded-xl border
+          border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900`}
       >
-        <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5 dark:border-slate-700 dark:bg-slate-900">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
           <h2 className="text-sm font-semibold">{title}</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800">
+          <button onClick={onClose} className="pg-press rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -144,7 +146,7 @@ export function Modal({
 
 export function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
   return (
-    <svg className={`animate-spin text-indigo-500 ${className}`} viewBox="0 0 24 24" fill="none">
+    <svg className={`animate-spin text-neutral-500 dark:text-neutral-300 ${className}`} viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
     </svg>
@@ -157,12 +159,12 @@ export function StatusDot({ status }: { status: 'up' | 'down' | 'unknown' | 'ok'
       ? 'bg-emerald-500'
       : status === 'down' || status === 'error'
         ? 'bg-red-500'
-        : 'bg-slate-400'
+        : 'bg-neutral-400'
   return <span className={`inline-block h-2 w-2 rounded-full ${cls} ${status === 'up' ? 'animate-pulse' : ''}`} />
 }
 
 export function Empty({ message }: { message: string }) {
-  return <div className="px-5 py-12 text-center text-sm text-slate-400">{message}</div>
+  return <div className="px-5 py-12 text-center text-sm text-neutral-400">{message}</div>
 }
 
 export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -170,10 +172,10 @@ export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: 
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className={`relative h-5.5 w-10 rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+      className={`pg-press relative h-5.5 w-10 rounded-full transition-colors ${checked ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-300 dark:bg-neutral-600'}`}
     >
       <span
-        className={`absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white shadow transition-all ${checked ? 'left-5' : 'left-0.5'}`}
+        className={`absolute top-0.5 h-4.5 w-4.5 rounded-full shadow transition-all ${checked ? 'left-5 bg-white dark:bg-neutral-900' : 'left-0.5 bg-white dark:bg-neutral-300'}`}
       />
     </button>
   )
@@ -191,7 +193,7 @@ export function Tabs({
   onChange: (id: string) => void
 }) {
   return (
-    <div className="flex gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/60">
+    <div className="flex gap-1 rounded-xl border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-800/60">
       {tabs.map((t) => {
         const Icon = t.icon
         return (
@@ -199,10 +201,10 @@ export function Tabs({
             key={t.id}
             type="button"
             onClick={() => onChange(t.id)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`pg-press flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               active === t.id
-                ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-900 dark:text-indigo-300'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-800 dark:text-white'
+                : 'text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
             }`}
           >
             {Icon && <Icon className="h-3.5 w-3.5" />}
@@ -253,9 +255,9 @@ export function CodeEditor({
       placeholder={placeholder}
       value={value}
       onChange={(e) => handle(e.target.value)}
-      className={`w-full resize-y rounded-lg border bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-100
-        placeholder:text-slate-600 focus:outline-none focus:ring-2
-        ${invalid ? 'border-red-500 focus:ring-red-500/40' : 'border-slate-700 focus:ring-indigo-500/40'} ${className}`}
+      className={`w-full resize-y rounded-lg border bg-neutral-950 p-3 font-mono text-xs leading-relaxed text-neutral-100
+        placeholder:text-neutral-600 focus:outline-none focus:ring-2
+        ${invalid ? 'border-red-500 focus:ring-red-500/40' : 'border-neutral-700 focus:ring-neutral-100/30'} ${className}`}
     />
   )
 }
@@ -274,17 +276,17 @@ export function CodeBlock({ code, label, onCopy }: { code: string; label?: strin
     <div className="group relative">
       {label && (
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-2xs font-medium uppercase tracking-wide text-slate-400">{label}</span>
+          <span className="text-2xs font-medium uppercase tracking-wide text-neutral-400">{label}</span>
         </div>
       )}
-      <pre className="max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 pr-10 font-mono text-2xs leading-relaxed text-slate-300">
+      <pre className="max-h-64 overflow-auto rounded-lg bg-neutral-950 p-3 pr-10 font-mono text-2xs leading-relaxed text-neutral-300">
         {code}
       </pre>
       <button
         type="button"
         onClick={copy}
-        className={`absolute right-2 ${label ? 'top-6' : 'top-2'} rounded-md p-1.5 text-slate-500 opacity-0 transition-all
-          hover:bg-slate-800 hover:text-slate-200 group-hover:opacity-100 ${copied ? 'text-emerald-400 opacity-100' : ''}`}
+        className={`pg-press absolute right-2 ${label ? 'top-6' : 'top-2'} rounded-md p-1.5 text-neutral-500 opacity-0 transition-all
+          hover:bg-neutral-800 hover:text-neutral-200 group-hover:opacity-100 ${copied ? 'text-emerald-400 opacity-100' : ''}`}
         title={copied ? 'Copied!' : 'Copy'}
       >
         {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
