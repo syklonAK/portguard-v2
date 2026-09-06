@@ -432,8 +432,8 @@ func (a *App) runAcmeSh(req *issueRequest) (string, string, error) {
 	}
 	conf := "/root/.acme.sh/account.conf"
 	if raw, err := os.ReadFile(conf); err == nil {
-		lines := strings.Split(string(raw), "
-")
+		nl := "\n"
+		lines := strings.Split(string(raw), nl)
 		found := false
 		for i, ln := range lines {
 			if strings.HasPrefix(ln, "ACCOUNT_EMAIL=") {
@@ -444,8 +444,7 @@ func (a *App) runAcmeSh(req *issueRequest) (string, string, error) {
 		if !found {
 			lines = append(lines, "ACCOUNT_EMAIL='"+email+"'")
 		}
-		if err := os.WriteFile(conf, []byte(strings.Join(lines, "
-")), 0o600); err != nil {
+		if err := os.WriteFile(conf, []byte(strings.Join(lines, nl)), 0o600); err != nil {
 			return "", "", fmt.Errorf("cannot update acme.sh account email: %v", err)
 		}
 	}
