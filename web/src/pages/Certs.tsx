@@ -286,8 +286,13 @@ export default function Certs() {
               or use DNS-01 instead.
             </p>
           )}
-          {issueForm.tool === 'certbot' && (
+          {issueForm.tool === 'certbot' ? (
             <Field label="Email (ACME account)" hint="Required by certbot for account registration">
+              <Input type="email" value={issueForm.email} onChange={(e) => setIssueForm({ ...issueForm, email: e.target.value })}
+                placeholder="you@example.com" />
+            </Field>
+          ) : (
+            <Field label="Email (optional)" hint="ACME account contact — defaults to portguard@<primary domain>">
               <Input type="email" value={issueForm.email} onChange={(e) => setIssueForm({ ...issueForm, email: e.target.value })}
                 placeholder="you@example.com" />
             </Field>

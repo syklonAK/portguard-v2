@@ -421,12 +421,33 @@ func (a *App) runAcmeSh(req *issueRequest) (string, string, error) {
 			break
 		}
 	}
-	// acme.sh registers the ACME account on first use; the installer default
-	// (portguard@localhost) is rejected by Let's Encrypt as an invalid
-	// contact, so always pass a syntactically valid account email
+	// acme.sh registers the ACME account on first use and reads the contact
+	// email from account.conf, ignoring --accountemail once ACCOUNT_EMAIL is
+	// stored there — and the installer default (portguard@localhost) is
+	// rejected by Let's Encrypt. Rewrite account.conf with a valid email
+	// before every issue.
 	email := req.Email
 	if email == "" {
 		email = "portguard@" + primary
+	}
+	conf := "/root/.acme.sh/account.conf"
+	if raw, err := os.ReadFile(conf); err == nil {
+		lines := strings.Split(string(raw), "
+")
+		found := false
+		for i, ln := range lines {
+			if strings.HasPrefix(ln, "ACCOUNT_EMAIL=") {
+				lines[i] = "ACCOUNT_EMAIL='" + email + "'"
+				found = true
+			}
+		}
+		if !found {
+			lines = append(lines, "ACCOUNT_EMAIL='"+email+"'")
+		}
+		if err := os.WriteFile(conf, []byte(strings.Join(lines, "
+")), 0o600); err != nil {
+			return "", "", fmt.Errorf("cannot update acme.sh account email: %v", err)
+		}
 	}
 	args := []string{"--issue", "--server", acmeCABase, "--accountemail", email}
 	for _, d := range req.Domains {
