@@ -52,10 +52,31 @@ export interface Mapping {
 export interface Cert {
   id: number
   name: string
-  type: 'manual' | 'selfsigned'
+  type: 'manual' | 'selfsigned' | 'acme'
   domains: string[]
   expires_at: string | null
   created_at: string
+}
+
+export interface ACMEEnvField {
+  key: string
+  label: string
+  secret: boolean
+  required: boolean
+}
+
+export interface ACMEProvider {
+  id: string
+  name: string
+  acmesh_dns?: string
+  certbot_pkg?: string
+  certbot_flag?: string
+  env: ACMEEnvField[]
+}
+
+export interface ACMEIssueResult {
+  cert: Cert
+  note: string
 }
 
 export interface PortEntry {
@@ -368,6 +389,20 @@ export const api = {
   selfSignedCert: (c: { name?: string; domains: string[]; days?: number }) =>
     req<Cert>('POST', '/api/certs/selfsigned', c),
   deleteCert: (id: number) => req<{ status: string }>('DELETE', `/api/certs/${id}`),
+
+  // ACME (Let's Encrypt) issuance via acme.sh / certbot, wildcard-capable
+  acmeProviders: () => req<ACMEProvider[]>('GET', '/api/certs/acme/providers'),
+  issueCert: (r: {
+    tool: string
+    method: 'http01' | 'dns01'
+    domains: string[]
+    email?: string
+    dns_provider?: string
+    dns_env?: Record<string, string>
+    name?: string
+  }) => req<ACMEIssueResult>('POST', '/api/certs/issue', r),
+  renewCert: (id: number) =>
+    req<{ status: string; expires_at: string | null }>('POST', `/api/certs/${id}/renew`),
 
   healthList: () => req<TargetHealth[]>('GET', '/api/health'),
   audit: () => req<AuditLog[]>('GET', '/api/audit'),

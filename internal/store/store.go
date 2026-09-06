@@ -579,8 +579,21 @@ func (s *Store) CreateCert(c *Cert) (int64, error) {
 	return res.LastInsertId()
 }
 
-func (s *Store) DeleteCert(id int64) error {
-	var n int
+// UpdateCertPEM swaps the stored PEM pair (used by ACME renewals); expiry is
+// refreshed so the Certs page shows the new validity window.
+func (s *Store) UpdateCertPEM(id int64, certPEM, keyPEM string, expiresAt *time.Time) error {
+	res, err := s.DB.Exec(`UPDATE ssl_certs SET cert_pem=?, key_pem=?, expires_at=? WHERE id=?`,
+		certPEM, keyPEM, nullTime(expiresAt), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) DeleteCert(id int64) error {	var n int
 	if err := s.DB.QueryRow(`SELECT COUNT(*) FROM mappings WHERE ssl_cert_id=?`, id).Scan(&n); err != nil {
 		return err
 	}

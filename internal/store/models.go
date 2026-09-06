@@ -38,7 +38,7 @@ func RoleRank(r string) int {
 type Cert struct {
 	ID        int64      `json:"id"`
 	Name      string     `json:"name"`
-	Type      string     `json:"type"` // manual | selfsigned
+	Type      string     `json:"type"` // manual | selfsigned | acme
 	CertPEM   string     `json:"-"`
 	KeyPEM    string     `json:"-"`
 	Domains   []string   `json:"domains"`

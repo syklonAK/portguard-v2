@@ -66,6 +66,17 @@ var Registry = []Tool{
 		DocsURL:    "https://certbot.eff.org/",
 	},
 	{
+		ID:   "acmesh",
+		Name: "acme.sh (ACME client)",
+		Description: "Zero-dependency shell ACME client with the widest DNS-01 provider support " +
+			"(Cloudflare, ArvanCloud, Hetzner, Route53, ...) — required to issue wildcard certificates " +
+			"from the Certs page. Installs to /root/.acme.sh.",
+		Category:  "security",
+		InstallCmd: `curl -fsSL https://get.acme.sh | sh -s email=portguard@localhost`,
+		VerifyBins: []string{"/root/.acme.sh/acme.sh"},
+		DocsURL:    "https://github.com/acmesh-official/acme.sh",
+	},
+	{
 		ID:   "wireguard",
 		Name: "WireGuard",
 		Description: "Kernel VPN backend used by PasarGuard wireguard nodes (apt: wireguard tools + dkms module).",
