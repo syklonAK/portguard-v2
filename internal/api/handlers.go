@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 
 	"portguard/internal/alerter"
 	"portguard/internal/health"
@@ -23,7 +22,6 @@ import (
 	"portguard/internal/service"
 	"portguard/internal/store"
 	"portguard/internal/sysinfo"
-	"portguard/web"
 )
 
 type App struct {
