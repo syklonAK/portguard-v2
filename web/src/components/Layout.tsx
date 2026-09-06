@@ -35,6 +35,14 @@ const nav = [
 // SidebarContent is shared between the desktop rail and the Bootstrap
 // offcanvas that replaces it on phones/tablets. closeOnNav makes every
 // link dismiss the offcanvas after navigation (no-op on desktop).
+// hideOffcanvas closes the mobile nav after a link tap; doing it in JS (not
+// data-bs-dismiss) keeps React Router's client-side navigation intact.
+function hideOffcanvas() {
+  const el = document.getElementById('pgSidebar')
+  const oc = (window as any).bootstrap?.Offcanvas
+  if (el && oc) oc.getOrCreateInstance(el).hide()
+}
+
 function SidebarContent({ me, system, dark, onToggleTheme, onLogout, closeOnNav }: {
   me?: { username?: string; role?: string }
   system?: string
@@ -59,13 +67,15 @@ function SidebarContent({ me, system, dark, onToggleTheme, onLogout, closeOnNav 
           <div className="text-2xs text-neutral-400">Port & Proxy Manager</div>
         </div>
       </div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
+      <nav
+        className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2"
+        onClickCapture={closeOnNav ? hideOffcanvas : undefined}
+      >
         {nav.map(({ to, label, icon: Icon, ...rest }) => (
           <NavLink
             key={to}
             to={to}
             end={'end' in rest ? (rest as { end?: boolean }).end : false}
-            data-bs-dismiss={closeOnNav ? 'offcanvas' : undefined}
             className={({ isActive }) =>
               `pg-press flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
