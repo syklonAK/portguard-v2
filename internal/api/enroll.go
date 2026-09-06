@@ -12,25 +12,6 @@ import (
 	"portguard/internal/store"
 )
 
-// clientIP returns the best-guess source address of the request: X-Real-IP,
-// the first X-Forwarded-For hop, then RemoteAddr. Trusted only for
-// bookkeeping (the caller is authenticated by the node token anyway).
-func clientIP(r *http.Request) string {
-	if v := strings.TrimSpace(r.Header.Get("X-Real-IP")); v != "" {
-		return v
-	}
-	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		if first := strings.TrimSpace(strings.Split(v, ",")[0]); first != "" {
-			return first
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
 // handleNodeMyIP tells an installing agent which source address the master
 // saw — the script feeds it back as the node's reachable address.
 func (a *App) handleNodeMyIP(w http.ResponseWriter, r *http.Request) {
