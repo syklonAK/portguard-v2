@@ -212,7 +212,7 @@ mkdir -p "$APP_DIR"
 curl -fsSL --connect-timeout 10 -H "Authorization: Bearer ${TOKEN}" "${MASTER}/api/node/binary" -o "${APP_DIR}/portguard.new" \
   || die "could not download the binary — check master reachability and the token"
 chmod +x "${APP_DIR}/portguard.new"
-# pipefail + SIGPIPE: `head -1` closes the pipe and the binary exits 141,
+# pipefail + SIGPIPE: head -1 closes the pipe and the binary exits 141,
 # which would fail the pipeline even on a match - capture the line first
 SMOKE="$("${APP_DIR}/portguard.new" agent 2>&1 | head -1 || true)"
 echo "$SMOKE" | grep -qi portguard   || die "downloaded binary failed its smoke test — the master may serve a different architecture"
