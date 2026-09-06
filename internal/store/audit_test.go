@@ -22,7 +22,7 @@ func testStore(t *testing.T) *Store {
 
 func TestReplacePortsSync(t *testing.T) {
 	st := testStore(t)
-	defer st.Close()
+	defer st.DB.Close()
 
 	mk := func(port int, proc string) PortEntry {
 		return PortEntry{Port: port, Proto: "tcp", ListenIP: "0.0.0.0", Process: proc, PID: 100 + port, User: "root", Classification: "other"}
@@ -92,7 +92,7 @@ func TestReplacePortsSync(t *testing.T) {
 
 func TestReplaceConnectionsSync(t *testing.T) {
 	st := testStore(t)
-	defer st.Close()
+	defer st.DB.Close()
 
 	mk := func(srcP, dstP int) ConnEntry {
 		return ConnEntry{SrcIP: "10.0.0.1", SrcPort: srcP, DstIP: "10.0.0.2", DstPort: dstP, Process: "p", PID: 1, UID: 0, State: "ESTABLISHED"}
@@ -142,7 +142,7 @@ func TestReplaceConnectionsSync(t *testing.T) {
 
 func TestPagination(t *testing.T) {
 	st := testStore(t)
-	defer st.Close()
+	defer st.DB.Close()
 
 	for i := 1; i <= 5; i++ {
 		m := Mapping{Name: map[int]string{1: "a", 2: "b", 3: "c", 4: "d", 5: "e"}[i], Engine: "nginx", Protocol: "tcp", ListenPort: 10000 + i}
@@ -187,7 +187,7 @@ func TestPagination(t *testing.T) {
 // appear in any public JSON, even if the struct is marshalled directly.
 func TestServerNodeTokenNeverSerialized(t *testing.T) {
 	st := testStore(t)
-	defer st.Close()
+	defer st.DB.Close()
 
 	n := ServerNode{Name: "secret-node", Host: "10.0.0.9", Port: 8080, APIToken: "super-secret-token-value", Enabled: true}
 	if _, err := st.CreateServerNode(&n); err != nil {

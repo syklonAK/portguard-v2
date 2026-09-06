@@ -96,9 +96,9 @@ func TestHAProxyRenderPathRoutes(t *testing.T) {
 		"http-request deny deny_status 404 if !fe_pg62_ws !fe_pg62_hu !fe_pg62_xhttp",
 		// dynamic backend extracts the port and dials it
 		"backend be_pg62_dyn",
-		"http-request set-var(txn.pgport) path,regsub(^/ws/([0-9]+)(/.*)?$,\\1) if { path_reg ^/ws/ }",
-		"http-request set-var(txn.pgport) path,regsub(^/hu/([0-9]+)(/.*)?$,\\1) if { path_reg ^/hu/ }",
-		"http-request set-var(txn.pgport) path,regsub(^/xhttp/([0-9]+)(/.*)?$,\\1) if { path_reg ^/xhttp/ }",
+		"http-request set-var(txn.pgport) path,regsub(^/ws/([0-9]+)(/.*)?$,\\1) if { path_reg ^/ws/[0-9]+(/.*)?$ }",
+		"http-request set-var(txn.pgport) path,regsub(^/hu/([0-9]+)(/.*)?$,\\1) if { path_reg ^/hu/[0-9]+(/.*)?$ }",
+		"http-request set-var(txn.pgport) path,regsub(^/xhttp/([0-9]+)(/.*)?$,\\1) if { path_reg ^/xhttp/[0-9]+(/.*)?$ }",
 		"http-request set-dst-port var(txn.pgport)",
 		"server dynamic 127.0.0.1:1",
 	} {

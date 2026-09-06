@@ -628,19 +628,19 @@ var _ Engine = NginxEngine{}
 // "/etc/portguard-evil") — anything escaping confDir is rejected instead of
 // silently rewritten.
 func secureJoin(confDir, rel string) (string, error) {
-	rel = filepath.Clean(strings.TrimPrefix(filepath.Clean("/"+rel), "/portguard/"))
-	if rel == "." || strings.HasPrefix(rel, "..") {
+	r := strings.TrimPrefix(rel, "portguard/")
+	if strings.HasPrefix(r, "/") {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+	clean := filepath.Clean(r)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path escapes the staging directory")
 	}
-	abs := filepath.Join(confDir, rel)
 	root, err := filepath.Abs(confDir)
 	if err != nil {
 		return "", err
 	}
-	abs, err = filepath.Abs(abs)
-	if err != nil {
-		return "", err
-	}
+	abs := filepath.Join(root, clean)
 	relToRoot, err := filepath.Rel(root, abs)
 	if err != nil || relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path escapes the staging directory")

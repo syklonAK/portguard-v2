@@ -114,13 +114,13 @@ func TestRenderHAPathACLDenyInteraction(t *testing.T) {
 	routes := []store.PathRoute{{Transport: store.PathTransportWS, Prefix: "ws", MinPort: 1, MaxPort: 65535}}
 
 	noTargets := store.Mapping{Name: "p", PathRoutes: routes}
-	out := renderHAPathACL("fe", "be", noTargets)
+	out := renderHAPathRoutes("fe", "be", noTargets)
 	if !strings.Contains(out, "http-request deny deny_status 404 if !fe_ws") {
 		t.Fatalf("targets=0 mapping must deny unmatched requests, got:\n%s", out)
 	}
 
 	withTargets := store.Mapping{Name: "p", PathRoutes: routes, Targets: []store.Target{{Host: "10.0.0.1", Port: 80}}}
-	out = renderHAPathACL("fe", "be", withTargets)
+	out = renderHAPathRoutes("fe", "be", withTargets)
 	if strings.Contains(out, "http-request deny") {
 		t.Fatalf("targets>0 mapping must keep default_backend reachable, got:\n%s", out)
 	}
