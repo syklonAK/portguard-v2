@@ -80,10 +80,12 @@ defaults
 			if m.RedirectTo != "" {
 				fmt.Fprintf(&b, "    http-request redirect location %s code 301\n", escapeHA(m.RedirectTo))
 			} else {
+				b.WriteString(renderHARouteRules(fe, be, m))
 				b.WriteString(renderHAPathRoutes(fe, be, m))
 				b.WriteString(renderHAPathACL(fe, be, m))
 				fmt.Fprintf(&b, "    default_backend %s\n", be)
 			}
+			b.WriteString(renderHARouteRuleBackends(m))
 			if m.WebSocket {
 				fmt.Fprintf(&b, "    timeout tunnel 3600s\n")
 			}
@@ -102,10 +104,12 @@ defaults
 			if m.RedirectTo != "" {
 				fmt.Fprintf(&b, "    http-request redirect location %s code 301\n", escapeHA(m.RedirectTo))
 			} else {
+				b.WriteString(renderHARouteRules(fe, be, m))
 				b.WriteString(renderHAPathRoutes(fe, be, m))
 				b.WriteString(renderHAPathACL(fe, be, m))
 				fmt.Fprintf(&b, "    default_backend %s\n", be)
 			}
+			b.WriteString(renderHARouteRuleBackends(m))
 			if m.WebSocket {
 				fmt.Fprintf(&b, "    timeout tunnel 3600s\n")
 			}
@@ -160,6 +164,82 @@ func renderHABackend(be string, m store.Mapping, tcpMode bool) string {
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// renderHARouteRules emits ordered path_beg ACLs + use_backend lines for the
+// advanced routing rules. HAProxy evaluates ACLs in file order, so rule
+// order is preserved as-is (with longest prefixes first for sanity).
+func renderHARouteRules(fe, be string, m store.Mapping) string {
+	if len(m.Routes) == 0 {
+		return ""
+	}
+	type active struct {
+		id   int64
+		path string
+	}
+	var rules []active
+	for _, r := range m.Routes {
+		if r.Enabled {
+			rules = append(rules, active{id: r.ID, path: r.Path})
+		}
+	}
+	// longest prefix first so specific rules win over generic ones
+	for i := 1; i < len(rules); i++ {
+		for j := i; j > 0 && len(rules[j].path) > len(rules[j-1].path); j-- {
+			rules[j], rules[j-1] = rules[j-1], rules[j]
+		}
+	}
+	var b strings.Builder
+	for _, r := range rules {
+		aclName := fmt.Sprintf("%s_r%d", fe, r.id%100000)
+		fmt.Fprintf(&b, "    acl %s path_beg %s\n", aclName, escapeHA(r.path))
+		if ruleHasRedirect(m, r.id) {
+			url := ruleRedirect(m, r.id)
+			fmt.Fprintf(&b, "    http-request redirect location %s code 301 if %s\n", escapeHA(url), aclName)
+		} else {
+			fmt.Fprintf(&b, "    use_backend %s_r%d if %s\n", be, r.id%100000, aclName)
+		}
+	}
+	return b.String()
+}
+
+// renderHARouteRuleBackends emits one backend per multi-target rule; single
+// targets get an inline backend too (uniform and diff-friendly).
+func renderHARouteRuleBackends(m store.Mapping) string {
+	if len(m.Routes) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range m.Routes {
+		if !r.Enabled || len(r.Targets) == 0 {
+			continue
+		}
+		rb := store.Mapping{
+			Engine: m.Engine, Protocol: "http", Targets: r.Targets,
+			Balance: m.Balance, WebSocket: m.WebSocket, HostHeader: m.HostHeader,
+		}
+		out := renderHABackend(fmt.Sprintf("be_pg%d_r%d", m.ID, r.ID%100000), rb, false)
+		b.WriteString(strings.TrimRight(out, "\n") + "\n\n")
+	}
+	return b.String()
+}
+
+func ruleHasRedirect(m store.Mapping, id int64) bool {
+	for _, r := range m.Routes {
+		if r.ID == id && r.Redirect != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func ruleRedirect(m store.Mapping, id int64) string {
+	for _, r := range m.Routes {
+		if r.ID == id {
+			return r.Redirect
+		}
+	}
+	return ""
 }
 
 // renderHAPathACL adds path-based routing (like haproxy-manager's ACL path rules):

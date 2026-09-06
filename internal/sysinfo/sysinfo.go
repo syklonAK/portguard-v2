@@ -10,6 +10,7 @@ import (
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/net"
 )
 
 type Snapshot struct {
@@ -27,6 +28,9 @@ type Snapshot struct {
 	Kernel       string  `json:"kernel"`
 	NumCPU       int     `json:"num_cpu"`
 	GoVersion    string  `json:"go_version"`
+	// cumulative network counters (bytes) across all interfaces
+	NetRxTotal uint64 `json:"net_rx_total"`
+	NetTxTotal uint64 `json:"net_tx_total"`
 }
 
 func SnapshotNow() Snapshot {
@@ -52,6 +56,11 @@ func SnapshotNow() Snapshot {
 		s.OS = hi.OS
 		s.Platform = hi.Platform + " " + hi.PlatformVersion
 		s.Kernel = hi.KernelVersion
+	}
+	if counters, err := net.IOCounters(false); err == nil && len(counters) > 0 {
+		// aggregate ("false") gives one row with totals across interfaces
+		s.NetRxTotal = counters[0].BytesRecv
+		s.NetTxTotal = counters[0].BytesSent
 	}
 	return s
 }

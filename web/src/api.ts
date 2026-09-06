@@ -39,6 +39,8 @@ export interface Mapping {
   access_rules: ACLRule[]
   extra_headers: Record<string, string>
   path_routes: PathRoute[]
+  routes: RouteRule[]
+  service_id: number | null
   host_header: string
   decoy: '' | 'builtin' | 'custom'
   decoy_html: string
@@ -461,7 +463,67 @@ export const api = {
   importConfirm: (indices: number[]) =>
     req<{ created: number; skipped: number; issues: { section: string; reason: string }[] }>('POST', '/api/import/confirm', { indices }),
 
+  // v2.8: services + metrics
+  listServices: () => req<ServiceView[]>('GET', '/api/services'),
+  createService: (s: Partial<Service>) => req<Service>('POST', '/api/services', s),
+  updateService: (id: number, s: Partial<Service>) => req<Service>('PUT', `/api/services/${id}`, s),
+  deleteService: (id: number) => req<{ ok: boolean }>('DELETE', `/api/services/${id}`),
+  serviceDetail: (id: number) => req<{ service: Service; mappings: Mapping[]; health: any[] }>('GET', `/api/services/${id}`),
+  metrics: (nodeId: number, range: '5m' | '1h' | '24h' | '7d') =>
+    req<MetricsData>('GET', `/api/metrics/${nodeId}?range=${range}`),
+
   eventsUrl: () => `/api/events?token=${encodeURIComponent(getToken() || '')}`,
+}
+
+// ---- v2.8 services + metrics ----
+
+export interface Service {
+  id: number
+  name: string
+  description: string
+  enabled: boolean
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ServiceView extends Service {
+  mapping_count: number
+  enabled_count: number
+  backends_up: number
+  backends_down: number
+}
+
+export interface MetricPoint {
+  node_id: number
+  cpu_percent: number
+  mem_percent: number
+  disk_percent: number
+  rx_bytes: number
+  tx_bytes: number
+  rx_bps: number
+  tx_bps: number
+  conns: number
+  ts: number
+}
+
+export interface MetricsData {
+  node_id: number
+  points: MetricPoint[]
+  rx_total: number
+  tx_total: number
+  rx_peak: number
+  tx_peak: number
+  active_conns: number
+}
+
+export interface RouteRule {
+  id: number
+  path: string
+  enabled: boolean
+  targets: Target[]
+  redirect?: string
+  notes?: string
 }
 
 export interface ImportScan {

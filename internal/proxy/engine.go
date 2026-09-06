@@ -207,6 +207,9 @@ func ValidateMapping(m store.Mapping, all []store.Mapping, panelPort int) error 
 	if err := validatePathRoutes(m); err != nil {
 		return err
 	}
+	if err := validateRouteRules(m); err != nil {
+		return err
+	}
 	if m.Decoy != "" && m.Decoy != "builtin" && m.Decoy != "custom" {
 		return fmt.Errorf("decoy must be empty, \"builtin\" or \"custom\"")
 	}
@@ -260,6 +263,64 @@ func listenIPsOverlap(a, b string) bool {
 	// v4 wildcard vs v6 wildcard both try to own every port on all
 	// interfaces — treat any wildcard pair as overlapping for the same port
 	return wildA || wildB
+}
+
+// validateRouteRules checks the ordered path-routing rules: prefixes must
+// start with "/", be unique, and each rule needs targets or a redirect.
+func validateRouteRules(m store.Mapping) error {
+	if len(m.Routes) == 0 {
+		return nil
+	}
+	if m.Protocol != "http" && m.Protocol != "https" {
+		return fmt.Errorf("route rules are only supported for http/https mappings")
+	}
+	if m.RedirectTo != "" {
+		return fmt.Errorf("route rules cannot be combined with redirect_to")
+	}
+	if m.Engine != "nginx" {
+		// HAProxy path routing needs ACLs per rule — supported but with a
+		// stricter shape: no wildcards, plain prefixes only
+		for i, r := range m.Routes {
+			if strings.Contains(r.Path, "*") {
+				return fmt.Errorf("route rule #%d: HAProxy routing uses plain prefixes (no * wildcards)", i+1)
+			}
+		}
+	}
+	seen := map[string]bool{}
+	for i, r := range m.Routes {
+		if !strings.HasPrefix(r.Path, "/") {
+			return fmt.Errorf("route rule #%d: path must start with /", i+1)
+		}
+		if hasControlChars(r.Path) {
+			return fmt.Errorf("route rule #%d: path contains control characters", i+1)
+		}
+		if seen[r.Path] {
+			return fmt.Errorf("route rule #%d: duplicate path %q", i+1, r.Path)
+		}
+		seen[r.Path] = true
+		if r.Redirect == "" && len(r.Targets) == 0 {
+			return fmt.Errorf("route rule #%d: needs at least one target or a redirect", i+1)
+		}
+		for _, t := range r.Targets {
+			if t.Port < 1 || t.Port > 65535 || t.Host == "" {
+				return fmt.Errorf("route rule #%d: invalid target %s:%d", i+1, t.Host, t.Port)
+			}
+			if hasControlChars(t.Host) {
+				return fmt.Errorf("route rule #%d: target host contains control characters", i+1)
+			}
+		}
+	}
+	return nil
+}
+
+// RouteRulePathForNginx converts a rule path to an nginx location prefix:
+// "/ws/*" becomes the prefix "/ws/" (the wildcard is implied by prefix
+// matching), anything else is used verbatim.
+func RouteRulePathForNginx(p string) string {
+	if strings.HasSuffix(p, "/*") {
+		return strings.TrimSuffix(p, "*")
+	}
+	return p
 }
 
 // hasControlChars reports whether s contains characters that could break out

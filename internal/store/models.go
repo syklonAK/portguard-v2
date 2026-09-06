@@ -130,6 +130,8 @@ type Mapping struct {
 	HostHeader   string            `json:"host_header"` // upstream Host header (proxy_set_header Host)
 	Decoy        string            `json:"decoy"`       // "" | builtin | custom — serve a real site on unmatched paths
 	DecoyHTML    string            `json:"decoy_html"`  // custom HTML when decoy == "custom"
+	Routes       []RouteRule       `json:"routes"`       // ordered path rules (advanced routing)
+	ServiceID    *int64            `json:"service_id"`  // logical grouping
 	Notes        string            `json:"notes"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
@@ -227,6 +229,46 @@ type Alert struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// ---- services ----
+
+// Service is a logical grouping of mappings (one deployable unit with its
+// own health/monitoring surface).
+type Service struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Enabled     bool      `json:"enabled"`
+	Notes       string    `json:"notes"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// RouteRule is one ordered path-based route inside a mapping: matching
+// requests go to its own targets (or a redirect). Rules are evaluated in
+// order; the mapping's own targets serve as the fallback ("/*").
+type RouteRule struct {
+	ID        int64    `json:"id"`
+	Path      string   `json:"path"`   // e.g. /ws/* — prefix match, * wildcard supported at the end
+	Enabled   bool     `json:"enabled"`
+	Targets   []Target `json:"targets"`
+	Redirect  string   `json:"redirect,omitempty"` // 301 target instead of proxying
+	Notes     string   `json:"notes,omitempty"`
+}
+
+// MetricPoint is one sampled measurement for a node (0 = this panel).
+type MetricPoint struct {
+	NodeID     int64   `json:"node_id"`
+	CPUPercent float64 `json:"cpu_percent"`
+	MemPercent float64 `json:"mem_percent"`
+	DiskPercent float64 `json:"disk_percent"`
+	RxBytes    uint64  `json:"rx_bytes"` // cumulative
+	TxBytes    uint64  `json:"tx_bytes"`
+	RxBps      int64   `json:"rx_bps"`   // delta rate
+	TxBps      int64   `json:"tx_bps"`
+	Conns      int     `json:"conns"`
+	TS         int64   `json:"ts"`
+}
+
 // TunnelRelay is one Iran-side relay entry (Hedioum Pool Tunnel topology):
 // users hit this server and traffic is relayed to the foreign node through
 // the Hedioum SOCKS5 hub. mode: raw (passthrough) | tls (terminate here).
@@ -289,13 +331,13 @@ func mustJSON(v any) string {
 func scanMapping(row interface{ Scan(...any) error }) (Mapping, error) {
 	var m Mapping
 	var enabled, websocket, http2 int
-	var serverNames, targets, headers, accessRules, balance, pathPrefix, pathRoutes sql.NullString
+	var serverNames, targets, headers, accessRules, balance, pathPrefix, pathRoutes, routes sql.NullString
 	var hostHeader, decoy, decoyHTML sql.NullString
-	var sslCertID sql.NullInt64
+	var sslCertID, serviceID sql.NullInt64
 	var createdTS, updatedTS int64
 	err := row.Scan(&m.ID, &m.Name, &enabled, &m.Engine, &m.Protocol, &m.ListenIP, &m.ListenPort,
 		&serverNames, &sslCertID, &m.RedirectTo, &websocket, &http2, &targets, &balance, &pathPrefix,
-		&accessRules, &headers, &pathRoutes, &hostHeader, &decoy, &decoyHTML, &m.Notes,
+		&accessRules, &headers, &pathRoutes, &hostHeader, &decoy, &decoyHTML, &routes, &serviceID, &m.Notes,
 		&createdTS, &updatedTS)
 	if err != nil {
 		return m, err
@@ -326,6 +368,13 @@ func scanMapping(row interface{ Scan(...any) error }) (Mapping, error) {
 	m.HostHeader = hostHeader.String
 	m.Decoy = decoy.String
 	m.DecoyHTML = decoyHTML.String
+	if routes.Valid && routes.String != "" {
+		_ = json.Unmarshal([]byte(routes.String), &m.Routes)
+	}
+	if serviceID.Valid {
+		sid := serviceID.Int64
+		m.ServiceID = &sid
+	}
 	m.CreatedAt = time.Unix(createdTS, 0)
 	m.UpdatedAt = time.Unix(updatedTS, 0)
 	return m, nil
@@ -333,7 +382,7 @@ func scanMapping(row interface{ Scan(...any) error }) (Mapping, error) {
 
 const mappingCols = `id, name, enabled, engine, protocol, listen_ip, listen_port, server_names,
 ssl_cert_id, redirect_to, websocket, http2, targets, balance, path_prefix, access_rules,
-extra_headers, path_routes, host_header, decoy, decoy_html, notes, created_at, updated_at`
+extra_headers, path_routes, host_header, decoy, decoy_html, routes, service_id, notes, created_at, updated_at`
 
 func scanTunnelRelay(row interface{ Scan(...any) error }) (TunnelRelay, error) {
 	var r TunnelRelay

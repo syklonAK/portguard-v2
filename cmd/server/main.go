@@ -208,6 +208,46 @@ func main() {
 		}
 	}()
 
+	// v2.8: metrics sampler — records one point per node (0 = this panel)
+	// every 30s; rates derive from the previous cumulative counters. Old
+	// samples are pruned to a 7-day retention.
+	go func() {
+		prevLocal := &store.MetricPoint{}
+		type prevEntry struct {
+			point store.MetricPoint
+			known bool
+		}
+		prevByNode := map[int64]prevEntry{}
+		time.Sleep(8 * time.Second)
+		for {
+			np := app.SampleLocalMetrics(prevLocal)
+			*prevLocal = np
+			nodes, _ := st.ListServerNodesPublic()
+			for _, n := range nodes {
+				if !n.Enabled {
+					continue
+				}
+				if pe, ok := prevByNode[n.ID]; ok {
+					p := pe.point
+					app.SampleRemoteMetrics(n.ID, &p)
+				} else {
+					app.SampleRemoteMetrics(n.ID, nil)
+				}
+				if pts, err := st.QueryMetrics(n.ID, time.Now().Unix()-120, time.Now().Unix()); err == nil && len(pts) > 0 {
+					prevByNode[n.ID] = prevEntry{point: pts[len(pts)-1], known: true}
+				}
+			}
+			st.PruneMetrics(7 * 24 * time.Hour)
+			t := time.NewTimer(30 * time.Second)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
+		}
+	}()
+
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(*host, strconv.Itoa(*port)),
 		Handler:           app.Router(),

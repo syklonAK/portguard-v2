@@ -53,10 +53,14 @@ func migrate(db *sql.DB) error {
 		{"mappings", "decoy", `ALTER TABLE mappings ADD COLUMN decoy TEXT NOT NULL DEFAULT ''`},
 		{"mappings", "decoy_html", `ALTER TABLE mappings ADD COLUMN decoy_html TEXT NOT NULL DEFAULT ''`},
 		{"admins", "role", `ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT 'owner'`},
+		{"mappings", "service_id", `ALTER TABLE mappings ADD COLUMN service_id INTEGER`},
+		{"mappings", "routes", `ALTER TABLE mappings ADD COLUMN routes TEXT NOT NULL DEFAULT '[]'`},
 	} {
+		// pragma functions cannot be parameterized reliably across drivers —
+		// the table name is from our fixed list above, never user input
 		var cols string
-		if err := db.QueryRow(`SELECT group_concat(name) FROM pragma_table_info(?)`, col.table).Scan(&cols); err == nil {
-			if !strings.Contains(cols, col.name) {
+		if err := db.QueryRow(`SELECT group_concat(name) FROM pragma_table_info('` + col.table + `')`).Scan(&cols); err == nil {
+			if !hasColumn(cols, col.name) {
 				_, _ = db.Exec(col.ddl)
 			}
 		}
@@ -69,8 +73,7 @@ CREATE TABLE IF NOT EXISTS admins (
 	role TEXT NOT NULL DEFAULT 'owner',
 	created_at INTEGER NOT NULL,
 	last_login_at INTEGER
-);
-CREATE TABLE IF NOT EXISTS settings (
+);CREATE TABLE IF NOT EXISTS settings (
 	key TEXT PRIMARY KEY,
 	value TEXT NOT NULL
 );
@@ -106,6 +109,8 @@ CREATE TABLE IF NOT EXISTS mappings (
 	host_header TEXT NOT NULL DEFAULT '',
 	decoy TEXT NOT NULL DEFAULT '',
 	decoy_html TEXT NOT NULL DEFAULT '',
+	routes TEXT NOT NULL DEFAULT '[]',
+	service_id INTEGER,
 	notes TEXT NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL
@@ -223,7 +228,31 @@ CREATE TABLE IF NOT EXISTS alerts (
 	created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_alerts_dedup ON alerts(dedup_key);CREATE TABLE IF NOT EXISTS ports (
+CREATE INDEX IF NOT EXISTS idx_alerts_dedup ON alerts(dedup_key);
+CREATE TABLE IF NOT EXISTS node_metrics (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	node_id INTEGER NOT NULL DEFAULT 0,
+	cpu_percent REAL NOT NULL DEFAULT 0,
+	mem_percent REAL NOT NULL DEFAULT 0,
+	disk_percent REAL NOT NULL DEFAULT 0,
+	rx_bytes INTEGER NOT NULL DEFAULT 0,
+	tx_bytes INTEGER NOT NULL DEFAULT 0,
+	rx_bps INTEGER NOT NULL DEFAULT 0,
+	tx_bps INTEGER NOT NULL DEFAULT 0,
+	conns INTEGER NOT NULL DEFAULT 0,
+	ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_metrics_node_ts ON node_metrics(node_id, ts);
+CREATE TABLE IF NOT EXISTS services (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL UNIQUE,
+	description TEXT NOT NULL DEFAULT '',
+	enabled INTEGER NOT NULL DEFAULT 1,
+	notes TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_metrics_ts ON node_metrics(ts);CREATE TABLE IF NOT EXISTS ports (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	port INTEGER NOT NULL,
 	proto TEXT NOT NULL,
@@ -265,6 +294,17 @@ CREATE INDEX IF NOT EXISTS idx_health_mapping ON target_health(mapping_id, targe
 }
 
 func nowTS() int64 { return time.Now().Unix() }
+
+// hasColumn reports whether a group_concat'd column list contains name as a
+// whole entry (avoids "routes" matching "path_routes").
+func hasColumn(concat, name string) bool {
+	for _, c := range strings.Split(concat, ",") {
+		if strings.TrimSpace(c) == name {
+			return true
+		}
+	}
+	return false
+}
 
 // ---- settings ----
 
@@ -446,12 +486,13 @@ func (s *Store) CreateMapping(m *Mapping) (int64, error) {
 	res, err := s.DB.Exec(`INSERT INTO mappings
 		(name, enabled, engine, protocol, listen_ip, listen_port, server_names, ssl_cert_id,
 		 redirect_to, websocket, http2, targets, balance, path_prefix, access_rules, extra_headers, path_routes,
-		 host_header, decoy, decoy_html, notes, created_at, updated_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 host_header, decoy, decoy_html, routes, service_id, notes, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		m.Name, b2i(m.Enabled), m.Engine, m.Protocol, m.ListenIP, m.ListenPort,
 		mustJSON(m.ServerNames), nullInt64(m.SSLCertID), m.RedirectTo, b2i(m.WebSocket), b2i(m.HTTP2),
 		mustJSON(m.Targets), m.Balance, m.PathPrefix, mustJSON(m.AccessRules), mustJSON(m.ExtraHeaders),
-		mustJSON(m.PathRoutes), m.HostHeader, m.Decoy, m.DecoyHTML, m.Notes, ts, ts)
+		mustJSON(m.PathRoutes), m.HostHeader, m.Decoy, m.DecoyHTML, mustJSON(m.Routes), nullInt64(m.ServiceID),
+		m.Notes, ts, ts)
 	if err != nil {
 		return 0, err
 	}
@@ -462,11 +503,12 @@ func (s *Store) UpdateMapping(m *Mapping) error {
 	_, err := s.DB.Exec(`UPDATE mappings SET name=?, enabled=?, engine=?, protocol=?, listen_ip=?,
 		listen_port=?, server_names=?, ssl_cert_id=?, redirect_to=?, websocket=?, http2=?,
 		targets=?, balance=?, path_prefix=?, access_rules=?, extra_headers=?, path_routes=?,
-		host_header=?, decoy=?, decoy_html=?, notes=?, updated_at=? WHERE id=?`,
+		host_header=?, decoy=?, decoy_html=?, routes=?, service_id=?, notes=?, updated_at=? WHERE id=?`,
 		m.Name, b2i(m.Enabled), m.Engine, m.Protocol, m.ListenIP, m.ListenPort,
 		mustJSON(m.ServerNames), nullInt64(m.SSLCertID), m.RedirectTo, b2i(m.WebSocket), b2i(m.HTTP2),
 		mustJSON(m.Targets), m.Balance, m.PathPrefix, mustJSON(m.AccessRules), mustJSON(m.ExtraHeaders),
-		mustJSON(m.PathRoutes), m.HostHeader, m.Decoy, m.DecoyHTML, m.Notes, nowTS(), m.ID)
+		mustJSON(m.PathRoutes), m.HostHeader, m.Decoy, m.DecoyHTML, mustJSON(m.Routes), nullInt64(m.ServiceID),
+		m.Notes, nowTS(), m.ID)
 	return err
 }
 
@@ -849,6 +891,104 @@ func (s *Store) GetConfigVersion(version int64) (ConfigVersion, string, string, 
 func (s *Store) SetConfigVersionDeployResult(version int64, result string) error {
 	_, err := s.DB.Exec(`UPDATE config_versions SET deploy_result=? WHERE version=?`, result, version)
 	return err
+}
+
+// ---- services ----
+
+func (s *Store) ListServices() ([]Service, error) {
+	rows, err := s.DB.Query(`SELECT id, name, description, enabled, notes, created_at, updated_at FROM services ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Service
+	for rows.Next() {
+		var sv Service
+		var enabled int
+		var c, u int64
+		if err := rows.Scan(&sv.ID, &sv.Name, &sv.Description, &enabled, &sv.Notes, &c, &u); err != nil {
+			return nil, err
+		}
+		sv.Enabled = enabled == 1
+		sv.CreatedAt = time.Unix(c, 0)
+		sv.UpdatedAt = time.Unix(u, 0)
+		out = append(out, sv)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CreateService(sv *Service) (int64, error) {
+	ts := nowTS()
+	res, err := s.DB.Exec(`INSERT INTO services(name, description, enabled, notes, created_at, updated_at)
+		VALUES(?,?,?,?,?,?)`, sv.Name, sv.Description, b2i(sv.Enabled), sv.Notes, ts, ts)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) UpdateService(sv *Service) error {
+	_, err := s.DB.Exec(`UPDATE services SET name=?, description=?, enabled=?, notes=?, updated_at=? WHERE id=?`,
+		sv.Name, sv.Description, b2i(sv.Enabled), sv.Notes, nowTS(), sv.ID)
+	return err
+}
+
+func (s *Store) DeleteService(id int64) error {
+	// detach member mappings instead of deleting them
+	_, _ = s.DB.Exec(`UPDATE mappings SET service_id=NULL, updated_at=? WHERE service_id=?`, nowTS(), id)
+	res, err := s.DB.Exec(`DELETE FROM services WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ---- node metrics ----
+
+func (s *Store) InsertMetric(p MetricPoint) error {
+	_, err := s.DB.Exec(`INSERT INTO node_metrics(node_id, cpu_percent, mem_percent, disk_percent, rx_bytes, tx_bytes, rx_bps, tx_bps, conns, ts)
+		VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		p.NodeID, p.CPUPercent, p.MemPercent, p.DiskPercent, p.RxBytes, p.TxBytes, p.RxBps, p.TxBps, p.Conns, p.TS)
+	return err
+}
+
+// QueryMetrics returns sampled points for a node in [from, to], downsampled
+// to at most ~200 rows for charting.
+func (s *Store) QueryMetrics(nodeID int64, from, to int64) ([]MetricPoint, error) {
+	rows, err := s.DB.Query(`SELECT node_id, cpu_percent, mem_percent, disk_percent, rx_bytes, tx_bytes, rx_bps, tx_bps, conns, ts
+		FROM node_metrics WHERE node_id=? AND ts BETWEEN ? AND ? ORDER BY ts`, nodeID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MetricPoint
+	for rows.Next() {
+		var p MetricPoint
+		if err := rows.Scan(&p.NodeID, &p.CPUPercent, &p.MemPercent, &p.DiskPercent, &p.RxBytes, &p.TxBytes, &p.RxBps, &p.TxBps, &p.Conns, &p.TS); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	// downsample: keep every Nth point so charts stay light
+	if len(out) > 200 {
+		step := len(out) / 200
+		slim := make([]MetricPoint, 0, 201)
+		for i := 0; i < len(out); i += step {
+			slim = append(slim, out[i])
+		}
+		slim = append(slim, out[len(out)-1])
+		out = slim
+	}
+	return out, rows.Err()
+}
+
+// PruneMetrics deletes samples older than the retention window (default 7d).
+func (s *Store) PruneMetrics(retention time.Duration) {
+	cutoff := time.Now().Add(-retention).Unix()
+	_, _ = s.DB.Exec(`DELETE FROM node_metrics WHERE ts < ?`, cutoff)
 }
 
 // ---- rate limiting ----

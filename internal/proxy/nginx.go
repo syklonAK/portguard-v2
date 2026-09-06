@@ -165,6 +165,9 @@ func renderHTTPServer(m store.Mapping, p Paths) (string, error) {
 		// dynamic port-in-path routes (ws/httpupgrade/xhttp) take precedence
 		// over the static proxy location blocks.
 		b.WriteString(renderNginxPathRoutes(m))
+		// ordered route rules (advanced routing): longest-prefix first so
+		// rule order is honoured by nginx's location matching
+		b.WriteString(renderNginxRouteRules(m))
 		if m.PathPrefix != "" {
 			// path-prefix routing: proxy only the prefix, reject everything else
 			fmt.Fprintf(&b, "        location %s {\n", m.PathPrefix)
@@ -173,7 +176,7 @@ func renderHTTPServer(m store.Mapping, p Paths) (string, error) {
 			b.WriteString(renderProxyPass(m))
 			b.WriteString("        }\n")
 		} else if len(m.Targets) > 0 {
-			// whole-site proxy
+			// whole-site proxy (fallback "/*" rule)
 			b.WriteString("        location / {\n")
 			b.WriteString(renderProxyHeaders(m))
 			b.WriteString(renderWSHeaders(m))
@@ -188,6 +191,70 @@ func renderHTTPServer(m store.Mapping, p Paths) (string, error) {
 	}
 	b.WriteString("    }\n\n")
 	return b.String(), nil
+}
+
+// renderNginxRouteRules emits the ordered path-routing rules as prefix
+// locations with their own upstreams. Longest prefixes are emitted first so
+// nginx's prefix matching honours rule specificity; disabled rules are
+// skipped and fall through to the mapping's fallback location.
+func renderNginxRouteRules(m store.Mapping) string {
+	if len(m.Routes) == 0 {
+		return ""
+	}
+	type ruleUp struct {
+		loc    string
+		up     string
+		targets []store.Target
+		redirect string
+	}
+	var rules []ruleUp
+	for _, r := range m.Routes {
+		if !r.Enabled {
+			continue
+		}
+		ru := ruleUp{loc: RouteRulePathForNginx(r.Path), redirect: r.Redirect}
+		if len(r.Targets) > 0 {
+			ru.up = fmt.Sprintf("pg_up_%d_r%d", m.ID, r.ID)
+			ru.targets = r.Targets
+		}
+		rules = append(rules, ru)
+	}
+	// stable sort by descending prefix length: longest first
+	for i := 1; i < len(rules); i++ {
+		for j := i; j > 0 && len(rules[j].loc) > len(rules[j-1].loc); j-- {
+			rules[j], rules[j-1] = rules[j-1], rules[j]
+		}
+	}
+	var ups strings.Builder
+	var locs strings.Builder
+	for _, ru := range rules {
+		if ru.redirect != "" {
+			fmt.Fprintf(&locs, "        location %s {\n            return 301 %s;\n        }\n", escapeNginx(ru.loc), escapeNginx(ru.redirect))
+			continue
+		}
+		if len(ru.targets) == 1 {
+			fmt.Fprintf(&locs, "        location %s {\n            proxy_pass http://%s:%d;\n        }\n",
+				escapeNginx(ru.loc), escapeNginx(ru.targets[0].Host), ru.targets[0].Port)
+			continue
+		}
+		// multi-target rule -> its own upstream block
+		fmt.Fprintf(&ups, "    upstream %s {\n", ru.up)
+		for i, t := range ru.targets {
+			w := ""
+			if t.Weight > 0 && t.Weight != 1 {
+				w = fmt.Sprintf(" weight=%d", t.Weight)
+			}
+			backup := ""
+			if t.Backup {
+				backup = " backup"
+			}
+			fmt.Fprintf(&ups, "        server %s:%d%s%s;\n", escapeNginx(t.Host), t.Port, w, backup)
+			_ = i
+		}
+		fmt.Fprintf(&ups, "    }\n")
+		fmt.Fprintf(&locs, "        location %s {\n            proxy_pass http://%s;\n        }\n", escapeNginx(ru.loc), ru.up)
+	}
+	return ups.String() + locs.String()
 }
 
 // renderProxyHeaders emits the standard proxy headers, honouring host_header.

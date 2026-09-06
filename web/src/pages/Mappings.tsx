@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import {
   api, type Mapping, type Target, type ACLRule, type PathRoute, type PathTransport,
-  type MappingTemplate, type EngineValidation, type ImportScan,
+  type MappingTemplate, type EngineValidation, type ImportScan, type RouteRule,
 } from '../api'
 import {
   Badge, Button, Card, CardHeader, CodeBlock, CodeEditor, Empty, Field, Input, Modal, Select,
@@ -33,6 +33,8 @@ function emptyMapping(prePort?: number): Partial<Mapping> {
     access_rules: [],
     extra_headers: {},
     path_routes: [],
+    routes: [],
+    service_id: null,
     host_header: '',
     decoy: '',
     decoy_html: '',
@@ -80,6 +82,95 @@ function DiffView({ diff }: { diff: string }) {
         }>{line || ' '}</div>
       ))}
     </pre>
+  )
+}
+
+// ---------- Route rules editor (advanced routing) ----------
+
+function RouteRulesEditor({ rules, onChange }: { rules: RouteRule[]; onChange: (r: RouteRule[]) => void }) {
+  const update = (i: number, patch: Partial<RouteRule>) =>
+    onChange(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+  const move = (i: number, dir: -1 | 1) => {
+    const next = [...rules]
+    const j = i + dir
+    if (j < 0 || j >= next.length) return
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onChange(next)
+  }
+  const add = () =>
+    onChange([...rules, { id: Date.now(), path: '/api/*', enabled: true, targets: [{ host: '127.0.0.1', port: 8080 }] }])
+  const clone = (i: number) => {
+    const next = [...rules]
+    next.splice(i + 1, 0, { ...rules[i], id: Date.now() + Math.floor(Math.random() * 1000) })
+    onChange(next)
+  }
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          Route rules <span className="text-2xs text-slate-400">— ordered path → target rules; mapping targets are the /* fallback</span>
+        </span>
+        <Button variant="ghost" size="sm" onClick={add}><Plus className="h-3.5 w-3.5" /> Add rule</Button>
+      </div>
+      {rules.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-center text-2xs text-slate-400 dark:border-slate-600">
+          No route rules. Example: <b>/ws/* → node-01:10001</b>, <b>/xhttp/* → node-02:10002</b>, <b>/api/* → backend-api</b>.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {rules.map((r, i) => (
+            <div key={r.id} className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5 dark:border-slate-700 dark:bg-slate-800/40">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col">
+                  <button className="text-slate-400 hover:text-slate-600 disabled:opacity-30" disabled={i === 0}
+                    onClick={() => move(i, -1)} title="Move up">▲</button>
+                  <button className="text-slate-400 hover:text-slate-600 disabled:opacity-30" disabled={i === rules.length - 1}
+                    onClick={() => move(i, 1)} title="Move down">▼</button>
+                </div>
+                <Input className="h-8 w-36 font-mono" value={r.path} placeholder="/api/*"
+                  onChange={(e) => update(i, { path: e.target.value })} />
+                <span className="text-slate-400">→</span>
+                {r.redirect ? (
+                  <Input className="h-8 flex-1" placeholder="https://new.example.com"
+                    value={r.redirect} onChange={(e) => update(i, { redirect: e.target.value })} />
+                ) : (
+                  <div className="flex flex-1 flex-wrap gap-1.5">
+                    {r.targets.map((t, ti) => (
+                      <span key={ti} className="flex items-center gap-1">
+                        <Input className="h-8 w-28 font-mono" value={t.host}
+                          onChange={(e) => update(i, { targets: r.targets.map((x, xi) => (xi === ti ? { ...x, host: e.target.value } : x)) })} />
+                        <Input className="h-8 w-16" type="number" value={t.port}
+                          onChange={(e) => update(i, { targets: r.targets.map((x, xi) => (xi === ti ? { ...x, port: parseInt(e.target.value, 10) || 0 } : x)) })} />
+                        {r.targets.length > 1 && (
+                          <Button variant="ghost" size="sm" className="text-red-500"
+                            onClick={() => update(i, { targets: r.targets.filter((_, xi) => xi !== ti) })}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </span>
+                    ))}
+                    <Button variant="ghost" size="sm"
+                      onClick={() => update(i, { targets: [...r.targets, { host: '127.0.0.1', port: 80 }] })}>
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+                <span className="flex-1" />
+                <label className="flex items-center gap-1 text-2xs text-slate-500">
+                  <input type="checkbox" checked={r.enabled} onChange={(e) => update(i, { enabled: e.target.checked })} /> on
+                </label>
+                <Button variant="ghost" size="sm" onClick={() => update(i, { redirect: r.redirect ? '' : 'https://' })}
+                  title={r.redirect ? 'Switch to proxy' : 'Switch to redirect'}>{r.redirect ? '⇄' : '⇄'}</Button>
+                <Button variant="ghost" size="sm" onClick={() => clone(i)} title="Clone"><Plus className="h-3 w-3" /></Button>
+                <Button variant="ghost" size="sm" className="text-red-500"
+                  onClick={() => onChange(rules.filter((_, idx) => idx !== i))}><Trash2 className="h-3 w-3" /></Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -145,6 +236,14 @@ function RoutePreview({ draft }: { draft: Partial<Mapping> }) {
       lines.push(`${scheme}://${domain}/${r.prefix}/<${rng}>  →  ${host}:<port>  [${TRANSPORT_META[r.transport]?.label || r.transport}]`)
     }
   }
+  for (const r of draft.routes ?? []) {
+    if (!r.enabled) continue
+    if (r.redirect) {
+      lines.push(`${scheme}://${domain}${r.path}  →  301 ${r.redirect}`)
+    } else {
+      lines.push(`${scheme}://${domain}${r.path}  →  ${r.targets.map((t) => `${t.host}:${t.port}`).join(', ')}`)
+    }
+  }
   if (draft.path_prefix) {
     lines.push(`${scheme}://${domain}${draft.path_prefix}  →  backend (prefix match, rest → 404)`)
   }
@@ -203,6 +302,7 @@ export default function Mappings() {
   const mappings = useQuery({ queryKey: ['mappings'], queryFn: () => api.listMappings() })
   const certs = useQuery({ queryKey: ['certs'], queryFn: () => api.listCerts() })
   const templates = useQuery({ queryKey: ['templates'], queryFn: () => api.templates() })
+  const services = useQuery({ queryKey: ['services'], queryFn: () => api.listServices() })
 
   const [modal, setModal] = useState<null | 'create' | 'edit'>(null)
   const [draft, setDraft] = useState<Partial<Mapping>>(emptyMapping())
@@ -685,6 +785,27 @@ export default function Mappings() {
                         </div>
                       )}
                     </div>
+
+                    {/* Service assignment + route rules (advanced routing) */}
+                    {isL7 && (
+                      <div className="space-y-2">
+                        <Field label="Service (optional)" hint="group related mappings for one-glance health & deploy">
+                          <Select
+                            value={draft.service_id ?? ''}
+                            onChange={(e) => setDraftField('service_id', e.target.value ? parseInt(e.target.value, 10) : null)}
+                          >
+                            <option value="">— unassigned —</option>
+                            {(services.data ?? []).map((s) => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <RouteRulesEditor
+                          rules={draft.routes || []}
+                          onChange={(r) => setDraftField('routes', r)}
+                        />
+                      </div>
+                    )}
 
                     {/* Access control */}
                     <div>
