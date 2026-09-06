@@ -12,7 +12,6 @@ package api
 import (
 	"bufio"
 	"encoding/json"
-	"io"
 	"errors"
 	"fmt"
 	"net/http"

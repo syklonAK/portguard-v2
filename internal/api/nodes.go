@@ -279,7 +279,6 @@ func (a *App) handleTools(w http.ResponseWriter, r *http.Request) {
 // UI polls/subscribes to for a live terminal view.
 func (a *App) handleToolInstall(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "tool")
-	actor := actorFrom(r.Context())
 	if r.URL.Query().Get("stream") == "1" && a.Jobs != nil {
 		jobName := "install " + id
 		j := a.Jobs.Start(jobName, func(job *Job) error {
