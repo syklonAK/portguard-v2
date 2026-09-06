@@ -171,7 +171,8 @@ const DESCRIPTIONS: Record<string, string> = {
   xray: 'Proxy core used by PasarGuard nodes and the PortGuard tunnel bridge (dokodemo→SOCKS5).',
   hedioum: 'Hedioum Pool Tunnel — the egress/hub binary for the two-server tunnel topology.',
   certbot: "Let's Encrypt client for issuing and renewing real TLS certificates.",
-  wireguard: 'Kernel VPN backend used by PasarGuard wireguard nodes.',
+  acmesh: 'Shell ACME client installed to /root/.acme.sh — powers certificate issuance on the SSL Certs page.',
+  wireguard: 'Installs the wg/wg-quick tools into /usr/bin. The /etc/wireguard directory stays empty until an interface (wg0.conf) is actually configured — PortGuard only provisions the package.',
   nginx: 'Primary web/proxy engine with TCP/UDP stream support.',
   haproxy: 'TCP/HTTP load balancer — the second PortGuard engine.',
 }
