@@ -182,6 +182,8 @@ UNIT="/etc/systemd/system/portguard-agent.service"
 AGENT_PORT="${AGENT_PORT:-8081}"
 MASTER=""
 TOKEN=""
+NAME=""
+HOSTIP=""
 ROLE="${ROLE:-generic}"
 say() { echo -e "\033[1;35m[agent-install]\033[0m $*"; }
 die() { echo -e "\033[1;31m[agent-install:ERROR]\033[0m $*" >&2; exit 1; }
@@ -191,6 +193,8 @@ while [ $# -gt 0 ]; do
     -master) MASTER="$2"; shift 2 ;;
     -token)  TOKEN="$2"; shift 2 ;;
     -role)   ROLE="$2"; shift 2 ;;
+    -name)   NAME="$2"; shift 2 ;;
+    -host)   HOSTIP="$2"; shift 2 ;;
     -port)   AGENT_PORT="$2"; shift 2 ;;
     *) die "unknown option: $1" ;;
   esac
