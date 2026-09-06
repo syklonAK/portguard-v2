@@ -5,12 +5,14 @@ package api
 // this file only wires paths to them so the surface stays auditable.
 
 import (
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"io/fs"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+
 	"portguard/web"
-))
+)
 
 func (a *App) Router() http.Handler {
 	r := chi.NewRouter()
