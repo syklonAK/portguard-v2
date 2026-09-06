@@ -19,7 +19,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"portguard/internal/store"
 	"portguard/internal/tools"
@@ -537,12 +536,4 @@ func fileReadable(path string) bool {
 	}
 	f.Close()
 	return true
-}
-
-func tailLines(s string, n int) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return strings.Join(lines, "\n")
 }
