@@ -138,7 +138,9 @@ func (c *pasarguardClient) attempt(path string, out any) (int, error) {
 	return resp.StatusCode, json.NewDecoder(resp.Body).Decode(out)
 }
 
-// pgUser is the subset of the PasarGuard user payload we need.
+// pgUser is the subset of the PasarGuard user payload we need. Older
+// panels carry a top-level uuid/enabled/expired; PasarGuard-style panels
+// keep the Xray UUIDs inside proxy_settings and express state via `status`.
 type pgUser struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
@@ -147,6 +149,33 @@ type pgUser struct {
 	Expired  bool   `json:"expired"`
 	Status   string `json:"status"`
 	NodeIDs  []int64 `json:"node_ids"`
+	ProxySettings struct {
+		Vmess struct {
+			ID string `json:"id"`
+		} `json:"vmess"`
+		Vless struct {
+			ID string `json:"id"`
+		} `json:"vless"`
+	} `json:"proxy_settings"`
+}
+
+// canonicalUUID resolves the user's Xray UUID across panel generations:
+// top-level uuid first, then the vmess/vless proxy UUIDs.
+func (u *pgUser) canonicalUUID() string {
+	for _, c := range []string{u.UUID, u.ProxySettings.Vmess.ID, u.ProxySettings.Vless.ID} {
+		if c != "" {
+			return c
+		}
+	}
+	return ""
+}
+
+// effectiveState maps status/enabled/expired across panel generations.
+func (u *pgUser) effectiveState() (enabled, expired bool) {
+	if u.Status != "" {
+		return u.Status == "active" || u.Status == "on_hold", u.Status == "expired" || u.Status == "disabled"
+	}
+	return u.Enabled, u.Expired
 }
 
 // handlePasarGuardSync pulls users from the configured PasarGuard panel and
@@ -364,12 +393,13 @@ func (a *App) SyncPasarGuardUsers() error {
 	}
 	synced := 0
 	for _, u := range users {
-		uuid := ratelimit.NormalizeUUID(u.UUID)
+		uuid := ratelimit.NormalizeUUID(u.canonicalUUID())
 		if !ratelimit.ValidUUID(uuid) {
 			continue
 		}
+		enabled, expired := u.effectiveState()
 		pu := store.PasarguardUser{
-			UUID: uuid, Username: u.Username, Enabled: u.Enabled, Expired: u.Expired,
+			UUID: uuid, Username: u.Username, Enabled: enabled, Expired: expired,
 		}
 		if err := a.St.UpsertPasarguardUser(&pu); err == nil {
 			synced++
