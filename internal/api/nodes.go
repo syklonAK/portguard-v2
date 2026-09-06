@@ -281,8 +281,26 @@ func (a *App) handleToolInstall(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "tool")
 	if r.URL.Query().Get("stream") == "1" && a.Jobs != nil {
 		jobName := "install " + id
+		actor := actorFrom(r.Context())
 		j := a.Jobs.Start(jobName, func(job *Job) error {
 			res, err := tools.InstallStream(id, job.Write)
+			if err == nil && !res.OK {
+				// official installers often hit flaky CDN/network paths:
+				// one automatic retry before giving up
+				job.Write("[portguard] retrying install once after failure…")
+				res, err = tools.InstallStream(id, job.Write)
+			}
+			status, detail := "ok", ""
+			if err == nil {
+				detail = res.Elapsed
+			}
+			if err != nil {
+				status, detail = "error", err.Error()
+			} else if !res.OK {
+				status = "error"
+				detail = res.Error
+			}
+			a.St.Audit(actor, "tool.install "+id, detail, status)
 			if err != nil {
 				return err
 			}
