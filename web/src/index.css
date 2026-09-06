@@ -133,3 +133,23 @@ tbody tr:hover { transform: translateZ(0); }
     animation: none;
   }
 }
+
+/* ---- Bootstrap integration (responsive shell) ---- */
+/* Tailwind preflight keeps base authority: bootstrap loads before index.css. */
+.pg-offcanvas {
+  max-width: min(85vw, 20rem);
+}
+html.dark .pg-offcanvas,
+html.dark .pg-offcanvas .offcanvas-header {
+  background-color: #171717;
+  color: #e5e5e5;
+  --bs-offcanvas-bg: #171717;
+}
+html:not(.dark) .pg-offcanvas {
+  background-color: #ffffff;
+  --bs-offcanvas-bg: #ffffff;
+}
+/* keep bootstrap's reboot from changing our button/link base */
+.pg-offcanvas a {
+  text-decoration: none;
+}

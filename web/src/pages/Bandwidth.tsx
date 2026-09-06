@@ -295,13 +295,13 @@ export default function Bandwidth() {
           right={
             <div className="flex flex-wrap items-center gap-2">
               <Input
-                className="w-52"
+                className="w-full sm:w-52"
                 placeholder="search name or uuid"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               <Select
-                className="w-36"
+                className="w-1/2 sm:w-36"
                 value={stateFilter}
                 onChange={(e) => { setStateFilter(e.target.value as typeof stateFilter); setPage(0) }}
               >
@@ -311,7 +311,7 @@ export default function Bandwidth() {
                 <option value="disabled">Disabled</option>
               </Select>
               <Select
-                className="w-28"
+                className="w-1/3 sm:w-28"
                 value={String(pageSize)}
                 onChange={(e) => { setPageSize(parseInt(e.target.value, 10) || 25); setPage(0) }}
               >
@@ -379,7 +379,7 @@ export default function Bandwidth() {
           </div>
         )}
         {rows.length > 0 && (
-          <div className="flex items-center justify-between border-t border-slate-200 px-5 py-2.5 text-xs text-slate-500 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-5 py-2.5 text-xs text-slate-500 dark:border-slate-800">
             <span>
               {total.toLocaleString()} users{debounced || stateFilter ? ' (filtered)' : ''} · page {page + 1} / {pageCount}
             </span>
@@ -464,11 +464,11 @@ function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label
   const accentCls = accent === 'indigo' ? 'text-indigo-600 dark:text-indigo-300'
     : accent === 'red' ? 'text-red-500' : ''
   return (
-    <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+    <div className="min-w-0 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
       <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-slate-400">
-        {icon} {label}
+        {icon} <span className="truncate">{label}</span>
       </div>
-      <div className={`mt-1 text-lg font-bold ${accentCls}`}>{value}</div>
+      <div className={`mt-1 truncate text-lg font-bold ${accentCls}`} title={value}>{value}</div>
     </div>
   )
 }

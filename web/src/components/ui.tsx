@@ -44,12 +44,12 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 
 export function CardHeader({ title, desc, right }: { title: string; desc?: string; right?: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-neutral-200/80 px-5 py-4 dark:border-neutral-800">
-      <div>
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-neutral-200/80 px-5 py-4 dark:border-neutral-800">
+      <div className="min-w-0">
         <h3 className="text-sm font-semibold">{title}</h3>
         {desc && <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{desc}</p>}
       </div>
-      {right}
+      {right && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{right}</div>}
     </div>
   )
 }
