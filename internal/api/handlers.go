@@ -153,6 +153,8 @@ func (a *App) Router() http.Handler {
 		pr.Delete("/api/mappings/{id}", a.Auth.RequireRole("admin", a.handleDeleteMapping))
 		pr.Post("/api/certs", a.Auth.RequireRole("admin", a.handleCreateCert))
 		pr.Post("/api/certs/selfsigned", a.Auth.RequireRole("admin", a.handleSelfSignedCert))
+		pr.Get("/api/discover", a.Auth.RequireRole("admin", a.handleDiscover))
+		pr.Post("/api/discover/apply", a.Auth.RequireRole("admin", a.handleDiscoverApply))
 		pr.Post("/api/certs/issue", a.Auth.RequireRole("admin", a.handleIssueCert))
 		pr.Post("/api/certs/{id}/renew", a.Auth.RequireRole("admin", a.handleRenewCert))
 		pr.Delete("/api/certs/{id}", a.Auth.RequireRole("admin", a.handleDeleteCert))

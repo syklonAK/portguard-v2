@@ -41,6 +41,8 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	pgURL := a.St.GetSettingOr("pasarguard_url", "")
 	pgToken := a.St.GetSettingOr("pasarguard_token", "")
 	pgTokenSet := pgToken != ""
+	pgUsername := a.St.GetSettingOr("pasarguard_username", "")
+	pgPasswordSet := a.St.GetSettingOr("pasarguard_password", "") != ""
 	rlEnabled := a.St.GetSettingOr("rate_limiting_enabled", "false")
 	rlSync := a.St.GetSettingOr("rate_limiting_sync_interval", "60")
 	// alerting
@@ -70,6 +72,8 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"tunnel_socks_host":          socksHost,
 		"tunnel_socks_port":          socksPort,
 		"pasarguard_url":             pgURL,
+		"pasarguard_username":         pgUsername,
+		"pasarguard_password_set":     pgPasswordSet,
 		"pasarguard_token_set":       pgTokenSet,
 		"rate_limiting_enabled":      rlEnabled,
 		"rate_limiting_sync_interval": rlSync,
@@ -94,6 +98,8 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		TunnelSocksPort *string     `json:"tunnel_socks_port"`
 		PasarGuardURL  *string      `json:"pasarguard_url"`
 		PasarGuardToken *string     `json:"pasarguard_token"`
+		PasarGuardUsername *string  `json:"pasarguard_username"`
+		PasarGuardPassword *string  `json:"pasarguard_password"`
 		RateLimitingEnabled *string `json:"rate_limiting_enabled"`
 		RateLimitingSyncInterval *string `json:"rate_limiting_sync_interval"`
 		AlertsEnabled  *string       `json:"alerts_enabled"`
@@ -179,6 +185,19 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if body.PasarGuardToken != nil && *body.PasarGuardToken != "" {
 		// empty string keeps the existing token (never clears by accident)
 		_ = a.St.SetSetting("pasarguard_token", strings.TrimSpace(*body.PasarGuardToken))
+	}
+	if body.PasarGuardUsername != nil {
+		_ = a.St.SetSetting("pasarguard_username", strings.TrimSpace(*body.PasarGuardUsername))
+	}
+	if body.PasarGuardPassword != nil && *body.PasarGuardPassword != "" {
+		// empty keeps the stored password; the sync client uses it to
+		// mint/refresh admin tokens automatically when they expire
+		_ = a.St.SetSetting("pasarguard_password", strings.TrimSpace(*body.PasarGuardPassword))
+	}
+	// rotating credentials invalidates the cached token; drop it so the
+	// next sync logs in fresh
+	if (body.PasarGuardUsername != nil || (body.PasarGuardPassword != nil && *body.PasarGuardPassword != "")) {
+		_ = a.St.SetSetting("pasarguard_token", "")
 	}
 	if body.RateLimitingEnabled != nil {
 		v := "false"

@@ -1,7 +1,11 @@
 package api
 
 import (
+	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -17,36 +21,106 @@ import (
 
 // ---- PasarGuard synchronization ----
 
-// pasarguardClient talks to a PasarGuard panel API (admin API token).
+// pasarguardClient talks to a PasarGuard panel API. It authenticates with a
+// bearer token, can mint/refresh that token itself from username+password
+// (admin tokens expire, so the manual-token-only flow kept breaking), and
+// tolerates self-signed TLS panels (common on localhost installs) by falling
+// back to skipping certificate verification after a verification failure.
 type pasarguardClient struct {
-	baseURL string
-	token   string
-	http    *http.Client
+	baseURL    string
+	token      string
+	username   string
+	password   string
+	skipTLS    bool
+	onNewToken func(string)
+	http       *http.Client
 }
 
 func newPasarGuardClient(baseURL, token string) *pasarguardClient {
 	return &pasarguardClient{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		token:   token,
-		http:    &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-func (c *pasarguardClient) get(path string, out any) error {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+path, nil)
-	if err != nil {
-		return err
+func (c *pasarguardClient) transport() *http.Client {
+	return &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: c.skipTLS},
+		},
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	resp, err := c.http.Do(req)
+}
+
+// login exchanges username+password for a fresh admin access token.
+func (c *pasarguardClient) login() error {
+	if c.username == "" {
+		return fmt.Errorf("no pasarguard token and no username/password configured (Settings → PasarGuard)")
+	}
+	body, _ := json.Marshal(map[string]string{"username": c.username, "password": c.password})
+	resp, err := c.transport().Post(c.baseURL+"/api/admin/token", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("pasarguard returned %d", resp.StatusCode)
+	var out struct {
+		AccessToken string `json:"access_token"`
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("pasarguard login failed with %d (check admin username/password)", resp.StatusCode)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || out.AccessToken == "" {
+		return fmt.Errorf("pasarguard login response unreadable")
+	}
+	c.token = out.AccessToken
+	if c.onNewToken != nil {
+		c.onNewToken(c.token)
+	}
+	return nil
+}
+
+func isTLSVerifyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var uv x509.UnknownAuthorityError
+	var hn x509.HostnameError
+	var ce *tls.CertificateVerificationError
+	return errors.As(err, &uv) || errors.As(err, &hn) || errors.As(err, &ce)
+}
+
+func (c *pasarguardClient) get(path string, out any) error {
+	status, err := c.attempt(path, out)
+	if isTLSVerifyError(err) && !c.skipTLS {
+		// self-signed panel: retry once without verification
+		c.skipTLS = true
+		status, err = c.attempt(path, out)
+	}
+	if err != nil && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
+		// token missing/expired → login once and retry
+		if lerr := c.login(); lerr != nil {
+			return lerr
+		}
+		_, err = c.attempt(path, out)
+	}
+	return err
+}
+
+func (c *pasarguardClient) attempt(path string, out any) (int, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.transport().Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return resp.StatusCode, fmt.Errorf("pasarguard returned %d", resp.StatusCode)
+	}
+	return resp.StatusCode, json.NewDecoder(resp.Body).Decode(out)
 }
 
 // pgUser is the subset of the PasarGuard user payload we need.
@@ -245,11 +319,19 @@ func (a *App) handleDeleteRatePolicy(w http.ResponseWriter, r *http.Request) {
 // and upserts them (used by both the manual endpoint and the background loop).
 func (a *App) SyncPasarGuardUsers() error {
 	base := a.St.GetSettingOr("pasarguard_url", "")
-	token := a.St.GetSettingOr("pasarguard_token", "")
-	if base == "" || token == "" {
+	if base == "" {
 		return fmt.Errorf("pasarguard not configured")
 	}
-	cli := newPasarGuardClient(base, token)
+	cli := newPasarGuardClient(base, a.St.GetSettingOr("pasarguard_token", ""))
+	cli.username = a.St.GetSettingOr("pasarguard_username", "")
+	cli.password = a.St.GetSettingOr("pasarguard_password", "")
+	cli.skipTLS = a.St.GetSettingOr("pasarguard_skip_tls", "") == "true"
+	cli.onNewToken = func(tok string) { _ = a.St.SetSetting("pasarguard_token", tok) }
+	if cli.token == "" && cli.username != "" {
+		if err := cli.login(); err != nil {
+			return err
+		}
+	}
 	var users []pgUser
 	var wrapped struct {
 		Users []pgUser `json:"users"`

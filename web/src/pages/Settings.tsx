@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Upload, RefreshCw } from 'lucide-react'
-import { api, type ImportResult } from '../api'
+import { Download, Upload, RefreshCw, Radar } from 'lucide-react'
+import { api, type ImportResult, type DiscoveredPanel } from '../api'
 import { Button, Card, CardHeader, Field, Input, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
 
@@ -11,6 +11,37 @@ export default function Settings() {
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api.settings() })
   const fileInput = useRef<HTMLInputElement>(null)
 
+  // scan the host for installed panels (docker + /opt .env files) and offer
+  // one-click application of the discovered integration profile
+  const runDiscover = async () => {
+    setScanning(true)
+    try {
+      const res = await api.discover()
+      setDiscovered(res)
+      if (!res.length) push('info', 'No supported panels found on this host.')
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const applyDiscovered = async (p: DiscoveredPanel) => {
+    try {
+      await api.discoverApply({ kind: p.kind, url: p.url, username: p.env_username || undefined, env_path: p.env_path })
+      // a password found in .env never leaves the server: fetch-and-store is
+      // not possible client-side, so only username is pre-filled when the
+      // operator has not typed one
+      const fresh = await api.settings()
+      qc.setQueryData(['settings'], fresh)
+      setPgURL(fresh.pasarguard_url || p.url)
+      setPgUser(fresh.pasarguard_username || '')
+      push('success', `${p.kind} (${p.name}) applied — enter the admin password if not found in .env`)
+    } catch (e: any) {
+      push('error', e.message)
+    }
+  }
+
   const [paths, setPaths] = useState({
     nginx_conf: '', haproxy_conf: '', certs_dir: '', backups_dir: '', nginx_bin: '', haproxy_bin: '', haproxy_socket: '',
   })
@@ -19,7 +50,11 @@ export default function Settings() {
   const [autoApply, setAutoApply] = useState(false)
   const [socksHost, setSocksHost] = useState('127.0.0.1')
   const [socksPort, setSocksPort] = useState('40001')
+  const [discovered, setDiscovered] = useState<DiscoveredPanel[] | null>(null)
+  const [scanning, setScanning] = useState(false)
   const [pgURL, setPgURL] = useState('')
+  const [pgUser, setPgUser] = useState('')
+  const [pgPass, setPgPass] = useState('')
   const [pgToken, setPgToken] = useState('')
   const [rlEnabled, setRlEnabled] = useState(false)
   const [rlSync, setRlSync] = useState('60')
@@ -43,6 +78,7 @@ export default function Settings() {
       setSocksHost(settings.data.tunnel_socks_host || '127.0.0.1')
       setSocksPort(settings.data.tunnel_socks_port || '40001')
       setPgURL(settings.data.pasarguard_url || '')
+      setPgUser(settings.data.pasarguard_username || '')
       setRlEnabled(settings.data.rate_limiting_enabled === 'true')
       setRlSync(settings.data.rate_limiting_sync_interval || '60')
       setAlertsEnabled((settings.data.alerts_enabled ?? 'true') === 'true')
@@ -64,6 +100,8 @@ export default function Settings() {
         tunnel_socks_host: socksHost,
         tunnel_socks_port: socksPort,
         pasarguard_url: pgURL,
+        pasarguard_username: pgUser,
+        ...(pgPass.trim() ? { pasarguard_password: pgPass.trim() } : {}),
         ...(pgToken.trim() ? { pasarguard_token: pgToken.trim() } : {}),
         rate_limiting_enabled: rlEnabled ? 'true' : 'false',
         rate_limiting_sync_interval: rlSync,
@@ -263,14 +301,51 @@ export default function Settings() {
         <CardHeader
           title="Bandwidth / PasarGuard"
           desc="User sync source and per-UUID rate limiting (enforced on nodes with Linux tc)"
+          right={
+            <Button variant="secondary" size="sm" onClick={runDiscover} disabled={scanning}>
+              <Radar className={`h-3.5 w-3.5 ${scanning ? 'animate-pulse' : ''}`} />
+              {scanning ? 'Scanning…' : 'Auto-detect panels'}
+            </Button>
+          }
         />
+        {discovered && discovered.length > 0 && (
+          <div className="space-y-2 border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+            <p className="text-2xs uppercase tracking-wide text-slate-400">Detected on this host</p>
+            {discovered.map((p) => (
+              <div key={p.source + p.name} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">{p.kind}</span>
+                  <span className="text-slate-400">·</span>
+                  <span className="font-mono">{p.url || p.name}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-2xs ${p.alive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+                    {p.alive ? 'API alive' : 'not responding'}
+                  </span>
+                  {p.env_has_password && <span className="text-2xs text-indigo-500">credentials in .env</span>}
+                  {p.note && <span className="text-2xs text-slate-400">{p.note}</span>}
+                </div>
+                <Button size="sm" variant="secondary" disabled={!p.alive} onClick={() => applyDiscovered(p)}>
+                  Apply
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
-          <Field label="PasarGuard panel URL" hint="admin API base, e.g. https://panel.example.com">
-            <Input value={pgURL} onChange={(e) => setPgURL(e.target.value)} placeholder="https://panel.example.com" />
+          <Field label="PasarGuard panel URL" hint="admin API base, e.g. https://127.0.0.1:2096 — self-signed certs are accepted automatically">
+            <Input value={pgURL} onChange={(e) => setPgURL(e.target.value)} placeholder="https://127.0.0.1:2096" />
+          </Field>
+          <Field label="PasarGuard admin username" hint="used to mint/refresh API tokens automatically">
+            <Input value={pgUser} onChange={(e) => setPgUser(e.target.value)} placeholder="admin" />
           </Field>
           <Field
-            label="PasarGuard API token"
-            hint={settings.data?.pasarguard_token_set ? 'configured — type a new one to rotate' : 'admin API token'}
+            label="PasarGuard admin password"
+            hint={settings.data?.pasarguard_password_set ? 'configured — type a new one to rotate' : 'preferred over a manual token'}
+          >
+            <Input type="password" value={pgPass} onChange={(e) => setPgPass(e.target.value)} placeholder="••••••" />
+          </Field>
+          <Field
+            label="PasarGuard API token (optional)"
+            hint={settings.data?.pasarguard_token_set ? 'configured — auto-refreshed on expiry' : 'optional when username/password are set'}
           >
             <Input type="password" value={pgToken} onChange={(e) => setPgToken(e.target.value)} placeholder="••••••" />
           </Field>

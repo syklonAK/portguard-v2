@@ -79,6 +79,20 @@ export interface ACMEIssueResult {
   note: string
 }
 
+export interface DiscoveredPanel {
+  kind: string
+  source: string
+  name: string
+  url: string
+  port: number
+  tls: boolean
+  alive: boolean
+  env_path?: string
+  env_username?: string
+  env_has_password?: boolean
+  note?: string
+}
+
 export interface Job {
   id: string
   name: string
@@ -160,6 +174,8 @@ export interface Settings {
   tunnel_socks_host?: string
   tunnel_socks_port?: string
   pasarguard_url?: string
+  pasarguard_username?: string
+  pasarguard_password_set?: boolean
   pasarguard_token_set?: boolean
   rate_limiting_enabled?: string
   rate_limiting_sync_interval?: string
@@ -418,6 +434,9 @@ export const api = {
   audit: () => req<AuditLog[]>('GET', '/api/audit'),
   certValidate: (id: number) => req<CertValidation>('GET', `/api/certs/${id}/validate`),
   jobs: () => req<Job[]>('GET', '/api/jobs'),
+  discover: () => req<DiscoveredPanel[]>('GET', '/api/discover'),
+  discoverApply: (r: { kind: string; url: string; username?: string; password?: string; token?: string; env_path?: string }) =>
+    req<{ ok: boolean }>('POST', '/api/discover/apply', r),
   job: (id: string) => req<Job>('GET', `/api/jobs/${id}`),
 
   // v2.2: Hedioum tunnels
