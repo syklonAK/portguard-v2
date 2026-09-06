@@ -73,7 +73,13 @@ func (a *Auth) Allow(ip string) bool {
 			recent = append(recent, t)
 		}
 	}
-	a.failIPs[ip] = recent
+	if len(recent) == 0 {
+		// prune the entry entirely so the map can't grow without bound
+		// under a flood of unique spoofed/unroutable source IPs
+		delete(a.failIPs, ip)
+	} else {
+		a.failIPs[ip] = recent
+	}
 	return len(recent) < 5
 }
 

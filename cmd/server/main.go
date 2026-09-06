@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,7 +27,7 @@ import (
 	"portguard/internal/sysinfo"
 )
 
-var version = "2.5.0"
+var version = "2.9.2"
 
 func envInt(key string, def int) int {
 	if v := os.Getenv(key); v != "" {
@@ -56,12 +57,6 @@ func main() {
 	host := flag.String("host", envStr("PORTGUARD_HOST", "0.0.0.0"), "panel listen host")
 	dbPath := flag.String("db", envStr("PORTGUARD_DB", "/var/lib/portguard/portguard.db"), "sqlite database path")
 	flag.Parse()
-
-	log.Printf("PortGuard v%s starting on %s:%d", version, *host, *port)
-
-	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o755); err != nil {
-		log.Fatalf("cannot create data dir: %v", err)
-	}
 
 	log.Printf("PortGuard v%s starting on %s:%d", version, *host, *port)
 
@@ -223,15 +218,28 @@ func main() {
 			np := app.SampleLocalMetrics(prevLocal)
 			*prevLocal = np
 			nodes, _ := st.ListServerNodesPublic()
+			// sample all enabled nodes concurrently: one slow/unreachable
+			// node (15s timeout) must not stretch the whole round
+			var wg sync.WaitGroup
 			for _, n := range nodes {
 				if !n.Enabled {
 					continue
 				}
-				if pe, ok := prevByNode[n.ID]; ok {
-					p := pe.point
-					app.SampleRemoteMetrics(n.ID, &p)
-				} else {
-					app.SampleRemoteMetrics(n.ID, nil)
+				wg.Add(1)
+				go func(id int64) {
+					defer wg.Done()
+					if pe, ok := prevByNode[id]; ok {
+						p := pe.point
+						app.SampleRemoteMetrics(id, &p)
+					} else {
+						app.SampleRemoteMetrics(id, nil)
+					}
+				}(n.ID)
+			}
+			wg.Wait()
+			for _, n := range nodes {
+				if !n.Enabled {
+					continue
 				}
 				if pts, err := st.QueryMetrics(n.ID, time.Now().Unix()-120, time.Now().Unix()); err == nil && len(pts) > 0 {
 					prevByNode[n.ID] = prevEntry{point: pts[len(pts)-1], known: true}

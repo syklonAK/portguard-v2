@@ -20,6 +20,7 @@ const queryClient = new QueryClient({
 // One EventSource for the whole app; each broker event becomes a window event
 // ("pg-sse-<topic>") that pages listen to for instant refreshes.
 let sse: EventSource | null = null
+let sseRetries = 0
 function connectSSE() {
   const token = getToken()
   if (!token || sse) return
@@ -32,10 +33,16 @@ function connectSSE() {
   sse.onerror = () => {
     sse?.close()
     sse = null
-    // token may have rotated or the panel restarted; retry after a pause
+    // token may have rotated or the panel restarted; back off so a down
+    // panel doesn't spin reconnect loops (capped at 30s, reset on success)
+    sseRetries = Math.min(sseRetries + 1, 6)
+    const delay = Math.min(1000 * 2 ** sseRetries, 30_000)
     setTimeout(() => {
       if (getToken()) connectSSE()
-    }, 5000)
+    }, delay)
+  }
+  sse.onopen = () => {
+    sseRetries = 0
   }
 }
 connectSSE()

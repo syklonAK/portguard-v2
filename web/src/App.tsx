@@ -8,7 +8,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Ports from './pages/Ports'
 import Mappings from './pages/Mappings'
-import Services from './pages/Services'
+import NginxServices from './pages/Services'
 import Runtime from './pages/Runtime'
 import Backups from './pages/Backups'
 import Diagnostics from './pages/Diagnostics'
@@ -109,7 +109,7 @@ export default function App() {
         <Route path="/mappings" element={<Mappings />} />
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/analytics" element={<Analytics />} />
-        <Route path="/services" element={<Services />} />
+        <Route path="/services/systemd" element={<NginxServices />} />
         <Route path="/runtime" element={<Runtime />} />
         <Route path="/backups" element={<Backups />} />
         <Route path="/versions" element={<Versions />} />

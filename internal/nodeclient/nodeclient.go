@@ -20,6 +20,16 @@ type Client struct {
 	HTTP    *http.Client
 }
 
+// sharedTransport keeps idle keep-alive connections to nodes open so the
+// frequent polling loops (metrics, alerter, bandwidth sync) reuse TCP
+// connections instead of re-handshaking on every request.
+var sharedTransport = &http.Transport{
+	Proxy:               http.ProxyFromEnvironment,
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 8,
+	IdleConnTimeout:     90 * time.Second,
+}
+
 func New(host string, port int, token string) *Client {
 	scheme := "http"
 	base := strings.TrimSuffix(host, "/")
@@ -32,7 +42,7 @@ func New(host string, port int, token string) *Client {
 	return &Client{
 		BaseURL: fmt.Sprintf("%s://%s:%d", scheme, base, port),
 		Token:   token,
-		HTTP:    &http.Client{Timeout: 15 * time.Second},
+		HTTP:    &http.Client{Timeout: 15 * time.Second, Transport: sharedTransport},
 	}
 }
 

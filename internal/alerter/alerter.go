@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"portguard/internal/nodeclient"
@@ -119,25 +120,33 @@ func (a *Alerter) sendWebhook(url string, payload map[string]any) {
 // --- sources ---
 
 func (a *Alerter) checkNodes() {
-	nodes, err := a.St.ListServerNodesPublic()
+	// ListServerNodes (not Public) so we have each node's API token —
+	// pinging with an empty token always 401s and reports nodes offline.
+	nodes, err := a.St.ListServerNodes()
 	if err != nil {
 		return
 	}
+	var wg sync.WaitGroup
 	for _, n := range nodes {
 		if !n.Enabled {
 			continue
 		}
-		cli := nodeclient.New(n.Host, n.Port, "")
-		online := cli.Ping() == nil
-		prev := n.Status
-		if online && (prev == "offline") {
-			a.fire("info", "node", "Node back online: "+n.Name, "Node "+n.Name+" ("+n.Host+") is reachable again.", n.Name, "node-up:"+fmt.Sprint(n.ID))
-			_ = a.St.TouchServerNode(n.ID, "online")
-		} else if !online && prev != "offline" {
-			a.fire("critical", "node", "Node offline: "+n.Name, "Node "+n.Name+" ("+n.Host+":"+fmt.Sprint(n.Port)+") is unreachable.", n.Name, "node-down:"+fmt.Sprint(n.ID))
-			_ = a.St.TouchServerNode(n.ID, "offline")
-		}
+		wg.Add(1)
+		go func(n store.ServerNode) {
+			defer wg.Done()
+			cli := nodeclient.New(n.Host, n.Port, n.APIToken)
+			online := cli.Ping() == nil
+			prev := n.Status
+			if online && (prev == "offline") {
+				a.fire("info", "node", "Node back online: "+n.Name, "Node "+n.Name+" ("+n.Host+") is reachable again.", n.Name, "node-up:"+fmt.Sprint(n.ID))
+				_ = a.St.TouchServerNode(n.ID, "online")
+			} else if !online && prev != "offline" {
+				a.fire("critical", "node", "Node offline: "+n.Name, "Node "+n.Name+" ("+n.Host+":"+fmt.Sprint(n.Port)+") is unreachable.", n.Name, "node-down:"+fmt.Sprint(n.ID))
+				_ = a.St.TouchServerNode(n.ID, "offline")
+			}
+		}(n)
 	}
+	wg.Wait()
 }
 
 func (a *Alerter) checkBackends() {

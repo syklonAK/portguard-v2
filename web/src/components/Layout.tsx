@@ -16,7 +16,7 @@ const nav = [
   { to: '/services', label: 'Services', icon: Boxes },
   { to: '/analytics', label: 'Analytics', icon: TrendingUp },
   { to: '/tunnels', label: 'Tunnels', icon: Waypoints },
-  { to: '/services', label: 'Services', icon: Wrench },
+  { to: '/services/systemd', label: 'Nginx/HAProxy', icon: Wrench },
   { to: '/runtime', label: 'HAProxy Runtime', icon: Gauge },
   { to: '/certs', label: 'SSL Certs', icon: ShieldCheck },
   { to: '/backups', label: 'Backups', icon: History },

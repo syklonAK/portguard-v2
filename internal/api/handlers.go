@@ -70,6 +70,11 @@ func (a *App) Router() http.Handler {
 	// is meant to be exposed directly; put a trusted reverse proxy in front
 	// only if you accept that trade-off.
 	r.Use(middleware.Recoverer)
+	// gzip responses (JSON APIs + embedded SPA) — large mapping lists and the
+	// JS bundle compress 5-10x, noticeably faster over WAN links to nodes
+	r.Use(middleware.Compress(5, "application/json", "text/html", "text/css",
+		"application/javascript", "image/svg+xml"))
+	r.Use(securityHeaders)
 	r.Get("/api/healthz", a.handleHealthz)
 	r.Get("/api/setup-status", a.handleSetupStatus)
 	r.Post("/api/setup", a.handleSetup)
@@ -796,4 +801,21 @@ func (a *App) handleAudit(w http.ResponseWriter, r *http.Request) {
 		logs = []store.AuditLog{}
 	}
 	writeJSON(w, http.StatusOK, logs)
+}
+
+// securityHeaders sets conservative baseline headers on every response.
+// The panel is admin-facing; framing, sniffing and referrer leaks are cheap
+// wins. HSTS is only sent over TLS so plain-HTTP LAN installs stay clean.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		if r.TLS != nil {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
 }

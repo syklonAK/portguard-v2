@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -288,22 +289,32 @@ func (a *App) PushRateLimitPlans() {
 	for _, p := range policies {
 		byNode[p.NodeID] = append(byNode[p.NodeID], p.UUID)
 	}
+	enabled := make([]store.ServerNode, 0, len(nodes))
 	for _, n := range nodes {
-		if !n.Enabled {
-			continue
-		}
-		err := a.pushNodePlan(n.ID)
-		status, errMsg := "synced", ""
-		if err != nil {
-			status, errMsg = "failed", err.Error()
-		}
-		for _, uuid := range byNode[n.ID] {
-			_ = a.St.SetPolicyStatus(uuid, n.ID, status, errMsg, 0)
-		}
-		if err != nil {
-			a.St.Audit("system", "ratelimit.push", n.Name+": "+err.Error(), "error")
+		if n.Enabled {
+			enabled = append(enabled, n)
 		}
 	}
+	// push to all nodes concurrently: a slow node must not delay the rest
+	var wg sync.WaitGroup
+	for _, n := range enabled {
+		wg.Add(1)
+		go func(n store.ServerNode) {
+			defer wg.Done()
+			err := a.pushNodePlan(n.ID)
+			status, errMsg := "synced", ""
+			if err != nil {
+				status, errMsg = "failed", err.Error()
+			}
+			for _, uuid := range byNode[n.ID] {
+				_ = a.St.SetPolicyStatus(uuid, n.ID, status, errMsg, 0)
+			}
+			if err != nil {
+				a.St.Audit("system", "ratelimit.push", n.Name+": "+err.Error(), "error")
+			}
+		}(n)
+	}
+	wg.Wait()
 }
 
 // handleListPasarguardUsers returns the synced user list joined with their
@@ -404,7 +415,6 @@ func (a *App) handleRateLimitPush(w http.ResponseWriter, r *http.Request) {
 		OK     bool   `json:"ok"`
 		Error  string `json:"error,omitempty"`
 	}
-	var results []result
 	policies, _ := a.St.ListRatePolicies()
 	statusByNode := map[int64]map[string]store.RateLimitPolicy{}
 	for _, p := range policies {
@@ -413,27 +423,38 @@ func (a *App) handleRateLimitPush(w http.ResponseWriter, r *http.Request) {
 		}
 		statusByNode[p.NodeID][p.UUID] = p
 	}
+	enabled := make([]store.ServerNode, 0, len(nodes))
 	for _, n := range nodes {
-		if !n.Enabled {
-			continue
-		}
-		res := result{NodeID: n.ID, OK: true}
-		if err := a.pushNodePlan(n.ID); err != nil {
-			res.OK = false
-			res.Error = err.Error()
-		}
-		results = append(results, res)
-		// record per-policy push status
-		if m, ok := statusByNode[n.ID]; ok {
-			for uuid := range m {
-				status, errMsg := "synced", ""
-				if !res.OK {
-					status, errMsg = "failed", res.Error
-				}
-				_ = a.St.SetPolicyStatus(uuid, n.ID, status, errMsg, 0)
-			}
+		if n.Enabled {
+			enabled = append(enabled, n)
 		}
 	}
+	results := make([]result, len(enabled))
+	// push concurrently; results are written to per-index slots
+	var wg sync.WaitGroup
+	for i, n := range enabled {
+		wg.Add(1)
+		go func(i int, n store.ServerNode) {
+			defer wg.Done()
+			res := result{NodeID: n.ID, OK: true}
+			if err := a.pushNodePlan(n.ID); err != nil {
+				res.OK = false
+				res.Error = err.Error()
+			}
+			results[i] = res
+			// record per-policy push status
+			if m, ok := statusByNode[n.ID]; ok {
+				for uuid := range m {
+					status, errMsg := "synced", ""
+					if !res.OK {
+						status, errMsg = "failed", res.Error
+					}
+					_ = a.St.SetPolicyStatus(uuid, n.ID, status, errMsg, 0)
+				}
+			}
+		}(i, n)
+	}
+	wg.Wait()
 	a.St.Audit(actorFrom(r.Context()), "ratelimit.push", fmt.Sprintf("%d nodes", len(results)), "ok")
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }

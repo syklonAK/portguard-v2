@@ -249,8 +249,11 @@ func (a *App) handleTunnelApply(w http.ResponseWriter, r *http.Request) {
 		prev = data
 	}
 	if _, err := tunnel.BackupBridge(a.Svc.Paths.BackupsDir); err != nil {
-		// non-fatal
-		_ = err
+		// a failed pre-apply backup removes the rollback safety net,
+		// so refuse to touch the live config
+		a.St.Audit(actorFrom(r.Context()), "tunnel.apply", "backup failed: "+err.Error(), "error")
+		errJSON(w, errString("backup failed, refusing to apply: "+err.Error()), http.StatusInternalServerError)
+		return
 	}
 	if err := tunnel.Apply(cfg, prev, st.XrayBinary); err != nil {
 		a.St.Audit(actorFrom(r.Context()), "tunnel.apply", err.Error(), "error")
