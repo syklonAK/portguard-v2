@@ -4,7 +4,9 @@
 package tools
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"sync"
@@ -209,6 +211,7 @@ type InstallResult struct {
 	ToolID  string `json:"tool_id"`
 	OK      bool   `json:"ok"`
 	Output  string `json:"output"` // tail of the installer output
+	Error   string `json:"error,omitempty"` // exit error / post-condition notes
 	Elapsed string `json:"elapsed"`
 }
 
@@ -217,9 +220,23 @@ type InstallResult struct {
 // trigger) would randomly fail on lock contention.
 var installMu sync.Mutex
 
-// Install runs the tool's official installer and returns combined output.
-// The command is executed as the panel user (root) with a generous timeout.
+// Install runs the installer without streaming (collected output).
 func Install(id string) (*InstallResult, error) {
+	var buf []string
+	res, err := InstallStream(id, func(line string) { buf = append(buf, line) })
+	if err != nil {
+		return res, err
+	}
+	res.Output = tail(strings.Join(buf, "\n"), 8000)
+	if res.Error != "" {
+		res.Output += "\n" + res.Error
+	}
+	return res, nil
+}
+
+// InstallStream runs the official installer, streaming each output line to
+// sink (may be nil) as it is produced so the panel can show a live terminal.
+func InstallStream(id string, sink func(string)) (*InstallResult, error) {
 	t := ByID(id)
 	if t == nil {
 		return nil, fmt.Errorf("unknown tool: %s", id)
@@ -232,22 +249,51 @@ func Install(id string) (*InstallResult, error) {
 
 	start := time.Now()
 	cmd := exec.Command("bash", "-c", t.InstallCmd)
-	out, err := cmd.CombinedOutput()
+	var pipe io.ReadCloser
+	var errCh chan error
+	if sink != nil {
+		var err error
+		pipe, err = cmd.StdoutPipe()
+		if err != nil {
+			return nil, err
+		}
+		cmd.Stderr = cmd.Stdout
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	if pipe != nil {
+		errCh = make(chan error, 1)
+		go func() {
+			sc := bufio.NewScanner(pipe)
+			sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+			for sc.Scan() {
+				sink(sc.Text())
+			}
+			errCh <- sc.Err()
+		}()
+	}
+	err := cmd.Wait()
+	if err == nil && errCh != nil {
+		err = <-errCh
+	}
 	res := &InstallResult{
 		ToolID:  id,
 		OK:      err == nil,
-		Output:  tail(string(out), 8000),
 		Elapsed: time.Since(start).Round(time.Millisecond).String(),
 	}
 	if err != nil {
-		res.Output += fmt.Sprintf("\n[exit error: %v]", err)
+		res.Error = fmt.Sprintf("[exit error: %v]", err)
 	}
 	// post-condition: the installer must have actually produced the binary
 	// (or it must already have been present when the command succeeded)
 	if !res.OK && preInstalled && toolPresent(t) {
 		// installer failed but the tool was and still is present: report a
 		// clear failure, not a masked success
-		res.Output += "\n[installer failed; tool was already present — state unchanged]"
+		if res.Error != "" {
+			res.Error += "\n"
+		}
+		res.Error += "[installer failed; tool was already present — state unchanged]"
 	} else {
 		res.OK = toolPresent(t)
 	}

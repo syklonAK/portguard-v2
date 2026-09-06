@@ -103,6 +103,7 @@ func main() {
 	app := &api.App{
 		St: st, Svc: svc, Auth: auth, Broker: broker,
 		Scanner: scn, PanelPort: *port, Version: version,
+		Jobs: api.NewJobManager(broker.Publish),
 		RateApplierFactory: func() *ratelimit.Applier {
 			return &ratelimit.Applier{StateDir: "/var/lib/portguard"}
 		},
@@ -368,6 +369,7 @@ func runAgent(args []string) {
 	app := &api.App{
 		St: st, Svc: svc, Broker: broker,
 		Scanner: scn, PanelPort: *port, Version: version,
+		Jobs: api.NewJobManager(broker.Publish),
 		RateApplierFactory: func() *ratelimit.Applier {
 			return &ratelimit.Applier{StateDir: "/var/lib/portguard"}
 		},

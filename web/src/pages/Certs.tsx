@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, ShieldCheck, BadgeCheck, Globe, RefreshCw } from 'lucide-react'
-import { api, type Cert, type CertValidation, type ACMEProvider } from '../api'
+import { api, type Cert, type CertValidation, type ACMEProvider, type Job } from '../api'
 import { Badge, Button, Card, CardHeader, Empty, Field, Input, Modal, Select, Spinner } from '../components/ui'
+import Terminal from '../components/Terminal'
 import { useToast } from '../components/toast'
 
 export default function Certs() {
@@ -14,6 +15,7 @@ export default function Certs() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [selfOpen, setSelfOpen] = useState(false)
   const [issueOpen, setIssueOpen] = useState(false)
+  const [jobId, setJobId] = useState<string | null>(null)
   const [validation, setValidation] = useState<{ name: string; data: CertValidation } | null>(null)
   const [checking, setChecking] = useState<number | null>(null)
 
@@ -91,23 +93,27 @@ export default function Certs() {
         dns_env: issueForm.method === 'dns01' ? dnsEnv : undefined,
         name: issueForm.name || undefined,
       }),
-    onSuccess: (res) => {
-      push('success', `Certificate issued and imported: ${res.cert.name}`)
-      setIssueOpen(false)
-      setDnsEnv({})
-      refresh()
-    },
+    onSuccess: (res) => setJobId(res.job_id),
     onError: (e: any) => push('error', e.message),
   })
 
   const renew = useMutation({
     mutationFn: (id: number) => api.renewCert(id),
-    onSuccess: () => {
-      push('success', 'Certificate renewed')
-      refresh()
-    },
+    onSuccess: (res) => setJobId(res.job_id),
     onError: (e: any) => push('error', e.message),
   })
+
+  // live terminal for the running job (issue or renew)
+  const onJobDone = (job: Job) => {
+    if (job.status === 'success') {
+      push('success', `${job.name} — done`)
+      setIssueOpen(false)
+      setDnsEnv({})
+    } else {
+      push('error', `${job.name} failed — see terminal output`)
+    }
+    refresh()
+  }
 
   const typeBadge = (t: string) =>
     t === 'acme' ? 'green' : t === 'manual' ? 'blue' : 'purple'
@@ -136,7 +142,7 @@ export default function Certs() {
           <Button variant="secondary" onClick={() => setSelfOpen(true)}>
             <ShieldCheck className="h-4 w-4" /> Self-signed
           </Button>
-          <Button onClick={() => setIssueOpen(true)}>
+          <Button onClick={() => { setIssueOpen(true); setJobId(null) }}>
             <Globe className="h-4 w-4" /> Issue ACME certificate
           </Button>
         </div>
@@ -307,11 +313,26 @@ export default function Certs() {
                 <Spinner className="h-3.5 w-3.5" /> Issuing… (DNS-01 can take 1–2 minutes)
               </span>
             )}
-            <Button variant="secondary" onClick={() => setIssueOpen(false)}>Cancel</Button>
-            <Button onClick={() => issue.mutate()}
-              disabled={issue.isPending || !issueForm.domains || (issueForm.method === 'dns01' && issueForm.tool === 'certbot' && !issueForm.email)}>
-              {issue.isPending ? 'Issuing…' : 'Issue certificate'}
-            </Button>
+            {!jobId && (
+              <>
+                <Button variant="secondary" onClick={() => setIssueOpen(false)}>Cancel</Button>
+                <Button onClick={() => issue.mutate()}
+                  disabled={issue.isPending || !issueForm.domains || (issueForm.method === 'dns01' && issueForm.tool === 'certbot' && !issueForm.email)}>
+                  {issue.isPending ? 'Issuing…' : 'Issue certificate'}
+                </Button>
+              </>
+            )}
+          </div>
+          {jobId && <Terminal jobId={jobId} onDone={onJobDone} />}
+        </div>
+      </Modal>
+
+      {/* Renew / background job terminal */}
+      <Modal open={jobId !== null && !issueOpen} onClose={() => setJobId(null)} title="Task output" wide>
+        <div className="space-y-3">
+          {jobId && <Terminal jobId={jobId} onDone={onJobDone} />}
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={() => setJobId(null)}>Close</Button>
           </div>
         </div>
       </Modal>

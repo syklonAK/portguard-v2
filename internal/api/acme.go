@@ -10,7 +10,9 @@
 package api
 
 import (
+	"bufio"
 	"encoding/json"
+	"io"
 	"errors"
 	"fmt"
 	"net/http"
@@ -265,11 +267,39 @@ func (a *App) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	certPEM, keyPEM, err := a.runACMEIssue(&req)
+	// stream mode: run in a background job so the UI can show a live
+	// terminal of the ACME client output
+	if r.URL.Query().Get("stream") == "1" && a.Jobs != nil {
+		jobName := "ACME issue: " + strings.Join(req.Domains, ", ")
+		j := a.Jobs.Start(jobName, func(job *Job) error {
+			c, err := a.importIssued(&req, job.Write, actorFrom(r.Context()))
+			if err != nil {
+				return err
+			}
+			job.Write("[portguard] done — certificate #" + strconv.FormatInt(c.ID, 10) + " imported (" + c.Name + ")")
+			return nil
+		})
+		writeJSON(w, http.StatusAccepted, map[string]any{"job_id": j.ID, "name": jobName})
+		return
+	}
+
+	c, err := a.importIssued(&req, nil, actorFrom(r.Context()))
 	if err != nil {
-		a.St.Audit(actorFrom(r.Context()), "cert.issue", strings.Join(req.Domains, ","), "error")
 		errJSON(w, err, http.StatusUnprocessableEntity)
 		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"cert": c, "note": "certificate imported; renew anytime via POST /api/certs/" + strconv.FormatInt(c.ID, 10) + "/renew",
+	})
+}
+
+// importIssued runs the ACME client, then stores the issued pair as a new
+// acme certificate together with its renewal profile.
+func (a *App) importIssued(req *issueRequest, sink func(string), actor string) (store.Cert, error) {
+	certPEM, keyPEM, err := a.runACMEIssue(req, sink)
+	if err != nil {
+		a.St.Audit(actor, "cert.issue", strings.Join(req.Domains, ","), "error")
+		return store.Cert{}, err
 	}
 
 	// pick a primary domain (first non-wildcard SAN preferred for the name)
@@ -282,8 +312,7 @@ func (a *App) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 	}
 	exp, err := parseCertExpiry(certPEM)
 	if err != nil {
-		errJSON(w, fmt.Errorf("issued certificate unreadable: %v", err), http.StatusInternalServerError)
-		return
+		return store.Cert{}, fmt.Errorf("issued certificate unreadable: %v", err)
 	}
 	name := req.Name
 	if name == "" {
@@ -292,8 +321,7 @@ func (a *App) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 	c := store.Cert{Name: name, Type: "acme", CertPEM: certPEM, KeyPEM: keyPEM, Domains: req.Domains, ExpiresAt: exp}
 	id, err := a.St.CreateCert(&c)
 	if err != nil {
-		errJSON(w, err, http.StatusInternalServerError)
-		return
+		return store.Cert{}, err
 	}
 	c.ID = id
 	// persist the issuance parameters so /renew can replay the same flow
@@ -302,13 +330,11 @@ func (a *App) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 		"env": req.DNSEnv, "domains": req.Domains, "email": req.Email,
 	})
 	_ = a.St.SetSetting(fmt.Sprintf("acme_profile_%d", id), string(profile))
-	a.St.Audit(actorFrom(r.Context()), "cert.issue", name+" ("+req.Tool+", "+req.Method+")", "ok")
+	a.St.Audit(actor, "cert.issue", name+" ("+req.Tool+", "+req.Method+")", "ok")
 	if a.Broker != nil {
 		a.Broker.Publish("cert", map[string]any{"action": "issued", "id": id, "name": name})
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"cert": c, "note": "certificate imported; renew anytime via POST /api/certs/" + strconv.FormatInt(id, 10) + "/renew",
-	})
+	return c, nil
 }
 
 // handleRenewCert replays the stored issuance flow for an ACME certificate
@@ -334,9 +360,37 @@ func (a *App) handleRenewCert(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, fmt.Errorf("corrupt issuance profile: %v", err), http.StatusInternalServerError)
 		return
 	}
-	certPEM, keyPEM, err := a.runACMEIssue(&prof)
+	actor := actorFrom(r.Context())
+
+	// stream mode: background job with live terminal output
+	if r.URL.Query().Get("stream") == "1" && a.Jobs != nil {
+		jobName := "ACME renew: " + c.Name
+		j := a.Jobs.Start(jobName, func(job *Job) error {
+			certPEM, keyPEM, err := a.runACMEIssue(&prof, job.Write)
+			if err != nil {
+				return err
+			}
+			exp, err := parseCertExpiry(certPEM)
+			if err != nil {
+				return fmt.Errorf("renewed certificate unreadable: %v", err)
+			}
+			if err := a.St.UpdateCertPEM(id, certPEM, keyPEM, exp); err != nil {
+				return err
+			}
+			a.St.Audit(actor, "cert.renew", c.Name, "ok")
+			if a.Broker != nil {
+				a.Broker.Publish("cert", map[string]any{"action": "renewed", "id": id, "name": c.Name})
+			}
+			job.Write("[portguard] done — certificate renewed, valid until " + exp.Format("2006-01-02"))
+			return nil
+		})
+		writeJSON(w, http.StatusAccepted, map[string]any{"job_id": j.ID, "name": jobName})
+		return
+	}
+
+	certPEM, keyPEM, err := a.runACMEIssue(&prof, nil)
 	if err != nil {
-		a.St.Audit(actorFrom(r.Context()), "cert.renew", c.Name, "error")
+		a.St.Audit(actor, "cert.renew", c.Name, "error")
 		errJSON(w, err, http.StatusUnprocessableEntity)
 		return
 	}
@@ -360,11 +414,11 @@ func (a *App) handleRenewCert(w http.ResponseWriter, r *http.Request) {
 
 // runACMEIssue dispatches to the selected client and returns the fullchain
 // PEM + private key PEM.
-func (a *App) runACMEIssue(req *issueRequest) (certPEM, keyPEM string, err error) {
+func (a *App) runACMEIssue(req *issueRequest, sink func(string)) (certPEM, keyPEM string, err error) {
 	if req.Tool == "certbot" {
-		return a.runCertbot(req)
+		return a.runCertbot(req, sink)
 	}
-	return a.runAcmeSh(req)
+	return a.runAcmeSh(req, sink)
 }
 
 // acmeEnv builds the process environment: parent env + validated provider
@@ -392,22 +446,28 @@ func checkEnvFields(p *acmeProvider, provided map[string]string) error {
 
 // ensureAcmeSh installs acme.sh via the tools registry when missing so the
 // issue button works even before visiting the Tools page.
-func ensureAcmeSh() error {
+func ensureAcmeSh(sink func(string)) error {
 	if _, err := os.Stat(acmeShBin); err == nil {
 		return nil
 	}
-	res, err := tools.Install("acmesh")
+	if sink != nil {
+		sink("[portguard] acme.sh not found — installing it now (Tools page)")
+	}
+	res, err := tools.InstallStream("acmesh", sink)
 	if err != nil {
 		return fmt.Errorf("acme.sh is not installed and auto-install failed: %v", err)
 	}
 	if !res.OK {
-		return fmt.Errorf("acme.sh auto-install failed: %s", res.Output)
+		return fmt.Errorf("acme.sh auto-install failed: %s", res.Error)
+	}
+	if sink != nil {
+		sink("[portguard] acme.sh installed successfully")
 	}
 	return nil
 }
 
-func (a *App) runAcmeSh(req *issueRequest) (string, string, error) {
-	if err := ensureAcmeSh(); err != nil {
+func (a *App) runAcmeSh(req *issueRequest, sink func(string)) (string, string, error) {
+	if err := ensureAcmeSh(sink); err != nil {
 		return "", "", err
 	}
 	var p *acmeProvider
@@ -460,9 +520,8 @@ func (a *App) runAcmeSh(req *issueRequest) (string, string, error) {
 	}
 	cmd := exec.Command(acmeShBin, args...)
 	cmd.Env = acmeEnv(p, req.DNSEnv)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", "", fmt.Errorf("acme.sh failed: %v: %s", err, tailLines(string(out), 15))
+	if t, err := execStream(cmd, sink); err != nil {
+		return "", "", fmt.Errorf("acme.sh failed: %v: %s", err, t)
 	}
 
 	// acme.sh writes to ~/.acme.sh/<primary>[_ecc]/
@@ -490,7 +549,7 @@ func (a *App) runAcmeSh(req *issueRequest) (string, string, error) {
 	return string(certPEM), string(keyPEM), nil
 }
 
-func (a *App) runCertbot(req *issueRequest) (string, string, error) {
+func (a *App) runCertbot(req *issueRequest, sink func(string)) (string, string, error) {
 	var p *acmeProvider
 	if req.Method == "dns01" {
 		p = acmeProviderByID(req.DNS)
@@ -498,8 +557,8 @@ func (a *App) runCertbot(req *issueRequest) (string, string, error) {
 		if _, err := os.Stat("/usr/lib/python3/dist-packages/certbot_" + strings.TrimPrefix(p.CertbotPkg, "python3-certbot-") + "/__init__.py"); err != nil {
 			cmd := exec.Command("bash", "-c",
 				"DEBIAN_FRONTEND=noninteractive apt-get update -y -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "+p.CertbotPkg)
-			if out, err := cmd.CombinedOutput(); err != nil {
-				return "", "", fmt.Errorf("failed to install %s: %v: %s", p.CertbotPkg, err, tailLines(string(out), 10))
+			if t, err := execStream(cmd, sink); err != nil {
+				return "", "", fmt.Errorf("failed to install %s: %v: %s", p.CertbotPkg, err, tailLines(t, 10))
 			}
 		}
 	}
@@ -537,9 +596,8 @@ func (a *App) runCertbot(req *issueRequest) (string, string, error) {
 	}
 	cmd := exec.Command("certbot", args...)
 	cmd.Env = env
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", "", fmt.Errorf("certbot failed: %v: %s", err, tailLines(string(out), 15))
+	if t, err := execStream(cmd, sink); err != nil {
+		return "", "", fmt.Errorf("certbot failed: %v: %s", err, t)
 	}
 	primary := req.Domains[0]
 	for _, d := range req.Domains {
@@ -561,6 +619,34 @@ func (a *App) runCertbot(req *issueRequest) (string, string, error) {
 }
 
 // ---- small helpers ----
+
+// execStream runs cmd, forwarding every stdout/stderr line to sink (may be
+// nil, e.g. the live terminal view) and returning the last lines for error
+// context when the command fails.
+func execStream(cmd *exec.Cmd, sink func(string)) (string, error) {
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	cmd.Stderr = cmd.Stdout
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	var lines []string
+	sc := bufio.NewScanner(pipe)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for sc.Scan() {
+		l := sc.Text()
+		lines = append(lines, l)
+		if sink != nil {
+			sink(l)
+		}
+	}
+	waitErr := cmd.Wait()
+	_ = pipe.Close()
+	return tailLines(strings.Join(lines, "
+"), 15), waitErr
+}
 
 func fileReadable(path string) bool {
 	f, err := os.Open(path)

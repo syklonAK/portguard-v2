@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, RefreshCw, CheckCircle2, XCircle, ExternalLink, Terminal } from 'lucide-react'
-import { api, type ToolState, type ToolInstallResult } from '../api'
+import { api, type ToolState, type ToolInstallResult, type Job } from '../api'
+import LiveTerminal from '../components/Terminal'
 import { Badge, Button, Card, CardHeader, CodeBlock, Spinner } from '../components/ui'
 import { useToast } from '../components/toast'
 
@@ -21,24 +22,33 @@ export default function Tools() {
   const tools = useQuery({ queryKey: ['tools'], queryFn: () => api.tools() })
   const [output, setOutput] = useState<ToolInstallResult | null>(null)
   const [installing, setInstalling] = useState<string | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [jobTool, setJobTool] = useState<string | null>(null)
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['tools'] })
 
+  // installs run as background jobs so the installer output streams live
+  // into the terminal view below the cards
   const install = useMutation({
-    mutationFn: (id: string) => api.installTool(id),
+    mutationFn: (id: string) => api.installToolStream(id),
     onMutate: (id) => setInstalling(id),
-    onSuccess: (res) => {
-      setOutput(res)
-      if (res.ok) {
-        push('success', `${res.tool_id} installed in ${res.elapsed}.`)
-      } else {
-        push('error', `${res.tool_id} install reported problems — see output.`)
-      }
-      refresh()
+    onSuccess: (res, id) => {
+      setOutput(null)
+      setJobTool(id)
+      setJobId(res.job_id)
     },
-    onError: (e: any) => push('error', e.message),
-    onSettled: () => setInstalling(null),
+    onError: (e: any) => {
+      push('error', e.message)
+      setInstalling(null)
+    },
   })
+
+  const onJobDone = (job: Job) => {
+    setInstalling(null)
+    if (job.status === 'success') push('success', `${jobTool} installed.`)
+    else push('error', `${jobTool} install failed — see terminal output.`)
+    refresh()
+  }
 
   const byCategory = (cat: string): ToolState[] =>
     (tools.data?.tools ?? []).filter((t) => t.category === cat)
@@ -119,6 +129,15 @@ export default function Tools() {
             </Card>
           )
         })
+      )}
+
+      {jobId && jobTool && (
+        <Card>
+          <CardHeader title={`Live install — ${jobTool}`} desc="streamed from the installer as it runs" />
+          <div className="p-5">
+            <LiveTerminal jobId={jobId} onDone={onJobDone} />
+          </div>
+        </Card>
       )}
 
       {output && (

@@ -35,6 +35,7 @@ type App struct {
 	Version   string
 	RateApplierFactory func() *ratelimit.Applier // set by main; lazily builds the node applier
 	Alerter   *alerter.Alerter                   // optional (nil until main wires it)
+	Jobs      *JobManager                        // long shell ops with live terminal output
 }
 
 // RateApplier returns the bandwidth applier for this host (agent or panel).
@@ -106,6 +107,8 @@ func (a *App) Router() http.Handler {
 		pr.Get("/api/tunnels", a.handleTunnelStatus)
 		pr.Get("/api/tunnels/relays", a.handleListRelays)
 		pr.Get("/api/tools", a.handleTools)
+		pr.Get("/api/jobs", a.handleListJobs)
+		pr.Get("/api/jobs/{id}", a.handleGetJob)
 		pr.Get("/api/nodes", a.handleListNodes)
 		pr.Get("/api/node-self", a.handleNodeTokenInfo)
 		// v2.6

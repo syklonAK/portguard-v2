@@ -79,6 +79,16 @@ export interface ACMEIssueResult {
   note: string
 }
 
+export interface Job {
+  id: string
+  name: string
+  status: 'running' | 'success' | 'failed'
+  error?: string
+  started_at: string
+  finished_at?: string | null
+  output?: string[]
+}
+
 export interface PortEntry {
   port: number
   proto: 'tcp' | 'udp'
@@ -400,13 +410,15 @@ export const api = {
     dns_provider?: string
     dns_env?: Record<string, string>
     name?: string
-  }) => req<ACMEIssueResult>('POST', '/api/certs/issue', r),
+  }) => req<{ job_id: string }>('POST', '/api/certs/issue?stream=1', r),
   renewCert: (id: number) =>
-    req<{ status: string; expires_at: string | null }>('POST', `/api/certs/${id}/renew`),
+    req<{ job_id: string }>('POST', `/api/certs/${id}/renew?stream=1`),
 
   healthList: () => req<TargetHealth[]>('GET', '/api/health'),
   audit: () => req<AuditLog[]>('GET', '/api/audit'),
   certValidate: (id: number) => req<CertValidation>('GET', `/api/certs/${id}/validate`),
+  jobs: () => req<Job[]>('GET', '/api/jobs'),
+  job: (id: string) => req<Job>('GET', `/api/jobs/${id}`),
 
   // v2.2: Hedioum tunnels
   tunnelStatus: () => req<TunnelStatus>('GET', '/api/tunnels'),
@@ -423,6 +435,7 @@ export const api = {
   // v2.4: tools (local + remote)
   tools: () => req<{ tools: ToolState[] }>('GET', '/api/tools'),
   installTool: (id: string) => req<ToolInstallResult>('POST', `/api/tools/${id}/install`),
+  installToolStream: (id: string) => req<{ job_id: string }>('POST', `/api/tools/${id}/install?stream=1`),
   nodeTools: (nodeId: number) => req<{ tools: ToolState[] }>('POST', `/api/nodes/${nodeId}/tools`),
   nodeInstallTool: (nodeId: number, tool: string) =>
     req<ToolInstallResult>('POST', `/api/nodes/${nodeId}/install`, { tool }),

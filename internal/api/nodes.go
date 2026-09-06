@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -274,8 +275,33 @@ func (a *App) handleTools(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleToolInstall is the local (admin JWT) install trigger.
+// stream=1 runs the installer as a background job and returns a job id the
+// UI polls/subscribes to for a live terminal view.
 func (a *App) handleToolInstall(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "tool")
+	actor := actorFrom(r.Context())
+	if r.URL.Query().Get("stream") == "1" && a.Jobs != nil {
+		jobName := "install " + id
+		j := a.Jobs.Start(jobName, func(job *Job) error {
+			res, err := tools.InstallStream(id, job.Write)
+			if err != nil {
+				return err
+			}
+			if !res.OK {
+				job.Write("[portguard] install reported problems" + func() string {
+					if res.Error != "" {
+						return ": " + res.Error
+					}
+					return ""
+				}())
+				return fmt.Errorf("%s install failed", id)
+			}
+			job.Write("[portguard] done — " + id + " installed in " + res.Elapsed)
+			return nil
+		})
+		writeJSON(w, http.StatusAccepted, map[string]any{"job_id": j.ID, "name": jobName})
+		return
+	}
 	res, err := tools.Install(id)
 	if err != nil {
 		errJSON(w, err, http.StatusNotFound)
