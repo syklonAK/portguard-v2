@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"os/user"
@@ -328,11 +329,15 @@ func (s *Service) writeCertFiles(certs map[int64]store.Cert) error {
 		if err := os.WriteFile(pemPath, []byte(combined), 0o640); err != nil {
 			return err
 		}
-		// best-effort: make pem group-readable by haproxy
-		if g, err := user.LookupGroup("haproxy"); err == nil {
-			if gid, err := strconv.Atoi(g.Gid); err == nil {
-				_ = os.Chown(pemPath, -1, gid)
-			}
+		// best-effort: make pem group-readable by haproxy; a failure is not
+		// fatal (the key stays 0600, the pem stays 0640 root-owned) but it
+		// must be visible, otherwise haproxy reloads start failing mysteriously
+		if g, err := user.LookupGroup("haproxy"); err != nil {
+			log.Printf("[certs] haproxy group lookup failed, %s left root-owned: %v", pemPath, err)
+		} else if gid, err := strconv.Atoi(g.Gid); err != nil {
+			log.Printf("[certs] haproxy gid parse failed, %s left root-owned: %v", pemPath, err)
+		} else if err := os.Chown(pemPath, -1, gid); err != nil {
+			log.Printf("[certs] chown %s to group haproxy failed: %v", pemPath, err)
 		}
 	}
 	return nil

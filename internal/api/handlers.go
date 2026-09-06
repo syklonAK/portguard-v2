@@ -459,8 +459,30 @@ func countEnabled(ms []store.Mapping) int {
 
 // ---------- mappings ----------
 
+// pagedParams reads ?limit=&offset= (both optional, clamped to sane
+// ranges). limit < 0 means "no limit" — the default, which keeps existing
+// clients that never send the parameters working unchanged.
+func pagedParams(r *http.Request) (limit, offset int) {
+	limit, offset = -1, 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			offset = n
+		}
+	}
+	if limit > 500 {
+		limit = 500 // sensible maximum for a dashboard
+	}
+	return limit, offset
+}
+
 func (a *App) handleListMappings(w http.ResponseWriter, r *http.Request) {
-	ms, err := a.St.ListMappings()
+	limit, offset := pagedParams(r)
+	ms, err := a.St.ListMappingsPaged(limit, offset)
 	if err != nil {
 		errJSON(w, err, 500)
 		return
@@ -685,7 +707,8 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 // ---------- certs ----------
 
 func (a *App) handleListCerts(w http.ResponseWriter, r *http.Request) {
-	certs, err := a.St.ListCerts()
+	limit, offset := pagedParams(r)
+	certs, err := a.St.ListCertsPaged(limit, offset)
 	if err != nil {
 		errJSON(w, err, 500)
 		return

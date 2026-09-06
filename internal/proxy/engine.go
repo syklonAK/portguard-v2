@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"unicode"
 
 	"portguard/internal/store"
 )
@@ -324,13 +325,20 @@ func RouteRulePathForNginx(p string) string {
 }
 
 // hasControlChars reports whether s contains characters that could break out
-// of a config directive line (newline, CR, NUL or other control bytes).
+// of a config directive line or spoof it visually: ASCII control bytes
+// (newline, CR, NUL, ...), other Unicode control characters, and format
+// characters such as U+202E RIGHT-TO-LEFT OVERRIDE (category Cf), which is
+// invisible in the dashboard but can reorder the rendered directive.
+// Ordinary printable Unicode (Persian, emoji, ...) is allowed.
 func hasControlChars(s string) bool {
 	if s == "" {
 		return false
 	}
 	for _, r := range s {
 		if r < 0x20 || r == 0x7f {
+			return true
+		}
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf) {
 			return true
 		}
 	}

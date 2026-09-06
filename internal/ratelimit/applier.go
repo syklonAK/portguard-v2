@@ -238,13 +238,11 @@ func (a *Applier) fullTeardown(iface string) {
 // ClearAll removes all bandwidth rules (used when limiting is disabled).
 func (a *Applier) ClearAll() error {
 	st := a.LoadState()
-	if st.Iace() != "" {
-		a.fullTeardown(st.Iace())
+	if st.Iface != "" {
+		a.fullTeardown(st.Iface)
 	}
 	return a.saveState(AppliedState{Rules: map[string]Rule{}})
 }
-
-func (s AppliedState) Iace() string { return s.Iface }
 
 // minRate keeps HTB happy: rate must be a sane fraction of ceil.
 func minRate(bps int64) int64 {

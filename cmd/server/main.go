@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"portguard/internal/alerter"
+	"portguard/internal/config"
 	"portguard/internal/api"
 	"portguard/internal/conntrack"
 	"portguard/internal/health"
@@ -87,8 +88,12 @@ func main() {
 			*kv.dst = v
 		}
 	}
-	_ = os.MkdirAll(paths.CertsDir, 0o750)
-	_ = os.MkdirAll(paths.BackupsDir, 0o755)
+	if err := os.MkdirAll(paths.CertsDir, 0o750); err != nil {
+		log.Printf("[startup] cannot create certs dir %s: %v (certificate deploy will fail)", paths.CertsDir, err)
+	}
+	if err := os.MkdirAll(paths.BackupsDir, 0o755); err != nil {
+		log.Printf("[startup] cannot create backups dir %s: %v (backups will fail)", paths.BackupsDir, err)
+	}
 
 	secret, err := st.Secret("jwt_secret")
 	if err != nil {
@@ -118,7 +123,7 @@ func main() {
 	app.Alerter = alertEngine
 	go alertEngine.Run(ctx.Done())
 
-	interval := 30 * time.Second
+	interval := config.DefaultCheckInterval
 	if v, err := st.GetSetting("check_interval"); err == nil && v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 5 {
 			interval = time.Duration(n) * time.Second
@@ -136,7 +141,7 @@ func main() {
 					return time.Duration(n) * time.Second
 				}
 			}
-			return 5 * time.Minute
+			return config.DefaultScanInterval
 		}
 		time.Sleep(3 * time.Second)
 		runScan(st, scn, *port, broker)
@@ -153,7 +158,7 @@ func main() {
 	}()
 
 	// system stats -> SSE every 5s
-	go sysinfo.RunSampler(ctx, 5*time.Second, func(s sysinfo.Snapshot) {
+	go sysinfo.RunSampler(ctx, config.SSESampleInterval, func(s sysinfo.Snapshot) {
 		broker.Publish("system", s)
 	})
 
@@ -162,7 +167,7 @@ func main() {
 	connSampler.OnChange(func(count int) {
 		broker.Publish("conns", map[string]int{"count": count})
 	})
-	go connSampler.Run(5*time.Second, ctx.Done())
+	go connSampler.Run(config.ConntrackSampleInterval, ctx.Done())
 
 	// v2.6: bandwidth sync loop — periodically pull PasarGuard users and
 	// push plans to enabled nodes (both intervals re-read each round from
@@ -246,8 +251,8 @@ func main() {
 					prevByNode[n.ID] = prevEntry{point: pts[len(pts)-1], known: true}
 				}
 			}
-			st.PruneMetrics(7 * 24 * time.Hour)
-			t := time.NewTimer(30 * time.Second)
+			st.PruneMetrics(config.MetricsRetention)
+			t := time.NewTimer(config.MetricsSampleInterval)
 			select {
 			case <-ctx.Done():
 				t.Stop()
@@ -359,8 +364,12 @@ func runAgent(args []string) {
 	}
 
 	paths := proxy.DefaultPaths()
-	_ = os.MkdirAll(paths.CertsDir, 0o750)
-	_ = os.MkdirAll(paths.BackupsDir, 0o755)
+	if err := os.MkdirAll(paths.CertsDir, 0o750); err != nil {
+		log.Printf("[startup] cannot create certs dir %s: %v (certificate deploy will fail)", paths.CertsDir, err)
+	}
+	if err := os.MkdirAll(paths.BackupsDir, 0o755); err != nil {
+		log.Printf("[startup] cannot create backups dir %s: %v (backups will fail)", paths.BackupsDir, err)
+	}
 
 	broker := api.NewBroker()
 	svc := service.New(st, paths, *port)
@@ -400,7 +409,7 @@ func runAgent(args []string) {
 
 	// live connection sampling
 	connSampler := conntrack.NewSampler(st, *port)
-	go connSampler.Run(5*time.Second, ctx.Done())
+	go connSampler.Run(config.ConntrackSampleInterval, ctx.Done())
 
 	// bandwidth policy recovery: on boot the agent asks the master for its
 	// current plan (the master pushes on connect anyway, but the pull makes

@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"os/exec"
 	"path/filepath"
 	"sort"

@@ -481,7 +481,8 @@ func (a *App) handleNodeLogs(w http.ResponseWriter, r *http.Request) {
 // ---- master-side node CRUD ----
 
 func (a *App) handleListNodes(w http.ResponseWriter, r *http.Request) {
-	nodes, err := a.St.ListServerNodesPublic()
+	limit, offset := pagedParams(r)
+	nodes, err := a.St.ListServerNodesPublicPaged(limit, offset)
 	if err != nil {
 		errJSON(w, err, http.StatusInternalServerError)
 		return

@@ -81,3 +81,40 @@ func TestParseSSLineNonListen(t *testing.T) {
 		t.Error("non-LISTEN tcp line must be skipped")
 	}
 }
+
+// TestSocketStatePredicates documents the /proc/net state model used by the
+// scanner: TCP listeners are state 0A; UDP sockets report TCP-like states
+// where 07 marks bound (listening) sockets and 01 marks connect()ed sockets
+// (excluded: those are usually ephemeral client sockets, not services).
+func TestSocketStatePredicates(t *testing.T) {
+	tcpCases := []struct {
+		state string
+		want  bool
+	}{
+		{"0A", true},  // TCP_LISTEN
+		{"01", false}, // ESTABLISHED
+		{"08", false}, // CLOSE_WAIT
+		{"", false},
+		{"FF", false},
+	}
+	for _, tc := range tcpCases {
+		if got := isTCPListening(tc.state); got != tc.want {
+			t.Errorf("isTCPListening(%q) = %v, want %v", tc.state, got, tc.want)
+		}
+	}
+
+	udpCases := []struct {
+		state  string
+		listen bool // expected discovery outcome
+	}{
+		{"07", true},  // unconnected/bound: every UDP listener
+		{"01", false}, // connected UDP client socket (ephemeral)
+		{"", false},
+		{"FF", false},
+	}
+	for _, tc := range udpCases {
+		if got := isUDPListening(tc.state); got != tc.listen {
+			t.Errorf("isUDPListening(%q) = %v, want %v", tc.state, got, tc.listen)
+		}
+	}
+}

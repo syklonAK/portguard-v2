@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"regexp"
 	"sort"
 	"strconv"
@@ -255,13 +256,60 @@ func psUser(pid int) string {
 		return n
 	}
 	pidUserMu.Unlock()
+	// /proc/<pid>/status instead of one `ps` spawn per PID — on busy servers
+	// with hundreds of processes the per-PID exec dominated the scan. The
+	// real UID is resolved through a process-wide cache (UIDs repeat far
+	// more often than PIDs); recycled PIDs are covered by ResetPidUserCache
+	// at the start of every scan.
 	name := ""
-	if out, err := exec.Command("ps", "-o", "user=", "-p", strconv.Itoa(pid)).Output(); err == nil {
-		name = strings.TrimSpace(string(out))
+	uid := procStatusUID(pid)
+	if uid != "" {
+		name = userNameForUID(uid)
 	}
 	pidUserMu.Lock()
 	pidUserCache[pid] = name
 	pidUserMu.Unlock()
+	return name
+}
+
+// procStatusUID extracts the real UID from /proc/<pid>/status; "" when the
+// process vanished mid-scan or the file is unreadable.
+func procStatusUID(pid int) string {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "
+") {
+		if strings.HasPrefix(line, "Uid:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				return fields[1]
+			}
+		}
+	}
+	return ""
+}
+
+var uidUserCache = struct {
+	sync.Mutex
+	m map[string]string
+}{m: map[string]string{}}
+
+func userNameForUID(uid string) string {
+	uidUserCache.Lock()
+	if n, ok := uidUserCache.m[uid]; ok {
+		uidUserCache.Unlock()
+		return n
+	}
+	uidUserCache.Unlock()
+	name := ""
+	if u, err := user.LookupId(uid); err == nil {
+		name = u.Username
+	}
+	uidUserCache.Lock()
+	uidUserCache.m[uid] = name
+	uidUserCache.Unlock()
 	return name
 }
 
@@ -279,7 +327,23 @@ func scanProc() ([]store.PortEntry, error) {
 	if _, err := os.Stat("/proc/net/tcp"); err != nil {
 		return nil, fmt.Errorf("/proc unavailable")
 	}
-	inodes := mapInodeOwners()
+	// first pass: collect the socket inodes we actually care about so the
+	// /proc walk below can skip user resolution for every other process
+	wanted := map[string]bool{}
+	for _, path := range []string{"/proc/net/tcp", "/proc/net/tcp6", "/proc/net/udp", "/proc/net/udp6"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "
+")[1:] {
+			f := strings.Fields(strings.TrimSpace(line))
+			if len(f) >= 10 {
+				wanted[f[9]] = true
+			}
+		}
+	}
+	inodes := mapInodeOwners(wanted)
 	var entries []store.PortEntry
 	add := func(path, proto string, listening func(st string) bool) {
 		data, err := os.ReadFile(path)
@@ -307,16 +371,32 @@ func scanProc() ([]store.PortEntry, error) {
 			entries = append(entries, e)
 		}
 	}
-	add("/proc/net/tcp", "tcp", func(st string) bool { return st == "0A" })
-	add("/proc/net/tcp6", "tcp", func(st string) bool { return st == "0A" })
-	add("/proc/net/udp", "udp", func(st string) bool { return st != "FF" && st != "" && st == "07" })
-	add("/proc/net/udp6", "udp", func(st string) bool { return st == "07" })
+	add("/proc/net/tcp", "tcp", isTCPListening)
+	add("/proc/net/tcp6", "tcp", isTCPListening)
+	add("/proc/net/udp", "udp", isUDPListening)
+	add("/proc/net/udp6", "udp", isUDPListening)
 	return entries, nil
 }
 
+// isTCPListening reports whether a /proc/net/tcp state column value is a
+// listening socket: 0A = TCP_LISTEN.
+func isTCPListening(st string) bool { return st == "0A" }
+
+// isUDPListening reports whether a /proc/net/udp* state column value is a
+// bound socket that receives traffic. The kernel reports UDP sockets with
+// TCP state numbers: 07 (TCP_CLOSE) for unconnected/bound sockets — every
+// UDP "listener" — and 01 (TCP_ESTABLISHED) for connect()ed sockets, which
+// are typically ephemeral client sockets, not services, and are excluded.
+// "FF" and "" never occur for live rows and never match.
+func isUDPListening(st string) bool { return st == "07" }
+
 type procOwner struct{ pid int; name, user string }
 
-func mapInodeOwners() map[string]procOwner {
+// mapInodeOwners walks /proc and maps socket inode -> owning process, but
+// only for the wanted inodes discovered from /proc/net/*: processes holding
+// no wanted socket cost one readlink per fd and no user lookup, and
+// processes that vanish mid-scan are skipped without failing the scan.
+func mapInodeOwners(wanted map[string]bool) map[string]procOwner {
 	out := map[string]procOwner{}
 	links, err := os.ReadDir("/proc")
 	if err != nil {
@@ -332,7 +412,7 @@ func mapInodeOwners() map[string]procOwner {
 		fdDir := "/proc/" + l.Name() + "/fd"
 		fds, err := os.ReadDir(fdDir)
 		if err != nil {
-			continue
+			continue // vanished or permission-denied process
 		}
 		for _, fd := range fds {
 			link, err := os.Readlink(filepath2(fdDir, fd.Name()))
@@ -340,9 +420,11 @@ func mapInodeOwners() map[string]procOwner {
 				continue
 			}
 			inode := strings.TrimSuffix(strings.TrimPrefix(link, "socket:["), "]")
+			if !wanted[inode] {
+				continue
+			}
 			if _, exists := out[inode]; !exists {
-				uid := fileOwnerUID("/proc/" + l.Name())
-				out[inode] = procOwner{pid: pid, name: name, user: uid}
+				out[inode] = procOwner{pid: pid, name: name, user: psUser(pid)}
 			}
 		}
 	}
@@ -350,14 +432,6 @@ func mapInodeOwners() map[string]procOwner {
 }
 
 func filepath2(a, b string) string { return a + "/" + b }
-
-func fileOwnerUID(path string) string {
-	out, err := exec.Command("stat", "-c", "%U", path).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
 
 // parseHexAddr parses /proc/net hex "00000000:0019".
 func parseHexAddr(s string) (string, int, error) {

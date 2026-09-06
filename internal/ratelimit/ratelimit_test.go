@@ -123,3 +123,20 @@ func TestClassID(t *testing.T) {
 		t.Errorf("classID must be under root: %q", a)
 	}
 }
+
+// Regression: ClearAll used a misspelled Iace() accessor and had to read the
+// applied interface from the state; it must tear down without panicking even
+// when tc is unavailable and always reset the state.
+func TestClearAllResetsState(t *testing.T) {
+	a := &Applier{StateDir: t.TempDir()}
+	if err := a.saveState(AppliedState{Iface: "eth0", Rules: map[string]Rule{"x": {}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.ClearAll(); err != nil {
+		t.Fatalf("ClearAll: %v", err)
+	}
+	st := a.LoadState()
+	if st.Iface != "" || len(st.Rules) != 0 {
+		t.Fatalf("state must be reset, got iface=%q rules=%d", st.Iface, len(st.Rules))
+	}
+}

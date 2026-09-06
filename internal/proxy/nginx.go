@@ -52,6 +52,10 @@ func (NginxEngine) StagedRel(p Paths, live string) (string, bool) {
 
 func (NginxEngine) Render(mappings []store.Mapping, certs map[int64]store.Cert, p Paths) (map[string]string, error) {
 	var upstreams, httpBlocks, streamBlocks strings.Builder
+	// rough preallocation: one upstream + one server block per mapping
+	upstreams.Grow(len(mappings) * 256)
+	httpBlocks.Grow(len(mappings) * 512)
+	streamBlocks.Grow(len(mappings) * 256)
 
 	sorted := make([]store.Mapping, len(mappings))
 	copy(sorted, mappings)
@@ -578,7 +582,10 @@ func (NginxEngine) Validate(staged map[string]string, p Paths) error {
 			// written to its live location by the apply pipeline, skip it here
 			continue
 		}
-		dst := filepath.Join(confDir, strings.TrimPrefix(rel, "portguard/"))
+		dst, err := secureJoin(confDir, rel)
+		if err != nil {
+			return fmt.Errorf("refusing to stage %q: %v", rel, err)
+		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err
 		}
@@ -614,3 +621,29 @@ func (NginxEngine) Reload(p Paths) error {
 }
 
 var _ Engine = NginxEngine{}
+
+// secureJoin joins rel under confDir and guarantees the result stays inside
+// confDir. rel may carry the "portguard/" staging prefix or arbitrary
+// traversal ("../", absolute paths, similar-prefix directories such as
+// "/etc/portguard-evil") — anything escaping confDir is rejected instead of
+// silently rewritten.
+func secureJoin(confDir, rel string) (string, error) {
+	rel = filepath.Clean(strings.TrimPrefix(filepath.Clean("/"+rel), "/portguard/"))
+	if rel == "." || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("path escapes the staging directory")
+	}
+	abs := filepath.Join(confDir, rel)
+	root, err := filepath.Abs(confDir)
+	if err != nil {
+		return "", err
+	}
+	abs, err = filepath.Abs(abs)
+	if err != nil {
+		return "", err
+	}
+	relToRoot, err := filepath.Rel(root, abs)
+	if err != nil || relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes the staging directory")
+	}
+	return abs, nil
+}
