@@ -215,28 +215,26 @@ func (s *Store) ReplaceConnections(conns []ConnEntry, now int64) error {
 	}
 	defer tx.Rollback()
 
-	// Synchronize the connections table on the (src, dst) tuple: existing
-	// rows are updated in place (preserving first_seen), new tuples are
-	// inserted and tuples that disappeared are deleted — one transaction,
-	// no full-table rewrite. Same-row duplicates cannot occur: the sampler
-	// emits one entry per conntrack tuple.
-	type key struct{ src, dstIP string; srcP, dstP int }
-	prev := map[key]int64{}
-	idByKey := map[key]int64{}
-	rows, err := tx.Query(`SELECT id, src_ip, src_port, dst_ip, dst_port, first_seen FROM connections`)
+	// Synchronize the connections table on its primary key
+	// (src_ip, src_port, dst_ip, dst_port): an upsert updates mutable
+	// columns and preserves first_seen, vanished tuples are deleted — one
+	// transaction, no full-table rewrite.
+	type key struct {
+		src, dstIP string
+		srcP, dstP int
+	}
+	rows, err := tx.Query(`SELECT src_ip, src_port, dst_ip, dst_port FROM connections`)
 	if err != nil {
 		return err
 	}
+	prev := map[key]bool{}
 	for rows.Next() {
 		var k key
-		var id int64
-		var fs int64
-		if err := rows.Scan(&id, &k.src, &k.srcP, &k.dstIP, &k.dstP, &fs); err != nil {
+		if err := rows.Scan(&k.src, &k.srcP, &k.dstIP, &k.dstP); err != nil {
 			rows.Close()
 			return err
 		}
-		prev[k] = fs
-		idByKey[k] = id
+		prev[k] = true
 	}
 	err = rows.Err()
 	rows.Close()
@@ -244,41 +242,40 @@ func (s *Store) ReplaceConnections(conns []ConnEntry, now int64) error {
 		return err
 	}
 
+	upsert, err := tx.Prepare(`INSERT INTO connections
+		(src_ip, src_port, dst_ip, dst_port, process, pid, uid, state, managed, inner, self, first_seen, last_seen)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(src_ip, src_port, dst_ip, dst_port) DO UPDATE SET
+			process=excluded.process, pid=excluded.pid, uid=excluded.uid, state=excluded.state,
+			managed=excluded.managed, inner=excluded.inner, self=excluded.self, last_seen=excluded.last_seen`)
+	if err != nil {
+		return err
+	}
+	defer upsert.Close()
 	seen := map[key]bool{}
 	for _, c := range conns {
 		k := key{c.SrcIP, c.DstIP, c.SrcPort, c.DstPort}
 		seen[k] = true
-		fs, ok := prev[k]
-		if !ok {
-			fs = now
-			if _, err := tx.Exec(`INSERT INTO connections
-				(src_ip, src_port, dst_ip, dst_port, process, pid, uid, state, managed, inner, self, first_seen, last_seen)
-				VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-				c.SrcIP, c.SrcPort, c.DstIP, c.DstPort, c.Process, c.PID, c.UID, c.State,
-				b2i(c.Managed), b2i(c.Inner), b2i(c.Self), fs, now); err != nil {
-				return err
-			}
-			continue
-		}
-		if _, err := tx.Exec(`UPDATE connections SET process=?, pid=?, uid=?, state=?, managed=?, inner=?, self=?, last_seen=? WHERE id=?`,
-			c.Process, c.PID, c.UID, c.State, b2i(c.Managed), b2i(c.Inner), b2i(c.Self), now, idByKey[k]); err != nil {
+		if _, err := upsert.Exec(c.SrcIP, c.SrcPort, c.DstIP, c.DstPort, c.Process, c.PID, c.UID, c.State,
+			b2i(c.Managed), b2i(c.Inner), b2i(c.Self), now, now); err != nil {
 			return err
 		}
 	}
-	delStmt, err := tx.Prepare(`DELETE FROM connections WHERE id=?`)
+	delStmt, err := tx.Prepare(`DELETE FROM connections WHERE src_ip=? AND src_port=? AND dst_ip=? AND dst_port=?`)
 	if err != nil {
 		return err
 	}
 	defer delStmt.Close()
-	for k, id := range idByKey {
+	for k := range prev {
 		if !seen[k] {
-			if _, err := delStmt.Exec(id); err != nil {
+			if _, err := delStmt.Exec(k.src, k.srcP, k.dstIP, k.dstP); err != nil {
 				return err
 			}
 		}
 	}
 	return tx.Commit()
 }
+
 func (s *Store) ListConnections() ([]ConnEntry, error) {
 	rows, err := s.DB.Query(`SELECT src_ip, src_port, dst_ip, dst_port, process, pid, uid, state, managed, inner, self, first_seen, last_seen
 		FROM connections ORDER BY last_seen DESC, src_ip`)

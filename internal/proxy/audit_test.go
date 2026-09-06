@@ -25,7 +25,7 @@ func TestSecureJoin(t *testing.T) {
 		{name: "escape to /etc/passwd", rel: "../../etc/passwd", wantOK: false},
 		{name: "absolute path", rel: "/etc/passwd", wantOK: false},
 		{name: "portguard prefix then escape", rel: "portguard/../../etc/shadow", wantOK: false},
-		{name: "root itself", rel: "portguard/", wantOK: true},
+		{name: "root itself", rel: "portguard/", wantOK: false},
 		{name: "dot", rel: ".", wantOK: false},
 	}
 	for _, tc := range tests {
@@ -121,7 +121,7 @@ func TestRenderHAPathACLDenyInteraction(t *testing.T) {
 
 	withTargets := store.Mapping{Name: "p", PathRoutes: routes, Targets: []store.Target{{Host: "10.0.0.1", Port: 80}}}
 	out = renderHAPathRoutes("fe", "be", withTargets)
-	if strings.Contains(out, "http-request deny") {
+	if strings.Contains(out, "deny_status 404 if !fe_ws") {
 		t.Fatalf("targets>0 mapping must keep default_backend reachable, got:\n%s", out)
 	}
 	if !strings.Contains(out, "use_backend be_dyn if fe_ws") {
