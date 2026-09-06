@@ -1,6 +1,8 @@
 package store
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"database/sql"
 	"errors"
 )
