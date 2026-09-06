@@ -279,8 +279,8 @@ func procStatusUID(pid int) string {
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(data), "
-") {
+	nl := "\n"
+	for _, line := range strings.Split(string(data), nl) {
 		if strings.HasPrefix(line, "Uid:") {
 			fields := strings.Fields(line)
 			if len(fields) >= 2 {
@@ -330,13 +330,13 @@ func scanProc() ([]store.PortEntry, error) {
 	// first pass: collect the socket inodes we actually care about so the
 	// /proc walk below can skip user resolution for every other process
 	wanted := map[string]bool{}
+	nl := "\n"
 	for _, path := range []string{"/proc/net/tcp", "/proc/net/tcp6", "/proc/net/udp", "/proc/net/udp6"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(string(data), "
-")[1:] {
+		for _, line := range strings.Split(string(data), nl)[1:] {
 			f := strings.Fields(strings.TrimSpace(line))
 			if len(f) >= 10 {
 				wanted[f[9]] = true

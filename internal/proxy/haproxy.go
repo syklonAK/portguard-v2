@@ -269,7 +269,7 @@ func renderHAPathRoutes(fe, be string, m store.Mapping) string {
 	needUpgrade := false
 	for _, pr := range m.PathRoutes {
 		id := fmt.Sprintf("%s_%s", fe, pr.Prefix)
-		fmt.Fprintf(&b, "    acl %s path_reg ^/%s/%s(/.*)?$\n", id, pr.Prefix, portPattern(pr.MinPort, pr.MaxPort))
+		fmt.Fprintf(&b, "    acl %s path_reg ^/%s/%s(/.*)?$\n", id, regexp.QuoteMeta(pr.Prefix), portPattern(pr.MinPort, pr.MaxPort))
 		aclNames = append(aclNames, id)
 		if pr.Transport == store.PathTransportWS || pr.Transport == store.PathTransportHU {
 			needUpgrade = true
@@ -320,8 +320,12 @@ func renderHADynBackend(be string, m store.Mapping) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "backend %s_dyn\n    mode http\n    timeout tunnel 3600s\n", be)
 	for _, pr := range m.PathRoutes {
-		fmt.Fprintf(&b, "    http-request set-var(txn.pgport) path,regsub(^/%s/([0-9]+)(/.*)?$,\\1) if { path_reg ^/%s/ }\n",
-			pr.Prefix, pr.Prefix)
+		// the prefix is user input: QuoteMeta keeps it literal inside the
+		// regex; the guard ACL must require the numeric port too, otherwise
+		// a non-numeric path would leave txn.pgport as the raw path and
+		// set-dst-port would apply garbage
+		fmt.Fprintf(&b, "    http-request set-var(txn.pgport) path,regsub(^/%s/([0-9]+)(/.*)?$,\\1) if { path_reg ^/%s/%s(/.*)?$ }\n",
+			regexp.QuoteMeta(pr.Prefix), regexp.QuoteMeta(pr.Prefix), portPattern(pr.MinPort, pr.MaxPort))
 	}
 	b.WriteString("    http-request set-dst-port var(txn.pgport)\n")
 	fmt.Fprintf(&b, "    server dynamic %s:1\n\n", host)
