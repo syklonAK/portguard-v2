@@ -128,7 +128,7 @@ func (a *App) Router() http.Handler {
 		pr.Get("/api/nodes/{id}/logs/{source}", a.handleNodeLogs)
 
 		// v2.8: services + metrics
-		pr.Get("/api/services", a.handleListServices)
+		pr.Get("/api/app-services", a.handleListServices)
 		pr.Get("/api/metrics/{id}", a.handleMetrics)
 		// (writes under admin)
 
@@ -186,10 +186,10 @@ func (a *App) Router() http.Handler {
 		pr.Post("/api/update", a.Auth.RequireRole("admin", a.handleUpdate))
 		pr.Post("/api/account/password", a.handleChangePassword)
 		// v2.8: services (admin writes)
-		pr.Post("/api/services", a.Auth.RequireRole("admin", a.handleCreateService))
-		pr.Get("/api/services/{id}", a.Auth.RequireRole("admin", a.handleServiceDetail))
-		pr.Put("/api/services/{id}", a.Auth.RequireRole("admin", a.handleUpdateService))
-		pr.Delete("/api/services/{id}", a.Auth.RequireRole("admin", a.handleDeleteService))
+		pr.Post("/api/app-services", a.Auth.RequireRole("admin", a.handleCreateService))
+		pr.Get("/api/app-services/{id}", a.Auth.RequireRole("admin", a.handleServiceDetail))
+		pr.Put("/api/app-services/{id}", a.Auth.RequireRole("admin", a.handleUpdateService))
+		pr.Delete("/api/app-services/{id}", a.Auth.RequireRole("admin", a.handleDeleteService))
 
 		// ---- owner-only (user management) ----
 		pr.Get("/api/users", a.Auth.RequireRole("owner", a.handleListUsers))

@@ -1,8 +1,10 @@
 package api
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -391,20 +393,31 @@ func (a *App) SyncPasarGuardUsers() error {
 	} else {
 		users = wrapped.Users
 	}
-	synced := 0
+
+	// normalize + derive the change fingerprint: when the panel reports the
+	// exact same population, skip the DB writes entirely — a 10k-user panel
+	// would otherwise rewrite every row every round for no effect
+	rows := make([]store.PasarguardUser, 0, len(users))
+	hash := sha256.New()
 	for _, u := range users {
 		uuid := ratelimit.NormalizeUUID(u.canonicalUUID())
 		if !ratelimit.ValidUUID(uuid) {
 			continue
 		}
 		enabled, expired := u.effectiveState()
-		pu := store.PasarguardUser{
-			UUID: uuid, Username: u.Username, Enabled: enabled, Expired: expired,
-		}
-		if err := a.St.UpsertPasarguardUser(&pu); err == nil {
-			synced++
-		}
+		rows = append(rows, store.PasarguardUser{UUID: uuid, Username: u.Username, Enabled: enabled, Expired: expired})
+		fmt.Fprintf(hash, "%s%s%v%v
+", uuid, u.Username, enabled, expired)
 	}
+	fingerprint := hex.EncodeToString(hash.Sum(nil))
+	if a.St.GetSettingOr("pasarguard_users_hash", "") == fingerprint {
+		_ = a.St.SetSetting("pasarguard_last_sync", time.Now().Format(time.RFC3339))
+		return nil
+	}
+	if err := a.St.UpsertPasarguardUsersBatch(rows); err != nil {
+		return err
+	}
+	_ = a.St.SetSetting("pasarguard_users_hash", fingerprint)
 	_ = a.St.SetSetting("pasarguard_last_sync", time.Now().Format(time.RFC3339))
 	return nil
 }
@@ -452,7 +465,13 @@ func (a *App) PushRateLimitPlans() {
 // handleListPasarguardUsers returns the synced user list joined with their
 // policy/profile state for the Bandwidth page.
 func (a *App) handleListPasarguardUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := a.St.ListPasarguardUsers()
+	q := r.URL.Query()
+	limit, offset := pagedParams(r)
+	search := strings.TrimSpace(q.Get("search"))
+	status := q.Get("status")
+	paged := limit > 0 || search != "" || status != ""
+
+	users, err := a.St.ListPasarguardUsersPaged(search, status, limit, offset)
 	if err != nil {
 		errJSON(w, err, http.StatusInternalServerError)
 		return
@@ -491,7 +510,17 @@ func (a *App) handleListPasarguardUsers(w http.ResponseWriter, r *http.Request) 
 		}
 		out = append(out, v)
 	}
-	writeJSON(w, http.StatusOK, out)
+	if !paged {
+		// legacy shape: the full plain array (old clients keep working)
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	total, err := a.St.CountPasarguardUsers(search, status)
+	if err != nil {
+		errJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": out, "total": total})
 }
 
 // buildNodePlan computes the desired tc rules for one node from its

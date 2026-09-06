@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Gauge, Plus, RefreshCw, Trash2, Zap, Users, Link2, Search, ShieldCheck, XCircle, Pencil,
@@ -36,10 +36,28 @@ export default function Bandwidth() {
 
   const status = useQuery({ queryKey: ['rate-limit-status'], queryFn: () => api.rateLimitStatus() })
   const profiles = useQuery({ queryKey: ['rate-profiles'], queryFn: () => api.listRateProfiles() })
-  const users = useQuery({ queryKey: ['pg-users'], queryFn: () => api.listPasarguardUsers() })
   const nodes = useQuery({ queryKey: ['nodes'], queryFn: () => api.listNodes() })
 
+  // thousands of users: the table is served server-side - one page of rows
+  // per fetch, with search + state filter applied in SQL, not in the browser
   const [search, setSearch] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const [stateFilter, setStateFilter] = useState<'' | 'active' | 'expired' | 'disabled'>('')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(25)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebounced(search.trim())
+      setPage(0)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search])
+  const users = useQuery({
+    queryKey: ['pg-users', page, pageSize, debounced, status],
+    queryFn: () =>
+      api.listPasarguardUsersPaged({ limit: pageSize, offset: page * pageSize, search: debounced, status: stateFilter }),
+    placeholderData: (prev) => prev,
+  })
   const [profileModal, setProfileModal] = useState<null | 'create' | 'edit'>()
   const [profileDraft, setProfileDraft] = useState<Partial<RateProfile> & { dl?: string; ul?: string }>({})
   const [userModal, setUserModal] = useState<PasarguardUserView | null>(null)
@@ -172,14 +190,9 @@ export default function Bandwidth() {
   })
 
   const st: RateLimitStatus | undefined = status.data
-  const filtered = useMemo(() => {
-    let list = users.data ?? []
-    if (search.trim()) {
-      const s = search.trim().toLowerCase()
-      list = list.filter((u) => u.username.toLowerCase().includes(s) || u.uuid.toLowerCase().includes(s))
-    }
-    return list
-  }, [users.data, search])
+  const rows = users.data?.users ?? []
+  const total = users.data?.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
 
   return (
     <div className="space-y-4">
@@ -278,20 +291,42 @@ export default function Bandwidth() {
       <Card>
         <CardHeader
           title="PasarGuard users"
-          desc={`${filtered.length} shown — limits key on the Xray UUID; enforcement maps the user's public source IP`}
+          desc="limits key on the Xray UUID; enforcement maps the user's public source IP"
           right={
-            <Input
-              className="w-52"
-              placeholder="search name or uuid"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className="w-52"
+                placeholder="search name or uuid"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <Select
+                className="w-36"
+                value={stateFilter}
+                onChange={(e) => { setStateFilter(e.target.value as typeof stateFilter); setPage(0) }}
+              >
+                <option value="">All states</option>
+                <option value="active">Active</option>
+                <option value="expired">Expired</option>
+                <option value="disabled">Disabled</option>
+              </Select>
+              <Select
+                className="w-28"
+                value={String(pageSize)}
+                onChange={(e) => { setPageSize(parseInt(e.target.value, 10) || 25); setPage(0) }}
+              >
+                <option value="25">25 / page</option>
+                <option value="50">50 / page</option>
+                <option value="100">100 / page</option>
+                <option value="250">250 / page</option>
+              </Select>
+            </div>
           }
         />
         {users.isLoading ? (
           <div className="flex justify-center py-10"><Spinner /></div>
-        ) : !filtered.length ? (
-          <Empty message="No synced users yet. Configure the PasarGuard URL/token in Settings, then click Sync users." />
+        ) : !rows.length ? (
+          <Empty message={debounced || stateFilter ? 'No users match the current search/filter.' : 'No synced users yet. Configure the PasarGuard URL/token in Settings, then click Sync users.'} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -307,7 +342,7 @@ export default function Bandwidth() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                {filtered.map((u) => (
+                {rows.map((u) => (
                   <tr key={u.uuid} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                     <td className="px-5 py-2.5 font-medium">{u.username || '—'}</td>
                     <td className="px-3 py-2.5 font-mono text-2xs text-slate-400" title={u.uuid}>{u.uuid.slice(0, 13)}…</td>
@@ -341,6 +376,19 @@ export default function Bandwidth() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {rows.length > 0 && (
+          <div className="flex items-center justify-between border-t border-slate-200 px-5 py-2.5 text-xs text-slate-500 dark:border-slate-800">
+            <span>
+              {total.toLocaleString()} users{debounced || stateFilter ? ' (filtered)' : ''} · page {page + 1} / {pageCount}
+            </span>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="sm" disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}>Prev</Button>
+              <Button variant="ghost" size="sm" disabled={page + 1 >= pageCount}
+                onClick={() => setPage((p) => p + 1)}>Next</Button>
+            </div>
           </div>
         )}
       </Card>

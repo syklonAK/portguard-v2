@@ -495,6 +495,12 @@ export const api = {
   updateRateProfile: (id: number, p: Partial<RateProfile>) => req<RateProfile>('PUT', `/api/rate-limits/profiles/${id}`, p),
   deleteRateProfile: (id: number) => req<{ ok: boolean }>('DELETE', `/api/rate-limits/profiles/${id}`),
   listPasarguardUsers: () => req<PasarguardUserView[]>('GET', '/api/pasarguard/users'),
+  listPasarguardUsersPaged: (p: { limit: number; offset: number; search?: string; status?: string }) => {
+    const q = new URLSearchParams({ limit: String(p.limit), offset: String(p.offset) })
+    if (p.search) q.set('search', p.search)
+    if (p.status) q.set('status', p.status)
+    return req<{ users: PasarguardUserView[]; total: number }>('GET', `/api/pasarguard/users?${q}`)
+  },
   upsertRatePolicy: (p: { uuid: string; node_id: number; profile_id?: number | null; download_bps?: number; upload_bps?: number; custom?: boolean; enabled?: boolean }) =>
     req<{ ok: boolean }>('POST', '/api/rate-limits/policies', p),
   deleteRatePolicy: (uuid: string, nodeId: number) =>
@@ -531,11 +537,11 @@ export const api = {
     req<{ created: number; skipped: number; issues: { section: string; reason: string }[] }>('POST', '/api/import/confirm', { indices }),
 
   // v2.8: services + metrics
-  listServices: () => req<ServiceView[]>('GET', '/api/services'),
-  createService: (s: Partial<Service>) => req<Service>('POST', '/api/services', s),
-  updateService: (id: number, s: Partial<Service>) => req<Service>('PUT', `/api/services/${id}`, s),
-  deleteService: (id: number) => req<{ ok: boolean }>('DELETE', `/api/services/${id}`),
-  serviceDetail: (id: number) => req<{ service: Service; mappings: Mapping[]; health: any[] }>('GET', `/api/services/${id}`),
+  listServices: () => req<ServiceView[]>('GET', '/api/app-services'),
+  createService: (s: Partial<Service>) => req<Service>('POST', '/api/app-services', s),
+  updateService: (id: number, s: Partial<Service>) => req<Service>('PUT', `/api/app-services/${id}`, s),
+  deleteService: (id: number) => req<{ ok: boolean }>('DELETE', `/api/app-services/${id}`),
+  serviceDetail: (id: number) => req<{ service: Service; mappings: Mapping[]; health: any[] }>('GET', `/api/app-services/${id}`),
   metrics: (nodeId: number, range: '5m' | '1h' | '24h' | '7d') =>
     req<MetricsData>('GET', `/api/metrics/${nodeId}?range=${range}`),
 

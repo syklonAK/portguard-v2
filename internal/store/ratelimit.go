@@ -1,6 +1,7 @@
 package store
 
 import (
+	"strings"
 	"database/sql"
 	"time"
 )
@@ -68,6 +69,101 @@ func (s *Store) UpsertPasarguardUser(u *PasarguardUser) error {
 		u.UUID, u.Username, nullInt64(u.NodeID), b2i(u.Enabled), b2i(u.Expired), u.LastIP, ts, ts, ts)
 	return err
 }
+// UpsertPasarguardUsersBatch syncs a whole page of users inside one
+// transaction (a single WAL commit instead of one per user — with thousands
+// of users the per-row commits dominated the sync round). node_id and
+// last_ip are preserved: the panel sync never owns those columns.
+func (s *Store) UpsertPasarguardUsersBatch(users []PasarguardUser) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(`INSERT INTO pasarguard_users(uuid, username, node_id, enabled, expired, last_ip, synced_at, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(uuid) DO UPDATE SET
+		username=excluded.username, enabled=excluded.enabled,
+		expired=excluded.expired, synced_at=excluded.synced_at, updated_at=excluded.updated_at`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	ts := nowTS()
+	for i := range users {
+		u := &users[i]
+		if _, err := stmt.Exec(u.UUID, u.Username, nullInt64(u.NodeID), b2i(u.Enabled), b2i(u.Expired), u.LastIP, ts, ts, ts); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func pasarguardUserFilter(search, status string) (string, []any) {
+	var conds []string
+	var args []any
+	if search != "" {
+		conds = append(conds, `(username LIKE ? OR uuid LIKE ?)`)
+		pat := "%" + search + "%"
+		args = append(args, pat, pat)
+	}
+	switch status {
+	case "active":
+		conds = append(conds, `enabled=1 AND expired=0`)
+	case "expired":
+		conds = append(conds, `expired=1`)
+	case "disabled":
+		conds = append(conds, `enabled=0`)
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = " WHERE " + strings.Join(conds, " AND ")
+	}
+	return where, args
+}
+
+// ListPasarguardUsersPaged returns one page of synced users; search matches
+// username/uuid substrings and status is active|expired|disabled ("" = all).
+func (s *Store) ListPasarguardUsersPaged(search, status string, limit, offset int) ([]PasarguardUser, error) {
+	where, args := pasarguardUserFilter(search, status)
+	q := `SELECT id, uuid, username, node_id, enabled, expired, last_ip, synced_at, created_at, updated_at
+		FROM pasarguard_users` + where + ` ORDER BY username LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	rows, err := s.DB.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PasarguardUser
+	for rows.Next() {
+		var u PasarguardUser
+		var enabled, expired int
+		var nodeID sql.NullInt64
+		var sy, c, up int64
+		if err := rows.Scan(&u.ID, &u.UUID, &u.Username, &nodeID, &enabled, &expired, &u.LastIP, &sy, &c, &up); err != nil {
+			return nil, err
+		}
+		u.Enabled = enabled == 1
+		u.Expired = expired == 1
+		if nodeID.Valid {
+			nid := nodeID.Int64
+			u.NodeID = &nid
+		}
+		u.SyncedAt = time.Unix(sy, 0)
+		u.CreatedAt = time.Unix(c, 0)
+		u.UpdatedAt = time.Unix(up, 0)
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// CountPasarguardUsers returns the row count for the same filter set.
+func (s *Store) CountPasarguardUsers(search, status string) (int, error) {
+	where, args := pasarguardUserFilter(search, status)
+	var n int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM pasarguard_users` + where, args...).Scan(&n)
+	return n, err
+}
+
 func (s *Store) ListPasarguardUsers() ([]PasarguardUser, error) {
 	rows, err := s.DB.Query(`SELECT id, uuid, username, node_id, enabled, expired, last_ip, synced_at, created_at, updated_at FROM pasarguard_users ORDER BY username`)
 	if err != nil {
