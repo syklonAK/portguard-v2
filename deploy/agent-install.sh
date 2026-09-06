@@ -64,9 +64,11 @@ chmod +x "${APP_DIR}/portguard.new"
 # smoke-test the binary in agent mode before touching anything else
 if ! "${APP_DIR}/portguard.new" agent -help >/dev/null 2>&1 && ! "${APP_DIR}/portguard.new" -help >/dev/null 2>&1; then
   # -help exits non-zero on flag packages; try the version print instead
-  if ! "${APP_DIR}/portguard.new" 2>&1 | head -1 | grep -qi portguard; then
-    die "downloaded binary failed its smoke test — the master may serve a different arch"
-  fi
+  # pipefail + SIGPIPE: `head -1` closes the pipe and the binary exits 141,
+  # which would fail the pipeline even on a match - capture the line first
+  SMOKE="$("${APP_DIR}/portguard.new" 2>&1 | head -1 || true)"
+  echo "$SMOKE" | grep -qi portguard     || die "downloaded binary failed its smoke test — the master may serve a different arch"
+
 fi
 
 mv "${APP_DIR}/portguard.new" "${APP_DIR}/portguard"
