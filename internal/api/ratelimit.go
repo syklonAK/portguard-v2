@@ -352,11 +352,15 @@ func (a *App) SyncPasarGuardUsers() error {
 	var wrapped struct {
 		Users []pgUser `json:"users"`
 	}
-	err := cli.get("/api/users", &wrapped)
-	if err == nil && len(wrapped.Users) > 0 {
+	if err := cli.get("/api/users", &wrapped); err != nil {
+		// older panels return a bare array instead of {"users": [...]}
+		var plain []pgUser
+		if err := cli.get("/api/users", &plain); err != nil {
+			return err
+		}
+		users = plain
+	} else {
 		users = wrapped.Users
-	} else if err := cli.get("/api/users", &users); err != nil {
-		return err
 	}
 	synced := 0
 	for _, u := range users {
