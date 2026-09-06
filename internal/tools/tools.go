@@ -262,6 +262,7 @@ func InstallStream(id string, sink func(string)) (*InstallResult, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+	var scanErr error
 	if pipe != nil {
 		errCh = make(chan error, 1)
 		go func() {
@@ -272,10 +273,13 @@ func InstallStream(id string, sink func(string)) (*InstallResult, error) {
 			}
 			errCh <- sc.Err()
 		}()
+		// drain the pipe to EOF *before* Wait(): Wait closes the pipe and
+		// the scanner would otherwise race it ("file already closed")
+		scanErr = <-errCh
 	}
 	err := cmd.Wait()
-	if err == nil && errCh != nil {
-		err = <-errCh
+	if err == nil && scanErr != nil {
+		err = scanErr
 	}
 	res := &InstallResult{
 		ToolID:  id,
