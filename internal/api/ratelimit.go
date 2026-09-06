@@ -406,8 +406,7 @@ func (a *App) SyncPasarGuardUsers() error {
 		}
 		enabled, expired := u.effectiveState()
 		rows = append(rows, store.PasarguardUser{UUID: uuid, Username: u.Username, Enabled: enabled, Expired: expired})
-		fmt.Fprintf(hash, "%s%s%v%v
-", uuid, u.Username, enabled, expired)
+		fmt.Fprintf(hash, "%s\x1f%s\x1f%v\x1f%v\n", uuid, u.Username, enabled, expired)
 	}
 	fingerprint := hex.EncodeToString(hash.Sum(nil))
 	if a.St.GetSettingOr("pasarguard_users_hash", "") == fingerprint {
