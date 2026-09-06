@@ -154,5 +154,5 @@ func (a *App) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, fmt.Errorf("job not found"), http.StatusNotFound)
 		return
 	}
-	writeJSON(w, http.StatusOK, jobJSON{Job: *j, Output: j.Output()})
+	writeJSON(w, http.StatusOK, jobJSON{Job: j, Output: j.Output()})
 }
