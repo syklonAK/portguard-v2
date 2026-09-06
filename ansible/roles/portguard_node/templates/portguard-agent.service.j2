@@ -1,0 +1,14 @@
+[Unit]
+Description=PortGuard managed node (agent)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/portguard-agent/portguard agent -port {{ portguard_agent_port }} -token {{ portguard_agent_token }} -role {{ portguard_node_role }}
+Restart=always
+RestartSec=3
+LimitNOFILE=1000000
+
+[Install]
+WantedBy=multi-user.target

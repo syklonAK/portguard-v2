@@ -1,0 +1,20 @@
+---
+# service.yml — manage services through the panel (audited, RBAC-checked):
+#
+#   # restart nginx everywhere (rendered by PortGuard)
+#   ansible-playbook service.yml -e portguard_service_target=nginx \
+#     -e portguard_service_action=restart -e portguard_api_user=admin -e portguard_api_pass=...
+#
+#   # full config redeploy (render → validate → backup → apply → rollback-on-fail)
+#   ansible-playbook service.yml -e portguard_service_target=apply \
+#     -e portguard_api_user=admin -e portguard_api_pass=...
+#
+#   # fleet overview
+#   ansible-playbook service.yml -e portguard_service_target=probe \
+#     -e portguard_api_user=admin -e portguard_api_pass=...
+
+- name: PortGuard service operations
+  hosts: portguard_master
+  gather_facts: true
+  roles:
+    - portguard_service

@@ -1,0 +1,6 @@
+---
+- name: Restart portguard-agent
+  ansible.builtin.systemd:
+    name: portguard-agent
+    state: restarted
+    daemon_reload: true

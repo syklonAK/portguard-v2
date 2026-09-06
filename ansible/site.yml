@@ -1,0 +1,19 @@
+---
+# site.yml — install/upgrade everything in one command:
+#
+#   ansible-playbook site.yml
+#   ansible-playbook site.yml -e portguard_agent_token=...   # with node onboarding
+#
+# After the run: open http://MASTER:8080, create the owner account, then
+# add each node (host/port/token) under Servers → Add server.
+
+- name: PortGuard control plane (master)
+  hosts: portguard_master
+  roles:
+    - portguard_panel
+
+- name: PortGuard managed nodes (agents)
+  hosts: portguard_nodes
+  roles:
+    - portguard_node
+  when: portguard_agent_token | default('') | length > 0

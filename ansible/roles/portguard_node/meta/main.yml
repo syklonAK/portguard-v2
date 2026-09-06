@@ -1,0 +1,10 @@
+galaxy_info:
+  author: PortGuard
+  description: Deploy PortGuard agents on managed nodes (no panel install)
+  license: MIT
+  min_ansible_version: "2.12"
+  platforms:
+    - name: Ubuntu
+      versions: ["focal", "jammy", "noble"]
+
+dependencies: []

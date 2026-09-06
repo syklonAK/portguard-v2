@@ -1,0 +1,7 @@
+galaxy_info:
+  author: PortGuard
+  description: Manage PortGuard-managed services (nginx/haproxy/panel/agents) via the panel API
+  license: MIT
+  min_ansible_version: "2.12"
+
+dependencies: []

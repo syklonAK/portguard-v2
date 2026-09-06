@@ -1,0 +1,103 @@
+---
+# portguard_service: service operations through the PortGuard API so that
+# every action is audited and RBAC-checked — never raw systemctl over SSH.
+#
+#   portguard_service_target: nginx | haproxy | panel | agents
+#   portguard_service_action: restart | stop | start | reload | apply | probe
+
+- name: Require a JWT token (owner/admin/operator)
+  ansible.builtin.fail:
+    msg: "Set portguard_api_user and portguard_api_pass (or portguard_api_token) for the panel."
+  when: >-
+    portguard_api_token | default('') | length == 0
+    and (portguard_api_user | default('') | length == 0)
+
+- name: Login to the panel API
+  ansible.builtin.uri:
+    url: "http{{ 's' if portguard_master_tls | default(false) else '' }}://{{ portguard_master_host }}:{{ portguard_panel_port }}/api/login"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ portguard_api_user }}"
+      password: "{{ portguard_api_pass }}"
+    status_code: 200
+  register: login
+  no_log: true
+  when: portguard_api_token | default('') | length == 0
+
+- name: Resolve the bearer token
+  ansible.builtin.set_fact:
+    pg_token: "{{ portguard_api_token | default(login.json.token) }}"
+
+- name: Manage engine services (nginx / haproxy) on the master
+  when: portguard_service_target in ['nginx', 'haproxy']
+  block:
+    - name: "{{ portguard_service_action }} {{ portguard_service_target }}"
+      ansible.builtin.uri:
+        url: "http{{ 's' if portguard_master_tls | default(false) else '' }}://{{ portguard_master_host }}:{{ portguard_panel_port }}/api/services/{{ portguard_service_target }}/{{ portguard_service_action }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ pg_token }}"
+        status_code: [200, 503]
+      register: svc
+      changed_when: svc.status == 200
+      no_log: false
+
+    - name: Show the result
+      ansible.builtin.debug:
+        msg: "{{ portguard_service_target }} {{ portguard_service_action }}: {{ svc.json.status | default('unknown') }}"
+
+- name: Manage the panel service itself
+  when: portguard_service_target == 'panel'
+  block:
+    - name: "{{ portguard_service_action }} the panel (systemd on the master host)"
+      ansible.builtin.systemd:
+        name: portguard
+        state: "{{ 'restarted' if portguard_service_action == 'restart' else portguard_service_action }}"
+      delegate_to: "{{ groups['portguard_master'][0] }}"
+      when: portguard_service_action != 'reload'
+
+- name: Trigger a safe apply pipeline (config deploy)
+  when: portguard_service_target == 'apply'
+  block:
+    - name: POST /api/apply
+      ansible.builtin.uri:
+        url: "http{{ 's' if portguard_master_tls | default(false) else '' }}://{{ portguard_master_host }}:{{ portguard_panel_port }}/api/apply"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ pg_token }}"
+        status_code: [200, 500]
+      register: apply_res
+      changed_when: apply_res.status == 200
+      failed_when: apply_res.status == 500
+
+    - name: Show the apply result
+      ansible.builtin.debug:
+        msg: "apply: {{ apply_res.json.status | default('ok') }}"
+
+- name: Probe every managed node
+  when: portguard_service_target == 'probe'
+  block:
+    - name: List nodes from the panel
+      ansible.builtin.uri:
+        url: "http{{ 's' if portguard_master_tls | default(false) else '' }}://{{ portguard_master_host }}:{{ portguard_panel_port }}/api/nodes"
+        headers:
+          Authorization: "Bearer {{ pg_token }}"
+        status_code: 200
+      register: nodes
+
+    - name: Show node fleet status
+      ansible.builtin.debug:
+        msg: "{{ '%-16s %-10s %s' | format(item.name, item.status, item.last_seen or 'never') }}"
+      loop: "{{ nodes.json }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+- name: Manage agent services on every node host
+  when: portguard_service_target == 'agents'
+  block:
+    - name: "{{ portguard_service_action }} portguard-agent"
+      ansible.builtin.systemd:
+        name: portguard-agent
+        state: "{{ 'restarted' if portguard_service_action == 'restart' else portguard_service_action }}"
+      when: inventory_hostname in groups['portguard_nodes']

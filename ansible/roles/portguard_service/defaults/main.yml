@@ -1,0 +1,8 @@
+---
+portguard_service_target: probe # nginx | haproxy | panel | agents | apply | probe
+portguard_service_action: restart # restart | stop | start | reload
+portguard_api_user: ""
+portguard_api_pass: ""
+portguard_api_token: "" # or pass a JWT directly
+portguard_panel_port: 8080
+portguard_master_host: "{{ groups['portguard_master'][0] }}"

@@ -1,0 +1,17 @@
+---
+# Disable the stock nginx/haproxy services: PortGuard owns their configs
+# from the panel afterwards. Flushing via handlers keeps this idempotent
+# (only fires when the packages or default site actually changed).
+- name: Stop stock nginx and haproxy
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: [nginx, haproxy]
+  failed_when: false
+
+- name: Restart portguard
+  ansible.builtin.systemd:
+    name: portguard
+    state: restarted
+    daemon_reload: true

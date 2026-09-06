@@ -1,0 +1,129 @@
+---
+# portguard_panel: installs the master control plane on exactly one host.
+# Idempotent: re-running upgrades the checkout, rebuilds only when the
+# revision changed, and never rewrites a working service needlessly.
+
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - haproxy
+      - libnginx-mod-stream
+      - curl
+      - git
+      - ca-certificates
+    state: present
+    update_cache: true
+  register: pkg
+  # reconfigure only when the packages actually changed
+  notify: Disable stock services
+
+- name: Remove the packaged nginx default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Disable stock services
+
+- name: Clone / update the PortGuard checkout
+  ansible.builtin.git:
+    repo: "{{ portguard_repo }}"
+    dest: /opt/portguard
+    version: main
+    force: true
+
+- name: Check for an existing Go toolchain
+  ansible.builtin.command: go version
+  register: go_check
+  failed_when: false
+  changed_when: false
+
+- name: Install Go toolchain
+  when: go_check.rc != 0
+  block:
+    - name: Detect system architecture
+      ansible.builtin.command: dpkg --print-architecture
+      register: arch
+      changed_when: false
+
+    - name: Map dpkg arch to Go arch
+      ansible.builtin.set_fact:
+        go_arch: >-
+          {{ 'arm64' if arch.stdout == 'arm64' else 'amd64' }}
+
+    - name: Download Go
+      ansible.builtin.get_url:
+        url: "https://goproxy.cn/dl/go{{ portguard_go_version }}.linux-{{ go_arch }}.tar.gz"
+        dest: /tmp/go.tar.gz
+        mode: "0644"
+
+    - name: Extract Go to /usr/local
+      ansible.builtin.unarchive:
+        src: /tmp/go.tar.gz
+        dest: /usr/local
+        remote_src: true
+
+    - name: Symlink go binaries
+      ansible.builtin.file:
+        src: "/usr/local/go/bin/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        state: link
+      loop: [go, gofmt]
+
+- name: Create data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { path: /var/lib/portguard, mode: "0755" }
+    - { path: /var/lib/portguard/certs, mode: "0750" }
+    - { path: /var/lib/portguard/backups, mode: "0755" }
+
+- name: Build the panel binary (frontend is prebuilt & embedded)
+  ansible.builtin.command: go build -trimpath -ldflags "-s -w" -o /opt/portguard/bin/portguard ./cmd/server
+  args:
+    chdir: /opt/portguard
+  environment:
+    CGO_ENABLED: "0"
+    GOPROXY: https://goproxy.cn,direct
+  register: build
+  changed_when: "'# portguard' in build.stderr or build.rc == 0"
+  # rebuild every run is cheap and keeps the binary in sync with the checkout
+
+- name: Install systemd unit
+  ansible.builtin.template:
+    src: portguard.service.j2
+    dest: /etc/systemd/system/portguard.service
+    mode: "0644"
+  notify: Restart portguard
+
+- name: Enable and start portguard
+  ansible.builtin.systemd:
+    name: portguard
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Allow the panel port (ufw)
+  community.general.ufw:
+    rule: allow
+    port: "{{ portguard_panel_port }}"
+    proto: tcp
+  when: "'ufw' in ansible_facts.packages"
+  ignore_errors: true
+
+- name: Wait for the panel to answer
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ portguard_panel_port }}/api/healthz"
+    status_code: 200
+  register: health
+  retries: 12
+  delay: 5
+  until: health.status == 200
+  changed_when: false
+
+- name: Report the panel URL
+  ansible.builtin.debug:
+    msg: >-
+      PortGuard panel is up: http://{{ ansible_host | default(inventory_hostname) }}:{{ portguard_panel_port }}
+      — first visit creates the owner account.

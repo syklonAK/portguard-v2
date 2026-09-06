@@ -1,0 +1,4 @@
+---
+portguard_repo: https://github.com/syklonAK/portguard-v2
+portguard_panel_port: 8080
+portguard_go_version: 1.24.5

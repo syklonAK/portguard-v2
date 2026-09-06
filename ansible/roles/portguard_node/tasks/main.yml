@@ -1,0 +1,92 @@
+---
+# portguard_node: turns each host into a managed PortGuard agent.
+# The binary is downloaded from the master (same version by construction)
+# using the master's node token — no Go, no GitHub, no panel on the node.
+
+- name: Ensure curl exists
+  ansible.builtin.apt:
+    name: curl
+    state: present
+    update_cache: true
+
+- name: Fail when no agent token is provided
+  ansible.builtin.fail:
+    msg: >-
+      Set portguard_agent_token (e.g. -e portguard_agent_token=...).
+      Generate one in the panel: Servers → Deploy new node.
+  when: portguard_agent_token | default('') | length == 0
+  run_once: false
+
+- name: Create the agent directory
+  ansible.builtin.file:
+    path: /opt/portguard-agent
+    state: directory
+    mode: "0755"
+
+- name: Download the agent binary from the master
+  ansible.builtin.get_url:
+    url: "http{{ 's' if portguard_master_tls | default(false) else '' }}://{{ portguard_master_host }}:{{ portguard_panel_port }}/api/node/binary"
+    headers:
+      Authorization: "Bearer {{ portguard_agent_token }}"
+    dest: /opt/portguard-agent/portguard.new
+    mode: "0755"
+  register: dl
+
+- name: Smoke-test the downloaded binary (agent mode)
+  ansible.builtin.command: /opt/portguard-agent/portguard.new agent -help
+  register: smoke
+  failed_when: smoke.rc not in [0, 1, 2]
+  changed_when: false
+  when: dl.changed
+
+- name: Promote the binary
+  ansible.builtin.command: mv /opt/portguard-agent/portguard.new /opt/portguard-agent/portguard
+  when: dl.changed
+  changed_when: true
+
+- name: Create the data directory
+  ansible.builtin.file:
+    path: /var/lib/portguard
+    state: directory
+    mode: "0755"
+
+- name: Install the agent systemd unit
+  ansible.builtin.template:
+    src: portguard-agent.service.j2
+    dest: /etc/systemd/system/portguard-agent.service
+    mode: "0644"
+  notify: Restart portguard-agent
+
+- name: Enable and start the agent
+  ansible.builtin.systemd:
+    name: portguard-agent
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Allow the agent port from the master only (ufw)
+  community.general.ufw:
+    rule: allow
+    src: "{{ portguard_master_ip }}"
+    port: "{{ portguard_agent_port }}"
+    proto: tcp
+  when: "'ufw' in ansible_facts.packages"
+  ignore_errors: true
+
+- name: Wait for the agent to answer
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ portguard_agent_port }}/api/node/ping"
+    status_code: 401 # token required = agent alive
+  register: agent_health
+  retries: 10
+  delay: 3
+  until: agent_health.status == 401
+  changed_when: false
+
+- name: Report registration data
+  ansible.builtin.debug:
+    msg: >-
+      Agent up on {{ inventory_hostname }}:{{ portguard_agent_port }}
+      (role={{ portguard_node_role }}) — add it in the panel:
+      Servers → Add server, host {{ ansible_host | default(inventory_hostname) }},
+      port {{ portguard_agent_port }}, same token.

@@ -1,0 +1,10 @@
+galaxy_info:
+  author: PortGuard
+  description: Install the PortGuard control-plane panel (master)
+  license: MIT
+  min_ansible_version: "2.12"
+  platforms:
+    - name: Ubuntu
+      versions: ["focal", "jammy", "noble"]
+
+dependencies: []

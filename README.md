@@ -108,6 +108,20 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/syklonAK/portguard-
 sudo bash /opt/portguard/deploy/install.sh
 ```
 
+### نصب یکجای Fleet با Ansible
+
+```bash
+cd portguard/ansible
+# inventory/hosts.ini را ویرایش کنید: یک [portguard_master] + [portguard_nodes]
+ansible-playbook site.yml --limit portguard_master            # نصب پنل
+ansible-playbook site.yml --limit portguard_nodes \
+  -e portguard_agent_token=...                                # دیپلوی همه agent ها
+ansible-playbook service.yml -e portguard_service_target=apply \
+  -e portguard_api_user=admin -e portguard_api_pass=...       # اعمال کانفیگ از طریق API
+```
+
+راهنمای کامل: [ansible/README.md](ansible/README.md)
+
 ### افزودن نود مدیریت‌شده (بدون نصب پنل روی نود!)
 
 ```

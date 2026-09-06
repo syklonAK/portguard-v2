@@ -60,6 +60,20 @@ From an existing checkout:
 sudo bash /opt/portguard/deploy/install.sh
 ```
 
+### Fleet install with Ansible (one command, many servers)
+
+```bash
+cd portguard/ansible
+# edit inventory/hosts.ini: one [portguard_master] + your [portguard_nodes]
+ansible-playbook site.yml --limit portguard_master            # install the panel
+ansible-playbook site.yml --limit portguard_nodes \
+  -e portguard_agent_token=...                                # onboard every agent
+ansible-playbook service.yml -e portguard_service_target=apply \
+  -e portguard_api_user=admin -e portguard_api_pass=...       # deploy configs via the API
+```
+
+See [ansible/README.md](ansible/README.md) for the full guide (roles, service management through the audited panel API, upgrades).
+
 ### Add a managed node (no panel install on the node!)
 
 1. In the master panel: **Servers → Deploy new node** — a token and a one-liner are generated for you.

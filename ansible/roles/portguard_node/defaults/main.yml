@@ -1,0 +1,6 @@
+---
+portguard_master_host: "{{ groups['portguard_master'][0] }}"
+portguard_agent_port: 8081
+portguard_node_role: generic
+portguard_agent_token: "" # required — from Servers → Deploy new node
+portguard_master_ip: "{{ hostvars[groups['portguard_master'][0]].ansible_host | default(groups['portguard_master'][0]) }}"
