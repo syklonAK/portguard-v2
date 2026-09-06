@@ -33,7 +33,7 @@ type pasarguardClient struct {
 	password   string
 	skipTLS    bool
 	onNewToken func(string)
-	http       *http.Client
+	onSkipTLS  func()
 }
 
 func newPasarGuardClient(baseURL, token string) *pasarguardClient {
@@ -62,7 +62,17 @@ func (c *pasarguardClient) login() error {
 	form := url.Values{"username": {c.username}, "password": {c.password}}
 	resp, err := c.transport().PostForm(c.baseURL+"/api/admin/token", form)
 	if err != nil {
-		return err
+		if !c.skipTLS && isTLSVerifyError(err) {
+			// self-signed panel: accept it and remember the decision
+			c.skipTLS = true
+			if c.onSkipTLS != nil {
+				c.onSkipTLS()
+			}
+			resp, err = c.transport().PostForm(c.baseURL+"/api/admin/token", form)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	defer resp.Body.Close()
 	var out struct {
@@ -96,6 +106,9 @@ func (c *pasarguardClient) get(path string, out any) error {
 	if isTLSVerifyError(err) && !c.skipTLS {
 		// self-signed panel: retry once without verification
 		c.skipTLS = true
+		if c.onSkipTLS != nil {
+			c.onSkipTLS()
+		}
 		status, err = c.attempt(path, out)
 	}
 	if err != nil && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
@@ -329,6 +342,7 @@ func (a *App) SyncPasarGuardUsers() error {
 	cli.password = a.St.GetSettingOr("pasarguard_password", "")
 	cli.skipTLS = a.St.GetSettingOr("pasarguard_skip_tls", "") == "true"
 	cli.onNewToken = func(tok string) { _ = a.St.SetSetting("pasarguard_token", tok) }
+	cli.onSkipTLS = func() { _ = a.St.SetSetting("pasarguard_skip_tls", "true") }
 	if cli.token == "" && cli.username != "" {
 		if err := cli.login(); err != nil {
 			return err
