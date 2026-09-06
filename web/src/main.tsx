@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { ToastProvider } from './components/toast'
 import { api, getToken } from './api'
-import 'bootstrap/dist/css/bootstrap.min.css'
+import './bs.scss'
 import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 import './index.css'
 
