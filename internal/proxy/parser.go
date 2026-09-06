@@ -26,7 +26,8 @@ type GlobalCfg struct {
 	RawLines     []string         `json:"raw_lines"`
 	Maxconn      string           `json:"maxconn,omitempty"`
 	StatsSocket  string           `json:"stats_socket,omitempty"`
-	User, Group  string           `json:"user,omitempty"`
+	User         string           `json:"user,omitempty"`
+	Group        string           `json:"group,omitempty"`
 	Nbthread     string           `json:"nbthread,omitempty"`
 }
 
