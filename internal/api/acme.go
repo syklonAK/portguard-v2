@@ -414,7 +414,21 @@ func (a *App) runAcmeSh(req *issueRequest) (string, string, error) {
 	if req.Method == "dns01" {
 		p = acmeProviderByID(req.DNS)
 	}
-	args := []string{"--issue", "--server", acmeCABase}
+	primary := req.Domains[0]
+	for _, d := range req.Domains {
+		if !strings.HasPrefix(d, "*.") {
+			primary = d
+			break
+		}
+	}
+	// acme.sh registers the ACME account on first use; the installer default
+	// (portguard@localhost) is rejected by Let's Encrypt as an invalid
+	// contact, so always pass a syntactically valid account email
+	email := req.Email
+	if email == "" {
+		email = "portguard@" + primary
+	}
+	args := []string{"--issue", "--server", acmeCABase, "--accountemail", email}
 	for _, d := range req.Domains {
 		args = append(args, "-d", d)
 	}
@@ -432,7 +446,6 @@ func (a *App) runAcmeSh(req *issueRequest) (string, string, error) {
 	}
 
 	// acme.sh writes to ~/.acme.sh/<primary>[_ecc]/
-	primary := req.Domains[0]
 	candidates := []string{primary + "_ecc", primary}
 	var certFile, keyFile string
 	for _, c := range candidates {
