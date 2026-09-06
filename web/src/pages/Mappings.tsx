@@ -138,10 +138,14 @@ function RouteRulesEditor({ rules, onChange }: { rules: RouteRule[]; onChange: (
                   <div className="flex flex-1 flex-wrap gap-1.5">
                     {r.targets.map((t, ti) => (
                       <span key={ti} className="flex items-center gap-1">
-                        <Input className="h-8 w-28 font-mono" value={t.host}
-                          onChange={(e) => update(i, { targets: r.targets.map((x, xi) => (xi === ti ? { ...x, host: e.target.value } : x)) })} />
-                        <Input className="h-8 w-16" type="number" value={t.port}
-                          onChange={(e) => update(i, { targets: r.targets.map((x, xi) => (xi === ti ? { ...x, port: parseInt(e.target.value, 10) || 0 } : x)) })} />
+                        <div className="w-28 shrink-0">
+                          <Input className="h-8 font-mono" value={t.host}
+                            onChange={(e) => update(i, { targets: r.targets.map((x, xi) => (xi === ti ? { ...x, host: e.target.value } : x)) })} />
+                        </div>
+                        <div className="w-16 shrink-0">
+                          <Input className="h-8" type="number" value={t.port}
+                            onChange={(e) => update(i, { targets: r.targets.map((x, xi) => (xi === ti ? { ...x, port: parseInt(e.target.value, 10) || 0 } : x)) })} />
+                        </div>
                         {r.targets.length > 1 && (
                           <Button variant="ghost" size="sm" className="text-red-500"
                             onClick={() => update(i, { targets: r.targets.filter((_, xi) => xi !== ti) })}>
@@ -735,10 +739,15 @@ export default function Mappings() {
                     <div className="space-y-2">
                       {(draft.targets || []).map((t, i) => (
                         <div key={i} className="flex items-center gap-2">
-                          <Input className="flex-1" placeholder="host" value={t.host} onChange={(e) => setTarget(i, { host: e.target.value })} />
-                          <Input className="w-24" type="number" placeholder="port" value={t.port || ''} onChange={(e) => setTarget(i, { port: parseInt(e.target.value, 10) })} />
+                          <Input className="min-w-0 flex-1" placeholder="host" value={t.host} onChange={(e) => setTarget(i, { host: e.target.value })} />
+                          {/* fixed widths live on wrapper divs: the Input base is w-full and a w-24 sibling loses the cascade fight */}
+                          <div className="w-24 shrink-0">
+                            <Input type="number" placeholder="port" value={t.port || ''} onChange={(e) => setTarget(i, { port: parseInt(e.target.value, 10) })} />
+                          </div>
                           {(draft.engine === 'nginx' || isL7) && (
-                            <Input className="w-20" type="number" placeholder="weight" value={t.weight ?? ''} onChange={(e) => setTarget(i, { weight: parseInt(e.target.value, 10) || undefined })} />
+                            <div className="w-20 shrink-0">
+                              <Input type="number" placeholder="weight" value={t.weight ?? ''} onChange={(e) => setTarget(i, { weight: parseInt(e.target.value, 10) || undefined })} />
+                            </div>
                           )}
                           <label className="flex items-center gap-1 text-2xs text-slate-500">
                             <input type="checkbox" checked={!!t.backup} onChange={(e) => setTarget(i, { backup: e.target.checked })} /> backup

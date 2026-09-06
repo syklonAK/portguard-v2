@@ -146,7 +146,9 @@ export default function Diagnostics() {
             <div className="flex flex-wrap items-center gap-5">
               {(check === 'http' || check === 'backend') && (
                 <Field label="Path">
-                  <Input className="w-40" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/" />
+                  <div className="w-40">
+                    <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/" />
+                  </div>
                 </Field>
               )}
               {(check === 'http' || check === 'backend') && (
