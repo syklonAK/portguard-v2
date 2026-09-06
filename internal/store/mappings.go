@@ -90,7 +90,7 @@ func (s *Store) ReplacePorts(entries []PortEntry) error {
 	}
 	const us = "\x1f" // unit separator: process names may contain any byte
 	rowKey := func(r portRow) string {
-		return fmt.Sprintf("%d%s%s%s%s%s%d%s%s%s%s%d%s%d", r.port, us, r.proto, us, r.ip, us, r.proc, us, r.pid, us, r.user, us, r.class, us, r.managed, us, r.self)
+		return fmt.Sprintf("%d%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%d", r.port, us, r.proto, us, r.ip, us, r.proc, us, r.pid, us, r.user, us, r.class, us, r.managed, us, r.self)
 	}
 	newRows := map[string]int{} // key -> remaining copies to match
 	for _, p := range entries {
