@@ -59,6 +59,25 @@ export default function Servers() {
 
   const genToken = () => crypto.randomUUID().replace(/-/g, '')
   const [deployToken, setDeployToken] = useState('')
+  const [deploySaving, setDeploySaving] = useState(false)
+
+  // opening the deploy modal mints a token AND saves it as this panel's
+  // node_token — the installer downloads the binary with this exact token,
+  // so an unsaved (or stale) token turns every node install into a 401
+  const openDeploy = async () => {
+    setDeployModal(true)
+    const t = genToken()
+    setDeployToken(t)
+    setDeploySaving(true)
+    try {
+      await api.putNodeSelf({ token: t })
+      push('success', 'Node token generated and saved — it is already active.')
+    } catch (e: any) {
+      push('error', `could not save the node token: ${e.message} — copy the token into "This panel → Node API token" manually`)
+    } finally {
+      setDeploySaving(false)
+    }
+  }
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['nodes'] })
 
@@ -238,7 +257,7 @@ export default function Servers() {
           <Button variant="secondary" onClick={() => { nodes.refetch(); selfInfo.refetch() }}>
             <RefreshCw className="h-4 w-4" /> Refresh
           </Button>
-          <Button variant="success" onClick={() => { setDeployToken(genToken()); setDeployModal(true) }}>
+          <Button variant="success" onClick={openDeploy} disabled={deploySaving}>
             <Rocket className="h-4 w-4" /> Deploy new node
           </Button>
           <Button onClick={() => { setDraft(emptyNode()); setTokenDraft(''); setModal('create') }}>
@@ -478,7 +497,20 @@ export default function Servers() {
           <Field label="1. Node token (generated — copy it)">
             <div className="flex gap-2">
               <Input readOnly className="font-mono" value={deployToken} />
-              <Button variant="secondary" onClick={() => { setDeployToken(genToken()) }} title="Regenerate">
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  const t = genToken()
+                  setDeployToken(t)
+                  try {
+                    await api.putNodeSelf({ token: t })
+                    push('success', 'New token saved — re-run the one-liner on nodes that used the old one.')
+                  } catch (e: any) {
+                    push('error', e.message)
+                  }
+                }}
+                title="Regenerate & save"
+              >
                 <KeyRound className="h-4 w-4" />
               </Button>
             </div>
@@ -497,9 +529,10 @@ export default function Servers() {
             />
           </Field>
           <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-2xs leading-relaxed text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
-            The agent listens on port <b>8081</b> (override with <code>-port</code>). Give it a friendly name with
-            <code className="mx-1">-name mynode</code>. Re-running the command on the same server just refreshes it.
-            The binary download and the registration are both protected by this same token.
+            The token above was <b>already saved</b> to this panel — the installer's binary download and
+            self-registration authenticate with it. No inbound port is opened on the node (reverse mode);
+            give it a friendly name with <code className="mx-1">-name mynode</code>. Re-running the command
+            on the same server just refreshes it.
           </div>
         </div>
       </Modal>
