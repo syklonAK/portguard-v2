@@ -179,7 +179,7 @@ export default function Settings() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Settings</h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">Engine paths, monitoring intervals and account</p>
+        <p className="text-xs text-muted-foreground">Engine paths, monitoring intervals and account</p>
       </div>
 
       <Card>
@@ -217,7 +217,7 @@ export default function Settings() {
               if (f) importFile.mutate(f)
             }}
           />
-          <p className="w-full text-2xs text-slate-400">
+          <p className="w-full text-2xs text-muted-foreground">
             Imported mappings are validated first (name/port conflicts are skipped or reported) and saved without applying — press Apply on the Mappings page to activate.
           </p>
         </div>
@@ -234,7 +234,7 @@ export default function Settings() {
           </Field>
           <label className="flex items-center gap-2.5 text-sm">
             <Toggle checked={autoApply} onChange={setAutoApply} />
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            <span className="text-xs font-medium text-muted-foreground">
               Auto-apply configuration after every mapping change
             </span>
           </label>
@@ -251,7 +251,7 @@ export default function Settings() {
             <Input type="number" value={socksPort} onChange={(e) => setSocksPort(e.target.value)} />
           </Field>
         </div>
-        <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
+        <div className="border-t border-border px-5 py-4">
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save settings'}
           </Button>
@@ -265,7 +265,7 @@ export default function Settings() {
         />
         <div className="space-y-3 p-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="flex items-center gap-2 pb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+            <label className="flex items-center gap-2 pb-1.5 text-xs font-medium text-muted-foreground">
               <Toggle checked={alertsEnabled} onChange={setAlertsEnabled} /> Enable alerting
             </label>
             <Field label="Cooldown (minutes, 1-1440)" hint="min gap between repeat alerts of the same event">
@@ -309,19 +309,19 @@ export default function Settings() {
           }
         />
         {discovered && discovered.length > 0 && (
-          <div className="space-y-2 border-b border-slate-200 px-5 py-3 dark:border-slate-800">
-            <p className="text-2xs uppercase tracking-wide text-slate-400">Detected on this host</p>
+          <div className="space-y-2 border-b border-border px-5 py-3">
+            <p className="text-2xs uppercase tracking-wide text-muted-foreground">Detected on this host</p>
             {discovered.map((p) => (
-              <div key={p.source + p.name} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
+              <div key={p.source + p.name} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">{p.kind}</span>
-                  <span className="text-slate-400">·</span>
+                  <span className="text-muted-foreground">·</span>
                   <span className="font-mono">{p.url || p.name}</span>
-                  <span className={`rounded px-1.5 py-0.5 text-2xs ${p.alive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+                  <span className={`rounded px-1.5 py-0.5 text-2xs ${p.alive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-mutedslate text-muted-foreground'}`}>
                     {p.alive ? 'API alive' : 'not responding'}
                   </span>
-                  {p.env_has_password && <span className="text-2xs text-indigo-500">credentials in .env</span>}
-                  {p.note && <span className="text-2xs text-slate-400">{p.note}</span>}
+                  {p.env_has_password && <span className="text-2xs text-primary">credentials in .env</span>}
+                  {p.note && <span className="text-2xs text-muted-foreground">{p.note}</span>}
                 </div>
                 <Button size="sm" variant="secondary" disabled={!p.alive} onClick={() => applyDiscovered(p)}>
                   Apply
@@ -349,7 +349,7 @@ export default function Settings() {
           >
             <Input type="password" value={pgToken} onChange={(e) => setPgToken(e.target.value)} placeholder="••••••" />
           </Field>
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Toggle checked={rlEnabled} onChange={setRlEnabled} />
             Enable bandwidth limiting (auto sync + push)
           </label>
@@ -369,7 +369,7 @@ export default function Settings() {
             <RefreshCw className={`h-4 w-4 ${selfUpdate.isPending ? 'animate-spin' : ''}`} />
             {selfUpdate.isPending ? 'Starting…' : 'Check & update now'}
           </Button>
-          <p className="w-full text-2xs text-slate-400">
+          <p className="w-full text-2xs text-muted-foreground">
             Runs <code>deploy/update.sh</code>: git pull → rebuild binary (embedded frontend, no Node needed) → restart the systemd service.
             The panel goes down for a few seconds and comes back on the same port.
           </p>
@@ -389,7 +389,7 @@ export default function Settings() {
             <Input type="password" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
           </Field>
         </div>
-        <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
+        <div className="border-t border-border px-5 py-4">
           <Button
             variant="secondary"
             onClick={() => {

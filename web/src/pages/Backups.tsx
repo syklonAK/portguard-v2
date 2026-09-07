@@ -14,23 +14,23 @@ function DiffView({ diffs }: { diffs: BackupDiffT[] }) {
         <div key={i}>
           <div className="mb-1.5 flex items-center gap-2">
             <Badge color={d.engine === 'nginx' ? 'green' : 'purple'}>{d.engine || 'unknown'}</Badge>
-            <span className="font-mono text-xs text-slate-500">{d.live_path}</span>
+            <span className="font-mono text-xs text-muted-foreground">{d.live_path}</span>
             {d.same ? <Badge color="slate">identical to live</Badge> : <Badge color="amber">differs from live</Badge>}
           </div>
           {!d.same && (
-            <pre className="max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-2xs leading-relaxed">
+            <pre className="max-h-64 overflow-auto rounded-lg bg-popover p-3 font-mono text-2xs leading-relaxed">
               {d.diff.split('\n').map((line, j) => (
                 <div key={j} className={
                   line.startsWith('+') ? 'text-emerald-400' :
                   line.startsWith('-') ? 'text-red-400' :
-                  line.startsWith('@@') ? 'text-sky-400' : 'text-slate-400'
+                  line.startsWith('@@') ? 'text-sky-400' : 'text-muted-foreground'
                 }>{line}</div>
               ))}
             </pre>
           )}
         </div>
       ))}
-      {anySame && <p className="text-xs text-slate-400">Every file in this backup matches the current live configuration.</p>}
+      {anySame && <p className="text-xs text-muted-foreground">Every file in this backup matches the current live configuration.</p>}
     </div>
   )
 }
@@ -77,7 +77,7 @@ export default function Backups() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Config Backups</h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-muted-foreground">
           A timestamped snapshot of every config file is taken before each Apply. Restore is validated with the engine
           binary first and keeps a safety copy of the current state.
         </p>
@@ -93,7 +93,7 @@ export default function Backups() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-medium">Timestamp</th>
                   <th className="px-3 py-2.5 font-medium">Engines</th>
                   <th className="px-3 py-2.5 font-medium">Files</th>
@@ -101,12 +101,12 @@ export default function Backups() {
                   <th className="px-5 py-2.5 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+              <tbody className="divide-y divide-border">
                 {backups.data.map((b) => {
                   const engines = [...new Set(b.files.map((f) => f.engine).filter(Boolean))]
                   const size = b.files.reduce((acc, f) => acc + f.size, 0)
                   return (
-                    <tr key={b.timestamp} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <tr key={b.timestamp} className="hover:bg-muted/60">
                       <td className="px-5 py-3 font-mono text-xs">{b.timestamp}</td>
                       <td className="px-3 py-3">
                         {engines.map((e) => (
@@ -147,7 +147,7 @@ export default function Backups() {
         ) : (
           <div className="space-y-3">
             <DiffView diffs={diffData} />
-            <div className="flex justify-end border-t border-slate-200 pt-3 dark:border-slate-700">
+            <div className="flex justify-end border-t border-border pt-3">
               <Button variant="secondary" onClick={() => setDiffFor(null)}>Close</Button>
             </div>
           </div>

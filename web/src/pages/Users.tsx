@@ -60,7 +60,7 @@ export default function Users() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Users & Roles</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Owner-only. Viewers read; Operators deploy; Admins change configuration; Owners manage users.
           </p>
         </div>
@@ -71,12 +71,12 @@ export default function Users() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {ROLES.map((r) => (
-          <div key={r.value} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+          <div key={r.value} className="rounded-xl border border-border p-3">
             <div className="flex items-center gap-2">
-              <Shield className={`h-4 w-4 ${r.value === 'owner' ? 'text-indigo-500' : 'text-slate-400'}`} />
+              <Shield className={`h-4 w-4 ${r.value === 'owner' ? 'text-primary' : 'text-muted-foreground'}`} />
               <span className="text-xs font-bold">{r.label}</span>
             </div>
-            <p className="mt-1 text-2xs leading-relaxed text-slate-500 dark:text-slate-400">{r.desc}</p>
+            <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">{r.desc}</p>
           </div>
         ))}
       </div>
@@ -91,7 +91,7 @@ export default function Users() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-medium">Username</th>
                   <th className="px-3 py-2.5 font-medium">Role</th>
                   <th className="px-3 py-2.5 font-medium">Created</th>
@@ -99,9 +99,9 @@ export default function Users() {
                   <th className="px-5 py-2.5 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+              <tbody className="divide-y divide-border">
                 {users.data.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <tr key={u.id} className="hover:bg-muted/60">
                     <td className="px-5 py-2.5 font-medium">{u.username}</td>
                     <td className="px-3 py-2.5">
                       <Select
@@ -112,8 +112,8 @@ export default function Users() {
                         {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                       </Select>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500">{new Date(u.created_at).toLocaleDateString()}</td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500">
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
                       {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : '—'}
                     </td>
                     <td className="px-5 py-2.5">
@@ -142,7 +142,7 @@ export default function Users() {
               {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label} — {r.desc}</option>)}
             </Select>
           </Field>
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
             <Button onClick={create} disabled={saving || !draft.username || draft.password.length < 8}>
               {saving ? 'Creating…' : 'Create user'}

@@ -55,7 +55,7 @@ export default function Alerts() {
               </span>
             )}
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Node offline, backend down, certificate expiry and resource thresholds — with dedup + cooldown.
             Channels (Telegram / webhook) are configured in Settings.
           </p>
@@ -83,7 +83,7 @@ export default function Alerts() {
         ) : !list.length ? (
           <Empty message="No alerts yet — everything is quiet." />
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
+          <div className="divide-y divide-border">
             {list.map((a) => (
               <div key={a.id} className={`flex items-start gap-3 px-5 py-3 ${a.acknowledged ? 'opacity-50' : ''}`}>
                 <Badge color={SEV_COLORS[a.severity] || 'slate'}>
@@ -94,8 +94,8 @@ export default function Alerts() {
                     <span className="text-sm font-medium">{a.title}</span>
                     <Badge color="slate">{a.category}</Badge>
                   </div>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{a.detail}</p>
-                  <p className="mt-0.5 text-2xs text-slate-400">
+                  <p className="mt-0.5 text-xs text-muted-foreground">{a.detail}</p>
+                  <p className="mt-0.5 text-2xs text-muted-foreground">
                     {new Date(a.created_at).toLocaleString()}
                     {a.target && <> · target: <span className="font-mono">{a.target}</span></>}
                   </p>

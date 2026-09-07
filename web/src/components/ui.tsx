@@ -10,21 +10,21 @@ export function Button({
   children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success'
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'success'
   size?: 'sm' | 'md'
 }) {
+  // PasarGuard button language: rounded-lg, sm:h-9, active:scale-[0.98],
+  // focus ring on --ring, primary = steel blue
   const base =
-    'pg-press inline-flex items-center justify-center gap-1.5 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
-  const sizes = { sm: 'h-8 px-3 text-xs', md: 'h-9.5 px-4 text-sm' }
+    'pg-press inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium transition-[background-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]'
+  const sizes = { sm: 'h-9 rounded-md px-3 [&>svg]:h-4 [&>svg]:w-4', md: 'h-10 px-4 py-2 [&>svg]:h-4.5 [&>svg]:w-4.5' }
   const variants = {
-    primary:
-      'bg-neutral-900 text-white hover:bg-neutral-700 shadow-sm dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200',
-    secondary:
-      'bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-200 dark:border-neutral-700 dark:hover:bg-neutral-800',
-    danger: 'bg-red-600 text-white hover:bg-red-500 shadow-sm',
-    success:
-      'bg-neutral-900 text-white hover:bg-neutral-700 shadow-sm dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200',
-    ghost: 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
+    primary: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
+    secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+    outline: 'border border-border bg-background hover:bg-accent hover:text-accent-foreground dark:border-input dark:hover:bg-accent/60',
+    danger: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+    success: 'bg-success text-success-foreground shadow-sm hover:bg-success/90',
+    ghost: 'hover:bg-accent hover:text-accent-foreground',
   }
   return (
     <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...props}>
@@ -35,9 +35,7 @@ export function Button({
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div
-      className={`pg-3d rounded-xl border border-neutral-200/80 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900 ${className}`}
-    >
+    <div className={`rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm ${className}`}>
       {children}
     </div>
   )
@@ -45,10 +43,10 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 
 export function CardHeader({ title, desc, right }: { title: string; desc?: string; right?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-neutral-200/80 px-5 py-4 dark:border-neutral-800">
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-border/60 px-6 py-5">
       <div className="min-w-0">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        {desc && <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{desc}</p>}
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+        {desc && <p className="mt-0.5 text-sm text-muted-foreground">{desc}</p>}
       </div>
       {right && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{right}</div>}
     </div>
@@ -56,11 +54,13 @@ export function CardHeader({ title, desc, right }: { title: string; desc?: strin
 }
 
 export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  // PasarGuard input: h-9, bg-input surface, visible border, ring focus
   return (
     <input
-      className={`h-9.5 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm transition-colors placeholder:text-neutral-400
-        focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10
-        dark:border-neutral-700 dark:bg-neutral-900 dark:placeholder:text-neutral-500 dark:focus:border-neutral-300 dark:focus:ring-neutral-100/10 ${className}`}
+      className={`flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm transition-colors
+        placeholder:text-input-placeholder
+        focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
+        disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       {...props}
     />
   )
@@ -69,9 +69,9 @@ export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInpu
 export function Select({ className = '', children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`h-9.5 w-full rounded-lg border border-neutral-200 bg-white px-2.5 text-sm transition-colors
-        focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10
-        dark:border-neutral-700 dark:bg-neutral-900 dark:focus:border-neutral-300 dark:focus:ring-neutral-100/10 ${className}`}
+      className={`flex h-9 w-full rounded-lg border border-border bg-input px-2.5 py-2 text-sm transition-colors
+        focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
+        disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       {...props}
     >
       {children}
@@ -82,9 +82,9 @@ export function Select({ className = '', children, ...props }: SelectHTMLAttribu
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-300">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-foreground">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-2xs text-neutral-400">{hint}</span>}
+      {hint && <span className="mt-1 block text-2xs text-muted-foreground">{hint}</span>}
     </label>
   )
 }
@@ -96,17 +96,18 @@ export function Badge({
   color?: 'slate' | 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'cyan'
   children: ReactNode
 }) {
+  // PasarGuard badge variants: soft tinted chips with explicit borders
   const colors = {
-    slate: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300',
-    green: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    red: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    blue: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200',
-    purple: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-    cyan: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+    slate: 'border-transparent bg-muted text-muted-foreground',
+    green: 'border-green-300 bg-green-100 text-green-800 dark:border-green-700 dark:bg-green-900 dark:text-green-300',
+    red: 'border-red-300 bg-red-100 text-red-800 dark:border-red-700 dark:bg-red-900 dark:text-red-300',
+    amber: 'border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+    blue: 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-300',
+    purple: 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-900 dark:text-violet-300',
+    cyan: 'border-cyan-300 bg-cyan-100 text-cyan-800 dark:border-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
   }
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-medium ${colors[color]}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-0 text-xs font-normal transition-colors ${colors[color]}`}>
       {children}
     </span>
   )
@@ -128,31 +129,27 @@ export function Modal({
   wide?: boolean
 }) {
   if (!open) return null
-  // the overlay never scrolls — the card is clamped to the viewport and only
-  // its body scrolls between the pinned header and footer, so the backdrop
-  // keeps covering the page and actions stay reachable on short viewports.
-  // Portal to <body>: pages animate in with transforms (.pg-page fade-up),
-  // and a transformed ancestor becomes the containing block for fixed children,
-  // which would shrink the overlay to the page container instead of the
-  // viewport. pg-modal-* hooks let index.css squeeze the chrome in compact
-  // mode (h <= 480px): less padding, full-width layout, shorter action buttons.
+  // PasarGuard dialog: centered fixed card over black/50 + backdrop-blur-sm.
+  // Portal to <body> so page animations can't trap the fixed positioning.
+  // The card is clamped to the viewport and only its body scrolls between
+  // the pinned header and footer; pg-modal-* hooks compact it on short screens.
   return createPortal(
     <div className="pg-modal-bg fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="pg-modal-wrap short:items-stretch relative flex h-full items-center justify-center p-4 sm:p-6">
         <div
           className={`pg-modal-card short:max-w-5xl short:rounded-xl flex max-h-full w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} flex-col rounded-xl border
-            border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900`}
+            border-border bg-background shadow-lg`}
         >
-          <div className="pg-modal-header flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900 short:py-2">
-            <h2 className="truncate text-sm font-semibold">{title}</h2>
-            <button onClick={onClose} className="pg-press shrink-0 rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800">
+          <div className="pg-modal-header flex shrink-0 items-center justify-between border-b border-border px-6 py-4 short:py-2">
+            <h2 className="truncate text-lg leading-tight font-semibold tracking-tight short:text-sm">{title}</h2>
+            <button onClick={onClose} className="pg-press shrink-0 cursor-pointer rounded-sm p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="pg-modal-body min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+          <div className="pg-modal-body min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
           {footer && (
-            <div className="pg-modal-footer shrink-0 rounded-b-xl border-t border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="pg-modal-footer shrink-0 rounded-b-xl border-t border-border bg-card px-6 py-4">
               {footer}
             </div>
           )}
@@ -165,7 +162,7 @@ export function Modal({
 
 export function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
   return (
-    <svg className={`animate-spin text-neutral-500 dark:text-neutral-300 ${className}`} viewBox="0 0 24 24" fill="none">
+    <svg className={`animate-spin text-muted-foreground ${className}`} viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
     </svg>
@@ -183,18 +180,25 @@ export function StatusDot({ status }: { status: 'up' | 'down' | 'unknown' | 'ok'
 }
 
 export function Empty({ message }: { message: string }) {
-  return <div className="px-5 py-12 text-center text-sm text-neutral-400 short:py-8 short:text-xs">{message}</div>
+  return <div className="px-6 py-12 text-center text-sm text-muted-foreground short:py-8 short:text-xs">{message}</div>
 }
 
 export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  // PasarGuard switch: h-5 w-9, checked = bg-primary
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`pg-press relative h-5.5 w-10 rounded-full transition-colors ${checked ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-300 dark:bg-neutral-600'}`}
+      className={`pg-press inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none ${
+        checked ? 'bg-primary' : 'bg-input'
+      }`}
     >
       <span
-        className={`absolute top-0.5 h-4.5 w-4.5 rounded-full shadow transition-all ${checked ? 'left-5 bg-white dark:bg-neutral-900' : 'left-0.5 bg-white dark:bg-neutral-300'}`}
+        className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow transition-transform ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
       />
     </button>
   )
@@ -211,8 +215,9 @@ export function Tabs({
   active: string
   onChange: (id: string) => void
 }) {
+  // PasarGuard TabsList: muted pill container, active tab lifts with bg-background
   return (
-    <div className="flex gap-1 rounded-xl border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-800/60 short:gap-0.5 short:rounded-lg short:p-0.5">
+    <div className="flex gap-1 rounded-lg bg-muted p-1 text-muted-foreground short:rounded-md short:p-0.5">
       {tabs.map((t) => {
         const Icon = t.icon
         return (
@@ -220,10 +225,10 @@ export function Tabs({
             key={t.id}
             type="button"
             onClick={() => onChange(t.id)}
-            className={`pg-press flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors short:gap-1 short:py-1 ${
+            className={`pg-press flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-all short:py-1 short:text-xs ${
               active === t.id
-                ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-800 dark:text-white'
-                : 'text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {Icon && <Icon className="h-3.5 w-3.5" />}
@@ -274,9 +279,9 @@ export function CodeEditor({
       placeholder={placeholder}
       value={value}
       onChange={(e) => handle(e.target.value)}
-      className={`w-full resize-y rounded-lg border bg-neutral-950 p-3 font-mono text-xs leading-relaxed text-neutral-100
-        placeholder:text-neutral-600 focus:outline-none focus:ring-2
-        ${invalid ? 'border-red-500 focus:ring-red-500/40' : 'border-neutral-700 focus:ring-neutral-100/30'} ${className}`}
+      className={`w-full resize-y rounded-lg border bg-popover p-3 font-mono text-xs leading-relaxed text-foreground
+        placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2
+        ${invalid ? 'border-destructive focus:ring-destructive/40' : 'border-border focus:ring-ring/30'} ${className}`}
     />
   )
 }
@@ -295,17 +300,17 @@ export function CodeBlock({ code, label, onCopy }: { code: string; label?: strin
     <div className="group relative">
       {label && (
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-2xs font-medium uppercase tracking-wide text-neutral-400">{label}</span>
+          <span className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">{label}</span>
         </div>
       )}
-      <pre className="max-h-64 overflow-auto rounded-lg bg-neutral-950 p-3 pr-10 font-mono text-2xs leading-relaxed text-neutral-300">
+      <pre className="max-h-64 overflow-auto rounded-lg bg-popover p-3 pr-10 font-mono text-2xs leading-relaxed text-foreground/90">
         {code}
       </pre>
       <button
         type="button"
         onClick={copy}
-        className={`pg-press absolute right-2 ${label ? 'top-6' : 'top-2'} rounded-md p-1.5 text-neutral-500 opacity-0 transition-all
-          hover:bg-neutral-800 hover:text-neutral-200 group-hover:opacity-100 ${copied ? 'text-emerald-400 opacity-100' : ''}`}
+        className={`pg-press absolute right-2 ${label ? 'top-6' : 'top-2'} cursor-pointer rounded-md p-1.5 text-muted-foreground opacity-0 transition-all
+          hover:text-foreground group-hover:opacity-100 ${copied ? 'text-emerald-500 opacity-100' : ''}`}
         title={copied ? 'Copied!' : 'Copy'}
       >
         {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

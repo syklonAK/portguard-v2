@@ -183,7 +183,7 @@ export default function Bandwidth() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Bandwidth / Rate Limits</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Per-UUID bandwidth limits for PasarGuard Xray users, enforced on nodes with Linux tc.
           </p>
         </div>
@@ -241,7 +241,7 @@ export default function Bandwidth() {
         ) : (
           <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
             {profiles.data.map((p) => (
-              <div key={p.id} className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+              <div key={p.id} className="rounded-xl border border-border p-3.5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">{p.name}</span>
                   <div className="flex gap-1">
@@ -261,8 +261,8 @@ export default function Bandwidth() {
                   </div>
                 </div>
                 <div className="mt-2 space-y-1 font-mono text-2xs">
-                  <div className="flex justify-between"><span className="text-slate-400">down</span><span>{fmt(p.download_bps)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">up</span><span>{fmt(p.upload_bps)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">down</span><span>{fmt(p.download_bps)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">up</span><span>{fmt(p.upload_bps)}</span></div>
                 </div>
                 {!p.enabled && <Badge color="red">disabled</Badge>}
               </div>
@@ -315,7 +315,7 @@ export default function Bandwidth() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-medium">User</th>
                   <th className="px-3 py-2.5 font-medium">UUID</th>
                   <th className="px-3 py-2.5 font-medium">State</th>
@@ -325,16 +325,16 @@ export default function Bandwidth() {
                   <th className="px-5 py-2.5 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+              <tbody className="divide-y divide-border">
                 {rows.map((u) => (
-                  <tr key={u.uuid} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <tr key={u.uuid} className="hover:bg-muted/60">
                     <td className="px-5 py-2.5 font-medium">{u.username || '—'}</td>
-                    <td className="px-3 py-2.5 font-mono text-2xs text-slate-400" title={u.uuid}>{u.uuid.slice(0, 13)}…</td>
+                    <td className="px-3 py-2.5 font-mono text-2xs text-muted-foreground" title={u.uuid}>{u.uuid.slice(0, 13)}…</td>
                     <td className="px-3 py-2.5">
                       {u.expired ? <Badge color="red">expired</Badge> : !u.enabled ? <Badge color="amber">disabled</Badge> : <Badge color="green">active</Badge>}
                     </td>
                     <td className="px-3 py-2.5 text-xs">
-                      {u.has_policy ? (u.custom ? <Badge color="blue">custom</Badge> : u.profile_name || '—') : <span className="text-slate-400">unlimited</span>}
+                      {u.has_policy ? (u.custom ? <Badge color="blue">custom</Badge> : u.profile_name || '—') : <span className="text-muted-foreground">unlimited</span>}
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs">
                       {u.has_policy ? `${fmt(u.policy_download_bps)} / ${fmt(u.policy_upload_bps)}` : '—'}
@@ -363,7 +363,7 @@ export default function Bandwidth() {
           </div>
         )}
         {rows.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-5 py-2.5 text-xs text-slate-500 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
             <span>
               {total.toLocaleString()} users{debounced || stateFilter ? ' (filtered)' : ''} · page {page + 1} / {pageCount}
             </span>
@@ -390,10 +390,10 @@ export default function Bandwidth() {
               <Input value={profileDraft.ul || ''} onChange={(e) => setProfileDraft({ ...profileDraft, ul: e.target.value })} placeholder="10Mbps" />
             </Field>
           </div>
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Toggle checked={profileDraft.enabled ?? true} onChange={(v) => setProfileDraft({ ...profileDraft, enabled: v })} /> Enabled
           </label>
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" onClick={() => setProfileModal(null)}>Cancel</Button>
             <Button onClick={saveProfile} disabled={saving || !profileDraft.name}>{saving ? 'Saving…' : 'Save profile'}</Button>
           </div>
@@ -405,7 +405,7 @@ export default function Bandwidth() {
         title={userModal ? `Bandwidth — ${userModal.username}` : ''}>
         {userModal && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-slate-50 p-3 font-mono text-2xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+            <div className="rounded-lg bg-mutedslate p-3 font-mono text-2xs text-muted-foreground">
               {userModal.uuid}
             </div>
             <Field label="Node" hint="which node enforces the limit">
@@ -433,7 +433,7 @@ export default function Bandwidth() {
                 <Field label="Upload"><Input value={userDraft.ul} onChange={(e) => setUserDraft({ ...userDraft, ul: e.target.value })} placeholder="3Mbps" /></Field>
               </div>
             )}
-            <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+            <div className="flex justify-end gap-2 border-t border-border pt-4">
               <Button variant="secondary" onClick={() => setUserModal(null)}>Cancel</Button>
               <Button onClick={saveUserPolicy} disabled={saving || !userDraft.nodeId}>{saving ? 'Saving…' : 'Save policy'}</Button>
             </div>
@@ -445,11 +445,11 @@ export default function Bandwidth() {
 }
 
 function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent?: 'indigo' | 'red' }) {
-  const accentCls = accent === 'indigo' ? 'text-indigo-600 dark:text-indigo-300'
+  const accentCls = accent === 'indigo' ? 'text-primary'
     : accent === 'red' ? 'text-red-500' : ''
   return (
-    <div className="min-w-0 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
-      <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-slate-400">
+    <div className="min-w-0 rounded-xl border border-border p-3.5">
+      <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         {icon} <span className="truncate">{label}</span>
       </div>
       <div className={`mt-1 truncate text-lg font-bold ${accentCls}`} title={value}>{value}</div>

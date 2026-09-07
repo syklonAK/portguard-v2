@@ -39,9 +39,9 @@ export default function Terminal({ jobId, onDone }: { jobId: string; onDone?: (j
   const lines = job.data?.output ?? []
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-700 bg-slate-950">
-      <div className="flex items-center justify-between border-b border-slate-800 px-3 py-1.5">
-        <span className="font-mono text-2xs text-slate-400">{job.data?.name ?? 'task'}</span>
+    <div className="overflow-hidden rounded-lg border border-border bg-popover">
+      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+        <span className="font-mono text-2xs text-muted-foreground">{job.data?.name ?? 'task'}</span>
         <span className="flex items-center gap-1.5 text-2xs">
           {status === 'running' && (
             <span className="flex items-center gap-1 text-sky-300">
@@ -60,12 +60,12 @@ export default function Terminal({ jobId, onDone }: { jobId: string; onDone?: (j
           )}
         </span>
       </div>
-      <div ref={boxRef} className="h-56 overflow-y-auto px-3 py-2 font-mono text-2xs leading-relaxed text-slate-300">
+      <div ref={boxRef} className="h-56 overflow-y-auto px-3 py-2 font-mono text-2xs leading-relaxed text-foreground/80">
         {lines.length === 0 && status === 'running' && (
-          <p className="text-slate-500">waiting for output…</p>
+          <p className="text-muted-foreground/60">waiting for output…</p>
         )}
         {lines.map((l, i) => (
-          <div key={i} className={`whitespace-pre-wrap ${l.startsWith('[portguard]') ? 'text-indigo-300' : ''}`}>
+          <div key={i} className={`whitespace-pre-wrap ${l.startsWith('[portguard]') ? 'text-primary' : ''}`}>
             {l || '\u00a0'}
           </div>
         ))}

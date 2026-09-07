@@ -69,7 +69,7 @@ export default function Runtime() {
         ].map(([label, value]) => (
           <Card key={label as string} className="p-3 text-center">
             <div className="text-xl font-bold">{value as number}</div>
-            <div className="text-2xs text-slate-400">{label as string}</div>
+            <div className="text-2xs text-muted-foreground">{label as string}</div>
           </Card>
         ))}
       </div>
@@ -81,8 +81,8 @@ export default function Runtime() {
             <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
               {Object.entries(rt.info || {}).map(([k, v]) => (
                 <div key={k} className="contents">
-                  <span className="text-slate-400">{k}</span>
-                  <span className="font-mono text-slate-600 dark:text-slate-300">{v}</span>
+                  <span className="text-muted-foreground">{k}</span>
+                  <span className="font-mono text-muted-foreground">{v}</span>
                 </div>
               ))}
             </div>
@@ -92,17 +92,17 @@ export default function Runtime() {
         <Card>
           <CardHeader title="Traffic" desc="Cumulative counters from show stat" />
           <div className="grid grid-cols-2 gap-4 p-5">
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+            <div className="rounded-lg bg-mutedslate p-3">
               <div className="text-lg font-bold">{fmtBytes(summary.bytes_in)}</div>
-              <div className="text-2xs text-slate-400">bytes in</div>
+              <div className="text-2xs text-muted-foreground">bytes in</div>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+            <div className="rounded-lg bg-mutedslate p-3">
               <div className="text-lg font-bold">{fmtBytes(summary.bytes_out)}</div>
-              <div className="text-2xs text-slate-400">bytes out</div>
+              <div className="text-2xs text-muted-foreground">bytes out</div>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+            <div className="rounded-lg bg-mutedslate p-3">
               <div className="text-lg font-bold">{summary.sessions}</div>
-              <div className="text-2xs text-slate-400">current sessions</div>
+              <div className="text-2xs text-muted-foreground">current sessions</div>
             </div>
           </div>
         </Card>
@@ -115,7 +115,7 @@ export default function Runtime() {
           desc="Live status — put a server into maintenance or bring it back without a reload"
           right={
             <input
-              className="h-8 w-44 rounded-lg border border-slate-300 bg-white px-2.5 text-xs dark:border-slate-600 dark:bg-slate-800"
+              className="h-8 w-44 rounded-lg border border-border bg-input px-2.5 text-xs"
               placeholder="filter…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -128,7 +128,7 @@ export default function Runtime() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-medium">Backend</th>
                   <th className="px-3 py-2.5 font-medium">Server</th>
                   <th className="px-3 py-2.5 font-medium">Status</th>
@@ -137,9 +137,9 @@ export default function Runtime() {
                   <th className="px-5 py-2.5 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+              <tbody className="divide-y divide-border">
                 {servers.map((r, i) => (
-                  <tr key={`${r.pxname}-${r.svname}-${i}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <tr key={`${r.pxname}-${r.svname}-${i}`} className="hover:bg-muted/60">
                     <td className="px-5 py-2.5 font-mono text-xs">{r.pxname}</td>
                     <td className="px-3 py-2.5 font-mono text-xs">{r.svname}</td>
                     <td className="px-3 py-2.5"><Badge color={statusColor(r.status || '')}>{r.status || '—'}</Badge></td>
@@ -177,7 +177,7 @@ function Header({ right }: { right?: React.ReactNode }) {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 className="text-lg font-bold">HAProxy Runtime</h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-muted-foreground">
           Live statistics and server maintenance via the HAProxy stats socket
         </p>
       </div>

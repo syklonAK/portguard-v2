@@ -59,7 +59,7 @@ export default function Services() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Services</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Logical groups of mappings — deploy, monitor and roll back one service at a time.
           </p>
         </div>
@@ -78,12 +78,12 @@ export default function Services() {
             <Card key={s.id} className={`flex flex-col ${!s.enabled ? 'opacity-60' : ''}`}>
               <div className="flex items-start justify-between p-4 pb-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <Boxes className="h-4.5 w-4.5" />
                   </div>
                   <div>
                     <div className="text-sm font-semibold">{s.name}</div>
-                    <div className="text-2xs text-slate-400">{s.description || '—'}</div>
+                    <div className="text-2xs text-muted-foreground">{s.description || '—'}</div>
                   </div>
                 </div>
                 <div className="flex gap-1">
@@ -92,25 +92,25 @@ export default function Services() {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2 px-4 pb-3 text-center">
-                <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
+                <div className="rounded-lg bg-mutedslate p-2">
                   <div className="text-sm font-bold">{s.mapping_count}</div>
-                  <div className="text-2xs text-slate-400">mappings</div>
+                  <div className="text-2xs text-muted-foreground">mappings</div>
                 </div>
-                <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
+                <div className="rounded-lg bg-mutedslate p-2">
                   <div className="text-sm font-bold text-emerald-500">{s.backends_up}</div>
-                  <div className="text-2xs text-slate-400">up</div>
+                  <div className="text-2xs text-muted-foreground">up</div>
                 </div>
-                <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
-                  <div className={`text-sm font-bold ${s.backends_down ? 'text-red-500' : 'text-slate-400'}`}>{s.backends_down}</div>
-                  <div className="text-2xs text-slate-400">down</div>
+                <div className="rounded-lg bg-mutedslate p-2">
+                  <div className={`text-sm font-bold ${s.backends_down ? 'text-red-500' : 'text-muted-foreground'}`}>{s.backends_down}</div>
+                  <div className="text-2xs text-muted-foreground">down</div>
                 </div>
               </div>
-              <div className="mt-auto flex items-center justify-between border-t border-slate-200 px-4 py-2.5 dark:border-slate-800">
+              <div className="mt-auto flex items-center justify-between border-t border-border px-4 py-2.5">
                 <Toggle checked={s.enabled} onChange={async () => {
                   try { await api.updateService(s.id, { ...s, enabled: !s.enabled }); refresh() }
                   catch (e: any) { push('error', e.message) }
                 }} />
-                <button className="flex items-center gap-1 text-2xs font-medium text-indigo-500 hover:text-indigo-600"
+                <button className="flex items-center gap-1 text-2xs font-medium text-primary hover:text-primary"
                   onClick={() => openDetail(s)}>
                   Details <ChevronRight className="h-3 w-3" />
                 </button>
@@ -124,10 +124,10 @@ export default function Services() {
         <div className="space-y-4">
           <Field label="Name"><Input value={draft.name || ''} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="xray-service" /></Field>
           <Field label="Description"><Input value={draft.description || ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Main Xray endpoints" /></Field>
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Toggle checked={draft.enabled ?? true} onChange={(v) => setDraft({ ...draft, enabled: v })} /> Enabled
           </label>
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
             <Button onClick={save} disabled={saving || !draft.name}>{saving ? 'Saving…' : 'Save service'}</Button>
           </div>
@@ -141,9 +141,9 @@ export default function Services() {
             {!detail.mappings.length ? (
               <Empty message="No mappings assigned yet. Open a mapping in the editor and pick this service under Advanced." />
             ) : (
-              <div className="max-h-72 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="max-h-72 overflow-auto rounded-xl border border-border">
                 <table className="w-full text-xs">
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  <tbody className="divide-y divide-border">
                     {detail.mappings.map((m) => (
                       <tr key={m.id}>
                         <td className="px-3 py-2 font-medium">{m.name}</td>

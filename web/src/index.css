@@ -1,19 +1,134 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* ---- PasarGuard design system ----
+   Same approach as the PasarGuard dashboard: HSL channel variables on :root
+   (light) and .dark, remapped into Tailwind utilities via @theme inline so
+   `bg-background`, `text-muted-foreground`, `bg-primary` etc. work everywhere.
+   Light: neutral gray surface + steel-blue primary (216 46% 40%).
+   Dark: near-black blue-gray + brighter steel blue (216 46% 53%). */
 
-/* compact mode for short viewports (h <= 480px, e.g. half-height windows):
-   `short:` utilities apply, plus the plain-CSS overrides below (unlayered
-   rules always beat Tailwind's layered utilities, so they win over sm:*) */
+@custom-variant dark (&:where(.dark, .dark *));
 @custom-variant short (@media (max-height: 30rem));
 
-@theme {
+:root {
+  color-scheme: light dark;
+  --pg-perspective: 900px;
+
+  --background: 240 5% 96%;
+  --foreground: 240 5% 10%;
+  --muted: 240 5% 90%;
+  --muted-foreground: 240 5% 40%;
+  --card: 240 5% 98%;
+  --card-foreground: var(--foreground);
+  --popover: 240 5% 98%;
+  --popover-foreground: var(--foreground);
+  --border: 240 5% 82%;
+  --input: 240 6% 91%;
+  --input-placeholder: 240 5% 55%;
+  --primary: 216 46% 40%;
+  --primary-foreground: 240 5% 98%;
+  --secondary: 240 5% 90%;
+  --secondary-foreground: 240 5% 20%;
+  --accent: 240 5% 90%;
+  --accent-foreground: 240 5% 20%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 76% 36%;
+  --success-foreground: 356 100% 97%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 26 83% 14%;
+  --ring: 216 46% 40%;
+  --radius: 0.5rem;
+  --sidebar-background: 240 5% 92%;
+  --sidebar-foreground: 240 5% 20%;
+  --sidebar-primary: 216 46% 40%;
+  --sidebar-primary-foreground: 240 5% 98%;
+  --sidebar-accent: 240 5% 86%;
+  --sidebar-accent-foreground: 240 5% 10%;
+  --sidebar-border: 240 5% 82%;
+  --sidebar-ring: 216 46% 40%;
+  --scrollbar-track: 240 5% 96%;
+  --scrollbar-thumb: 240 5% 70%;
+  --scrollbar-thumb-hover: 240 5% 55%;
+  --scrollbar-thumb-active: 240 5% 45%;
+}
+
+.dark {
+  --background: 240 2% 11%;
+  --foreground: 0 0% 98%;
+  --muted: 240 4% 15%;
+  --muted-foreground: 0 0% 63.9%;
+  --card: 240 2% 11.5%;
+  --card-foreground: var(--foreground);
+  --popover: 240 2% 11%;
+  --popover-foreground: var(--foreground);
+  --border: 0 0% 20%;
+  --input: 240 2% 16.5%;
+  --input-placeholder: 0 0% 40%;
+  --primary: 216 46% 53%;
+  --primary-foreground: 0 0% 5%;
+  --secondary: 240 4% 16%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: 240 4% 16%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 40% 98%;
+  --success: 142 70% 45%;
+  --success-foreground: 145 80% 10%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 26 83% 14%;
+  --ring: 215 16% 47%;
+  --radius: 0.5rem;
+  --sidebar-background: 240 2% 11%;
+  --sidebar-foreground: 0 0% 71%;
+  --sidebar-primary: 216 46% 53%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 240 4% 16%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 240 2% 18%;
+  --sidebar-ring: 0 0% 64%;
+  --scrollbar-track: 240 2% 11%;
+  --scrollbar-thumb: 0 0% 25%;
+  --scrollbar-thumb-hover: 0 0% 35%;
+  --scrollbar-thumb-active: 0 0% 45%;
+}
+
+@theme inline {
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
 
-  /* minimal monochrome palette + one accent */
-  --color-accent: #6366f1;
-  --color-accent-strong: #4f46e5;
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
   --animate-fade-up: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-fade-in: fade-in 0.3s ease both;
   --animate-pop: pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
@@ -31,73 +146,49 @@
   from { opacity: 0; transform: scale(0.94) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
-@keyframes float-slow {
-  0%, 100% { transform: translateZ(0) rotateX(0deg); }
-  50% { transform: translateZ(24px) rotateX(4deg); }
-}
-
-:root {
-  color-scheme: light dark;
-  /* 3D perspective for card hover effects */
-  --pg-perspective: 900px;
-}
 
 html, body, #root {
   height: 100%;
 }
 
 body {
-  @apply bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+  @apply bg-background text-foreground antialiased;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb) / 0.4) transparent;
 }
 
-/* ---- minimal 3D interaction layer ---- */
+/* PasarGuard-style thin overlay scrollbars everywhere */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb) / 0.4) transparent;
+}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--scrollbar-thumb) / 0.35); border: none; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--scrollbar-thumb-hover) / 0.55); }
+::-webkit-scrollbar-thumb:active { background: hsl(var(--scrollbar-thumb-active) / 0.7); }
+::-webkit-scrollbar-corner { background: transparent; }
 
-/* cards lift with a real perspective tilt on hover */
-.pg-3d {
-  transform-style: preserve-3d;
-  transition:
-    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.35s ease;
-  will-change: transform;
-}
-.pg-3d:hover {
-  transform:
-    perspective(var(--pg-perspective))
-    translateY(-3px)
-    rotateX(0.6deg)
-    scale(1.006);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.04),
-    0 12px 32px -12px rgb(0 0 0 / 0.16);
-}
-.dark .pg-3d:hover {
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.5),
-    0 16px 40px -12px rgb(0 0 0 / 0.7);
-}
+/* hidden but scrollable (sidebar content, like PasarGuard) */
+.pg-scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.pg-scroll-hide::-webkit-scrollbar { display: none; }
 
-/* buttons press INTO the screen */
+/* buttons press subtly (PasarGuard active:scale-[0.98]) */
 .pg-press {
   transition:
-    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.16s ease,
-    background-color 0.16s ease,
-    border-color 0.16s ease,
-    color 0.16s ease;
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.12s ease;
 }
-.pg-press:active {
-  transform: perspective(400px) scale(0.96) translateZ(-6px);
-}
-.pg-press:not(:disabled):hover {
-  transform: perspective(400px) translateY(-1px);
-}
+.pg-press:active { transform: scale(0.98); }
+button:not(:disabled) { cursor: pointer; }
 
 /* page-level entrance */
-.pg-page {
-  animation: var(--animate-fade-up);
-}
+.pg-page { animation: var(--animate-fade-up); }
 .pg-page > * { animation: var(--animate-fade-up); }
 .pg-page > *:nth-child(2) { animation-delay: 40ms; }
 .pg-page > *:nth-child(3) { animation-delay: 80ms; }
@@ -108,64 +199,36 @@ body {
 .pg-modal-bg { animation: var(--animate-fade-in); }
 .pg-modal-card {
   animation: var(--animate-pop);
-  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.28);
+  box-shadow: 0 24px 64px -16px hsl(0 0% 0% / 0.32);
 }
 
-/* rows ripple-ish feedback (cheap, no js) */
-tbody tr {
-  transition: background-color 0.15s ease, transform 0.15s ease;
-}
-tbody tr:hover { transform: translateZ(0); }
+/* rows quiet hover like PasarGuard's md:hover:bg-muted */
+tbody tr { transition: background-color 0.15s ease; }
 
-/* focus ring: minimal but visible */
+/* focus ring: visible but minimal */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* landing hero float */
-.pg-float { animation: float-slow 7s ease-in-out infinite; transform-style: preserve-3d; }
-
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { @apply bg-neutral-300 dark:bg-neutral-700 rounded-full; }
-::-webkit-scrollbar-thumb:hover { @apply bg-neutral-400 dark:bg-neutral-600; }
-
-@media (prefers-reduced-motion: reduce) {
-  .pg-3d:hover, .pg-press:active, .pg-press:not(:disabled):hover, .pg-float {
-    transform: none;
-    animation: none;
-  }
-}
-
-/* ---- Bootstrap integration (responsive shell) ---- */
-/* Tailwind preflight keeps base authority: bootstrap loads before index.css. */
-.pg-offcanvas {
-  max-width: min(85vw, 20rem);
-}
-html.dark .pg-offcanvas,
-html.dark .pg-offcanvas .offcanvas-header {
-  background-color: #171717;
-  color: #e5e5e5;
-  --bs-offcanvas-bg: #171717;
-}
-html:not(.dark) .pg-offcanvas {
-  background-color: #ffffff;
-  --bs-offcanvas-bg: #ffffff;
-}
-/* keep bootstrap's reboot from changing our button/link base */
-.pg-offcanvas a {
-  text-decoration: none;
+/* ---- collapsible sidebar shell (PasarGuard layout) ----
+   The wrapper carries --pg-sidebar-width so the main content and the rail
+   transition together; state lives on data attributes. */
+.pg-shell { --pg-sidebar-width: 16rem; }
+.pg-shell[data-state='collapsed'] { --pg-sidebar-width: 3rem; }
+.pg-sidebar,
+.pg-main {
+  transition:
+    width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ---- short-viewport (compact) mode ---- */
 /* Pure-CSS density overrides for h <= 480px. Unlayered on purpose: Tailwind
    utilities live in @layer utilities, so these rules win even against sm:*
-   variants without needing !important. Mappings.tsx leans on the sticky
-   header + hard max-heights below; the short: variant handles one-off cases. */
+   variants without needing !important. */
 
-/* modal chrome shrinks: less header/footer padding, wider use of space */
 @media (max-height: 30rem) {
   .pg-modal-wrap {
     padding: 0.5rem !important;
@@ -173,23 +236,13 @@ html:not(.dark) .pg-offcanvas {
   }
   .pg-modal-card {
     max-height: 100% !important;
-    border-radius: 0.75rem;
     box-shadow: 0 12px 32px -8px rgb(0 0 0 / 0.4);
   }
-  .pg-modal-header {
-    padding: 0.5rem 1rem !important;
-  }
-  .pg-modal-body {
-    padding: 0.75rem 1rem !important;
-  }
-  .pg-modal-footer {
-    padding: 0.5rem 1rem !important;
-  }
-  .pg-modal-footer .pg-press {
-    height: 2rem;
-  }
+  .pg-modal-header { padding: 0.5rem 1rem !important; }
+  .pg-modal-body { padding: 0.75rem 1rem !important; }
+  .pg-modal-footer { padding: 0.5rem 1rem !important; }
+  .pg-modal-footer .pg-press { height: 2rem; }
 
-  /* form fields collapse to one dense row height */
   .pg-modal-body input,
   .pg-modal-body select,
   .pg-modal-body textarea {
@@ -201,41 +254,56 @@ html:not(.dark) .pg-offcanvas {
     font-size: 0.625rem;
   }
 
-  /* sticky page toolbar (Mappings) stays visible while the table scrolls */
+  /* sticky page toolbar stays visible while the table scrolls */
   .pg-sticky-bar {
     position: sticky;
     top: -1rem;
     z-index: 20;
     margin: -1rem -1rem 0;
     padding: 0.5rem 1rem;
-    background: color-mix(in oklab, white 86%, transparent);
+    background: color-mix(in oklab, hsl(var(--background)) 86%, transparent);
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgb(229 229 229);
-  }
-  html.dark .pg-sticky-bar {
-    background: color-mix(in oklab, #0a0a0a 86%, transparent);
-    border-bottom-color: rgb(38 38 38);
+    border-bottom: 1px solid hsl(var(--border));
   }
 }
 @media (min-height: 30.02rem) {
-  .pg-sticky-bar {
-    background: transparent;
-  }
+  .pg-sticky-bar { background: transparent; }
 }
 
-/* dense tables in compact mode: tighter rows, smaller controls */
+/* dense tables in compact mode */
 @media (max-height: 30rem) {
-  .pg-dense tbody tr:where(:not(.pg-row-keep)) td {
+  .pg-dense tbody tr td {
     padding-top: 0.375rem;
     padding-bottom: 0.375rem;
     font-size: 0.75rem;
   }
-  .pg-dense tbody tr:where(:not(.pg-row-keep)) .pg-press {
-    height: 1.75rem;
-  }
+  .pg-dense tbody tr .pg-press { height: 1.75rem; }
   .pg-dense thead th {
     padding-top: 0.375rem;
     padding-bottom: 0.375rem;
     font-size: 0.625rem;
   }
+}
+
+/* ---- Bootstrap integration (responsive shell) ----
+   Tailwind preflight keeps base authority: bootstrap loads before index.css. */
+.pg-offcanvas {
+  max-width: min(85vw, 20rem);
+}
+html.dark .pg-offcanvas,
+html.dark .pg-offcanvas .offcanvas-header {
+  background-color: hsl(var(--sidebar-background));
+  color: hsl(var(--sidebar-foreground));
+  --bs-offcanvas-bg: hsl(var(--sidebar-background));
+}
+html:not(.dark) .pg-offcanvas {
+  background-color: hsl(var(--sidebar-background));
+  --bs-offcanvas-bg: hsl(var(--sidebar-background));
+}
+html:not(.dark) .pg-offcanvas .offcanvas-header {
+  background-color: hsl(var(--sidebar-background));
+}
+/* keep bootstrap's reboot from changing our button/link base */
+.pg-offcanvas a {
+  text-decoration: none;
 }

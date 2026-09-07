@@ -30,17 +30,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={{ push }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-100 flex flex-col gap-2 max-w-sm">
+      <div className="fixed right-4 bottom-4 z-100 flex max-w-sm flex-col gap-2">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="flex items-start gap-2 rounded-lg border px-4 py-3 shadow-lg backdrop-blur bg-white/95 dark:bg-slate-900/95
-              border-slate-200 dark:border-slate-700 text-sm"
+            className="flex items-start gap-2 rounded-lg border border-border bg-popover px-4 py-3 text-foreground shadow-lg backdrop-blur-sm text-sm"
           >
-            {t.kind === 'success' && <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-500 shrink-0" />}
-            {t.kind === 'error' && <XCircle className="h-4 w-4 mt-0.5 text-red-500 shrink-0" />}
-            {t.kind === 'warning' && <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />}
-            {t.kind === 'info' && <Info className="h-4 w-4 mt-0.5 text-sky-500 shrink-0" />}
+            {t.kind === 'success' && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />}
+            {t.kind === 'error' && <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />}
+            {t.kind === 'warning' && <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />}
+            {t.kind === 'info' && <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
             <span className="whitespace-pre-wrap break-words">{t.message}</span>
           </div>
         ))}

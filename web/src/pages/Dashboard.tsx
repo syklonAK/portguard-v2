@@ -8,12 +8,12 @@ function Stat({ icon: Icon, label, value, sub }: { icon: any; label: string; val
   return (
     <Card className="p-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Icon className="h-4.5 w-4.5" />
         </div>
         <div className="min-w-0">
           <div className="truncate text-lg font-semibold leading-tight">{value}</div>
-          <div className="text-2xs text-slate-400">{sub || label}</div>
+          <div className="text-2xs text-muted-foreground">{sub || label}</div>
         </div>
       </div>
     </Card>
@@ -22,7 +22,7 @@ function Stat({ icon: Icon, label, value, sub }: { icon: any; label: string; val
 
 function Bar({ pct, color }: { pct: number; color: string }) {
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-accent">
       <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
     </div>
   )
@@ -55,7 +55,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold">Dashboard</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             {s?.platform} · kernel {s?.kernel} · PortGuard v{d?.version}
           </p>
         </div>
@@ -76,7 +76,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold">{engine}</div>
-                    <div className="text-2xs text-slate-400">
+                    <div className="text-2xs text-muted-foreground">
                       {st?.binary_installed ? `unit ${st?.unit} · pid ${st?.pid || '—'}` : 'binary not installed'}
                     </div>
                   </div>
@@ -117,21 +117,21 @@ export default function Dashboard() {
         <CardHeader title="Resources" desc="Live utilization (updates every 5s)" />
         <div className="space-y-4 p-5">
           <div>
-            <div className="mb-1.5 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
               <span>CPU</span>
               <span>{s?.cpu_percent?.toFixed(1) ?? '—'}%</span>
             </div>
-            <Bar pct={s?.cpu_percent ?? 0} color="bg-indigo-500" />
+            <Bar pct={s?.cpu_percent ?? 0} color="bg-primary/100" />
           </div>
           <div>
-            <div className="mb-1.5 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
               <span>Memory</span>
               <span>{s?.mem_percent?.toFixed(1) ?? '—'}%</span>
             </div>
             <Bar pct={s?.mem_percent ?? 0} color="bg-emerald-500" />
           </div>
           <div>
-            <div className="mb-1.5 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
               <span>Disk /</span>
               <span>{s?.disk_percent?.toFixed(1) ?? '—'}%</span>
             </div>
@@ -147,13 +147,13 @@ export default function Dashboard() {
             title="Mappings"
             desc={`${d?.mappings.enabled ?? 0} enabled of ${d?.mappings.total ?? 0}`}
             right={
-              <Link to="/mappings" className="text-xs font-medium text-indigo-500 hover:underline">
+              <Link to="/mappings" className="text-xs font-medium text-primary hover:underline">
                 Manage →
               </Link>
             }
           />
           {mappings.data && mappings.data.length > 0 ? (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="divide-y divide-border">
               {mappings.data.slice(0, 6).map((m) => (
                 <div key={m.id} className="flex items-center justify-between px-5 py-2.5 text-sm">
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -161,7 +161,7 @@ export default function Dashboard() {
                     <span className="truncate font-medium">{m.name}</span>
                     <Badge color={m.engine === 'nginx' ? 'green' : 'purple'}>{m.engine}</Badge>
                   </div>
-                  <span className="shrink-0 font-mono text-xs text-slate-500">
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
                     :{m.listen_port} → {m.protocol}
                   </span>
                 </div>
@@ -178,7 +178,7 @@ export default function Dashboard() {
             title="Backend Health"
             desc="From the last monitoring round"
             right={
-              <Link to="/monitoring" className="text-xs font-medium text-indigo-500 hover:underline">
+              <Link to="/monitoring" className="text-xs font-medium text-primary hover:underline">
                 Details →
               </Link>
             }
@@ -192,12 +192,12 @@ export default function Dashboard() {
               <div className="text-2xl font-bold text-red-600 dark:text-red-300">{d?.health.down ?? 0}</div>
               <div className="text-2xs text-red-700/70 dark:text-red-400/70">down</div>
             </div>
-            <div className="rounded-lg bg-slate-100 p-3 text-center dark:bg-slate-800">
-              <div className="text-2xl font-bold text-slate-500">{d?.health.unknown ?? 0}</div>
-              <div className="text-2xs text-slate-400">unknown</div>
+            <div className="rounded-lg bg-mutedslate p-3 text-center">
+              <div className="text-2xl font-bold text-muted-foreground">{d?.health.unknown ?? 0}</div>
+              <div className="text-2xs text-muted-foreground">unknown</div>
             </div>
           </div>
-          <div className="border-t border-slate-200 px-5 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
             <Activity className="mr-1 inline h-3.5 w-3.5" />
             Checks run every few seconds against each target (TCP + HTTP).
           </div>
@@ -209,10 +209,10 @@ export default function Dashboard() {
         <Link to="/ports">
           <Card className="p-4 transition-shadow hover:shadow-md">
             <div className="flex items-center gap-3">
-              <Network className="h-5 w-5 text-indigo-500" />
+              <Network className="h-5 w-5 text-primary" />
               <div>
                 <div className="text-sm font-semibold">Scan Ports</div>
-                <div className="text-2xs text-slate-400">Detect services & unmapped ports</div>
+                <div className="text-2xs text-muted-foreground">Detect services & unmapped ports</div>
               </div>
             </div>
           </Card>
@@ -220,10 +220,10 @@ export default function Dashboard() {
         <Link to="/mappings">
           <Card className="p-4 transition-shadow hover:shadow-md">
             <div className="flex items-center gap-3">
-              <ArrowLeftRight className="h-5 w-5 text-indigo-500" />
+              <ArrowLeftRight className="h-5 w-5 text-primary" />
               <div>
                 <div className="text-sm font-semibold">Create Mapping</div>
-                <div className="text-2xs text-slate-400">Route a domain or port to a backend</div>
+                <div className="text-2xs text-muted-foreground">Route a domain or port to a backend</div>
               </div>
             </div>
           </Card>
@@ -231,10 +231,10 @@ export default function Dashboard() {
         <Link to="/certs">
           <Card className="p-4 transition-shadow hover:shadow-md">
             <div className="flex items-center gap-3">
-              <ShieldCheck className="h-5 w-5 text-indigo-500" />
+              <ShieldCheck className="h-5 w-5 text-primary" />
               <div>
                 <div className="text-sm font-semibold">SSL Certificates</div>
-                <div className="text-2xs text-slate-400">Upload or generate certificates</div>
+                <div className="text-2xs text-muted-foreground">Upload or generate certificates</div>
               </div>
             </div>
           </Card>

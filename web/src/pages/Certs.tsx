@@ -131,7 +131,7 @@ export default function Certs() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">SSL Certificates</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Used by https mappings — nginx reads .crt/.key, HAProxy reads a combined .pem (generated automatically)
           </p>
         </div>
@@ -157,7 +157,7 @@ export default function Certs() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+              <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-5 py-2.5 font-medium">Name</th>
                 <th className="px-3 py-2.5 font-medium">Type</th>
                 <th className="px-3 py-2.5 font-medium">Domains</th>
@@ -165,12 +165,12 @@ export default function Certs() {
                 <th className="px-5 py-2.5 text-right font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+            <tbody className="divide-y divide-border">
               {certs.data.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <tr key={c.id} className="hover:bg-muted/60">
                   <td className="px-5 py-3 font-medium">{c.name}</td>
                   <td className="px-3 py-3"><Badge color={typeBadge(c.type)}>{c.type}</Badge></td>
-                  <td className="px-3 py-3 text-xs text-slate-500">{c.domains.join(', ') || '—'}</td>
+                  <td className="px-3 py-3 text-xs text-muted-foreground">{c.domains.join(', ') || '—'}</td>
                   <td className="px-3 py-3">{expiryBadge(c)}</td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-1">
@@ -205,7 +205,7 @@ export default function Certs() {
           </Field>
           <Field label="Certificate PEM (fullchain)">
             <textarea
-              className="h-40 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-xs focus:border-indigo-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800"
+              className="h-40 w-full rounded-lg border border-border bg-card p-3 font-mono text-xs focus:border-primary/50 focus:outline-none"
               placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
               value={up.cert_pem}
               onChange={(e) => setUp({ ...up, cert_pem: e.target.value })}
@@ -213,7 +213,7 @@ export default function Certs() {
           </Field>
           <Field label="Private key PEM">
             <textarea
-              className="h-32 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-xs focus:border-indigo-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800"
+              className="h-32 w-full rounded-lg border border-border bg-card p-3 font-mono text-xs focus:border-primary/50 focus:outline-none"
               placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
               value={up.key_pem}
               onChange={(e) => setUp({ ...up, key_pem: e.target.value })}
@@ -268,8 +268,8 @@ export default function Certs() {
                 </Select>
               </Field>
               {activeProvider?.env?.length ? (
-                <div className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-                  <p className="text-2xs font-medium uppercase tracking-wide text-slate-400">
+                <div className="space-y-2 rounded-lg border border-border p-3">
+                  <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                     {activeProvider.name} API credentials
                   </p>
                   {activeProvider.env.map((f) => (
@@ -287,7 +287,7 @@ export default function Certs() {
             </>
           )}
           {issueForm.method === 'http01' && (
-            <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <p className="rounded-lg bg-mutedslate px-3 py-2 text-xs text-muted-foreground">
               HTTP-01 runs a standalone server on port 80. Stop nginx/HAProxy first if they already own port 80,
               or use DNS-01 instead.
             </p>
@@ -309,7 +309,7 @@ export default function Certs() {
           </Field>
           <div className="flex items-center justify-end gap-2 pt-2">
             {issue.isPending && (
-              <span className="mr-auto flex items-center gap-2 text-xs text-slate-500">
+              <span className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">
                 <Spinner className="h-3.5 w-3.5" /> Issuing… (DNS-01 can take 1–2 minutes)
               </span>
             )}
@@ -348,19 +348,19 @@ export default function Certs() {
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                  <span className="text-slate-400">Subject</span>
+                  <span className="text-muted-foreground">Subject</span>
                   <span className="font-mono">{validation.data.cert?.subject}</span>
-                  <span className="text-slate-400">Issuer</span>
+                  <span className="text-muted-foreground">Issuer</span>
                   <span className="font-mono">{validation.data.cert?.issuer}</span>
-                  <span className="text-slate-400">Valid</span>
+                  <span className="text-muted-foreground">Valid</span>
                   <span>{validation.data.cert?.not_before} → {validation.data.cert?.not_after}</span>
-                  <span className="text-slate-400">Days left</span>
+                  <span className="text-muted-foreground">Days left</span>
                   <span>{validation.data.cert?.days_left}</span>
-                  <span className="text-slate-400">Domains</span>
+                  <span className="text-muted-foreground">Domains</span>
                   <span>{validation.data.cert?.dns_names?.join(', ') || '—'}</span>
-                  <span className="text-slate-400">Key type</span>
+                  <span className="text-muted-foreground">Key type</span>
                   <span>{validation.data.cert?.key_algorithm}</span>
-                  <span className="text-slate-400">Key match</span>
+                  <span className="text-muted-foreground">Key match</span>
                   <span className={validation.data.key_match?.ok ? 'text-emerald-600' : 'text-red-500'}>
                     {validation.data.key_match?.ok ? '✓ ' : '✗ '}{validation.data.key_match?.msg}
                   </span>
@@ -370,7 +370,7 @@ export default function Certs() {
                 </p>
               </>
             )}
-            <div className="flex justify-end border-t border-slate-200 pt-3 dark:border-slate-700">
+            <div className="flex justify-end border-t border-border pt-3">
               <Button variant="secondary" onClick={() => setValidation(null)}>Close</Button>
             </div>
           </div>

@@ -16,8 +16,8 @@ const CHECKS: { id: DiagCheck; label: string; icon: any; desc: string; needsPort
 function KV({ k, v }: { k: string; v: any }) {
   return (
     <div className="contents">
-      <span className="text-slate-400">{k}</span>
-      <span className="font-mono text-slate-700 dark:text-slate-200">{v}</span>
+      <span className="text-muted-foreground">{k}</span>
+      <span className="font-mono text-foreground">{v}</span>
     </div>
   )
 }
@@ -25,7 +25,7 @@ function KV({ k, v }: { k: string; v: any }) {
 function ResultView({ check, res }: { check: DiagCheck; res: Record<string, any> }) {
   const latency = (x: any) => (typeof x?.latency_ms === 'number' ? `${x.latency_ms.toFixed(1)} ms` : '—')
   const okBadge = (v: any) =>
-    v?.skipped ? <span className="text-2xs text-slate-400">skipped</span>
+    v?.skipped ? <span className="text-2xs text-muted-foreground">skipped</span>
       : v?.success ? <span className="text-2xs text-emerald-500">✓ OK</span>
       : <span className="text-2xs text-red-500">✗ fail{v?.error ? `: ${v.error}` : ''}</span>
 
@@ -35,15 +35,15 @@ function ResultView({ check, res }: { check: DiagCheck; res: Record<string, any>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
           <div className="contents">
-            <span className="text-slate-400">DNS</span>
+            <span className="text-muted-foreground">DNS</span>
             <span>{okBadge(dns)} {(dns?.ips || []).join(', ')}</span>
           </div>
-          <div className="contents"><span className="text-slate-400">TCP</span><span>{okBadge(tcp)} {latency(tcp)}</span></div>
-          <div className="contents"><span className="text-slate-400">TLS</span><span>{okBadge(tls)} {latency(tls)}</span></div>
-          <div className="contents"><span className="text-slate-400">HTTP</span><span>{okBadge(http)} {http?.status ? `${http.status} · ${latency(http)}` : ''}</span></div>
+          <div className="contents"><span className="text-muted-foreground">TCP</span><span>{okBadge(tcp)} {latency(tcp)}</span></div>
+          <div className="contents"><span className="text-muted-foreground">TLS</span><span>{okBadge(tls)} {latency(tls)}</span></div>
+          <div className="contents"><span className="text-muted-foreground">HTTP</span><span>{okBadge(http)} {http?.status ? `${http.status} · ${latency(http)}` : ''}</span></div>
         </div>
         {tls?.cert && typeof tls.cert === 'object' && (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-mutedslate p-3 text-xs">
             <KV k="TLS" v={tls.protocol || '—'} />
             <KV k="Cipher" v={tls.cipher || '—'} />
             <KV k="Cert subject" v={tls.cert.subject || '—'} />
@@ -96,7 +96,7 @@ export default function Diagnostics() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Network Diagnostics</h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-muted-foreground">
           Probe backends and upstreams directly from the server — TCP, DNS, TLS, HTTP or the full chain.
         </p>
       </div>
@@ -111,14 +111,14 @@ export default function Diagnostics() {
                 onClick={() => setCheck(c.id)}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
                   check === c.id
-                    ? 'bg-indigo-50 ring-1 ring-indigo-300 dark:bg-indigo-500/10 dark:ring-indigo-500/40'
-                    : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                    ? 'bg-primary/10 ring-1 ring-primary/30'
+                    : 'hover:bg-muted/60'
                 }`}
               >
-                <c.icon className={`h-4 w-4 ${check === c.id ? 'text-indigo-500' : 'text-slate-400'}`} />
+                <c.icon className={`h-4 w-4 ${check === c.id ? 'text-primary' : 'text-muted-foreground'}`} />
                 <div className="min-w-0">
                   <div className="text-sm font-medium">{c.label}</div>
-                  <div className="truncate text-2xs text-slate-400">{c.desc}</div>
+                  <div className="truncate text-2xs text-muted-foreground">{c.desc}</div>
                 </div>
               </button>
             ))}
@@ -152,7 +152,7 @@ export default function Diagnostics() {
                 </Field>
               )}
               {(check === 'http' || check === 'backend') && (
-                <label className="flex items-center gap-2 pt-4 text-xs font-medium text-slate-600 dark:text-slate-300">
+                <label className="flex items-center gap-2 pt-4 text-xs font-medium text-muted-foreground">
                   <input type="checkbox" checked={useTLS} onChange={(e) => setUseTLS(e.target.checked)} /> Use TLS/HTTPS
                 </label>
               )}
@@ -164,7 +164,7 @@ export default function Diagnostics() {
 
             {run.isPending && <div className="flex justify-center py-6"><Spinner /></div>}
             {result && !run.isPending && (
-              <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
+              <div className="border-t border-border pt-4">
                 <ResultView check={result.check} res={result.res} />
               </div>
             )}

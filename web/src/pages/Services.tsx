@@ -40,7 +40,7 @@ export default function Services() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Services</h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-muted-foreground">
           Start / stop / reload the proxy engines. Reload validates the generated config first — a broken config never
           reaches the service.
         </p>
@@ -84,7 +84,7 @@ export default function Services() {
                       </Button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-2xs text-slate-500 dark:border-slate-800">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-3 text-2xs text-muted-foreground">
                     <span>Unit</span><span className="font-mono">{s?.unit || engine}</span>
                     <span>Sub state</span><span>{s?.sub || '—'}</span>
                     <span>Main PID</span><span className="font-mono">{s?.pid || '—'}</span>

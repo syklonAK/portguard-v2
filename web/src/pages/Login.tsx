@@ -51,12 +51,12 @@ export default function Login({ mode }: { mode: 'login' | 'setup' }) {
     <div className="flex min-h-full flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <div className="pg-3d flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-900 text-white shadow-lg dark:bg-white dark:text-neutral-900">
+          <div className="pg-3d flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
             <ShieldHalf className="h-7 w-7" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">PortGuard</h1>
-            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               {mode === 'setup' ? 'Create the first owner account' : 'Sign in to your control plane'}
             </p>
           </div>
@@ -64,19 +64,19 @@ export default function Login({ mode }: { mode: 'login' | 'setup' }) {
 
         <form
           onSubmit={submit}
-          className="pg-modal-card space-y-4 rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900"
+          className="pg-modal-card space-y-4 rounded-xl border border-border bg-card p-6"
         >
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-300">Username</span>
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Username</span>
             <Input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus minLength={3} required />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-300">Password</span>
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Password</span>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
           </label>
           {mode === 'setup' && (
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-300">Confirm password</span>
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">Confirm password</span>
               <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} minLength={8} required />
             </label>
           )}
@@ -91,7 +91,7 @@ export default function Login({ mode }: { mode: 'login' | 'setup' }) {
             {busy ? 'Please wait…' : mode === 'setup' ? 'Create owner' : 'Sign in'}
           </Button>
         </form>
-        <p className="mt-4 text-center text-2xs text-neutral-400">
+        <p className="mt-4 text-center text-2xs text-muted-foreground">
           PortGuard — Network Edge Control Plane
         </p>
       </div>
@@ -101,12 +101,12 @@ export default function Login({ mode }: { mode: 'login' | 'setup' }) {
         {FEATURES.map((f, i) => (
           <div
             key={f.title}
-            className="pg-3d flex flex-col items-center rounded-xl border border-neutral-200/80 bg-white p-4 text-center dark:border-white/10 dark:bg-white/[0.03]"
+            className="pg-3d flex flex-col items-center rounded-xl border border-border/60 bg-card p-4 text-center shadow-sm"
             style={{ animation: `fade-up 0.5s cubic-bezier(0.22,1,0.36,1) ${i * 70}ms both` }}
           >
-            <f.icon className="h-4 w-4 text-neutral-700 dark:text-neutral-200" />
-            <div className="mt-2 text-xs font-semibold text-neutral-800 dark:text-white">{f.title}</div>
-            <p className="mt-1 text-2xs leading-relaxed text-neutral-500 dark:text-neutral-400">{f.desc}</p>
+            <f.icon className="h-4 w-4 text-foreground" />
+            <div className="mt-2 text-xs font-semibold text-foreground">{f.title}</div>
+            <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">{f.desc}</p>
           </div>
         ))}
       </div>

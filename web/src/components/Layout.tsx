@@ -1,9 +1,10 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Network, ArrowLeftRight, ShieldCheck, Activity, ScrollText, Settings as SettingsIcon,
-  ShieldHalf, Moon, Sun, LogOut, Wrench, Gauge, History, Stethoscope, Waypoints, Radio, Server, Package, GaugeCircle, GitBranch, Bell, UsersRound, Terminal, Boxes, TrendingUp, Menu,
+  ShieldHalf, Moon, Sun, LogOut, Wrench, Gauge, History, Stethoscope, Waypoints, Radio, Server, Package,
+  GaugeCircle, GitBranch, Bell, UsersRound, Terminal, Boxes, TrendingUp, Menu, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, setToken } from '../api'
 
@@ -32,74 +33,71 @@ const nav = [
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]
 
-// SidebarContent is shared between the desktop rail and the Bootstrap
-// offcanvas that replaces it on phones/tablets. closeOnNav makes every
-// link dismiss the offcanvas after navigation (no-op on desktop).
-// hideOffcanvas closes the mobile nav after a link tap; doing it in JS (not
-// data-bs-dismiss) keeps React Router's client-side navigation intact.
-function hideOffcanvas() {
-  const el = document.getElementById('pgSidebar')
-  const oc = (window as any).bootstrap?.Offcanvas
-  if (el && oc) oc.getOrCreateInstance(el).hide()
-}
+const SIDEBAR_KEY = 'pg_sidebar_open'
 
-function SidebarContent({ me, system, dark, onToggleTheme, onLogout, closeOnNav }: {
+function SidebarContent({ me, system, dark, onToggleTheme, onLogout, collapsed, onNavigate }: {
   me?: { username?: string; role?: string }
   system?: string
   dark: boolean
   onToggleTheme: () => void
   onLogout: () => void
-  closeOnNav?: boolean
+  collapsed: boolean
+  onNavigate?: () => void
 }) {
   return (
     <>
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white shadow-md dark:bg-white dark:text-neutral-900">
+      {/* brand header — collapses to logo-only when the rail is icon-mode */}
+      <div className={`flex items-center gap-2.5 border-b border-sidebar-border px-3 py-4 ${collapsed ? 'justify-center px-2' : 'px-4'}`}>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <ShieldHalf className="h-5 w-5" />
         </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-bold tracking-tight">PortGuard</span>
-            <span className="rounded bg-neutral-100 px-1 py-0.5 font-mono text-2xs font-medium text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300" title="panel version">
-              v{system || '…'}
-            </span>
+        {!collapsed && (
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-sm font-bold tracking-tight">PortGuard</span>
+              <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-2xs font-medium text-muted-foreground" title="panel version">
+                v{system || '…'}
+              </span>
+            </div>
+            <div className="truncate text-2xs text-muted-foreground">Port & Proxy Manager</div>
           </div>
-          <div className="text-2xs text-neutral-400">Port & Proxy Manager</div>
-        </div>
+        )}
       </div>
-      <nav
-        className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2"
-        onClickCapture={closeOnNav ? hideOffcanvas : undefined}
-      >
+
+      <nav className="pg-scroll-hide flex-1 space-y-0.5 overflow-y-auto px-2 py-2" onClick={onNavigate}>
         {nav.map(({ to, label, icon: Icon, ...rest }) => (
           <NavLink
             key={to}
             to={to}
             end={'end' in rest ? (rest as { end?: boolean }).end : false}
+            title={collapsed ? label : undefined}
             className={({ isActive }) =>
-              `pg-press flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              `pg-press flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+                collapsed ? 'justify-center px-2' : ''
+              } ${
                 isActive
-                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
-                  : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
+                  ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
               }`
             }
           >
             <Icon className="h-4 w-4 shrink-0" />
-            {label}
+            {!collapsed && label}
           </NavLink>
         ))}
       </nav>
-      <div className="border-t border-neutral-200/80 p-3 dark:border-neutral-800">
-        <div className="flex items-center justify-between rounded-lg px-2 py-1.5">
-          <span className="min-w-0 truncate text-xs font-medium text-neutral-500 dark:text-neutral-400">
+
+      <div className="border-t border-sidebar-border p-2">
+        <div className={`flex items-center justify-between rounded-lg px-2 py-1.5 ${collapsed ? 'flex-col gap-2' : ''}`}>
+          <span className={`min-w-0 truncate text-xs font-medium text-muted-foreground ${collapsed ? 'hidden' : ''}`}>
             {me?.username || ''}
-            {me?.role && <span className="ml-1 text-2xs text-neutral-400">({me.role})</span>}
+            {me?.role && <span className="ml-1 text-2xs text-muted-foreground/70">({me.role})</span>}
           </span>
           <div className="flex shrink-0 gap-0.5">
-            <button onClick={onToggleTheme} className="pg-press rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Toggle theme">
+            <button onClick={onToggleTheme} className="pg-press cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" title="Toggle theme">
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <button onClick={onLogout} className="pg-press rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Logout">
+            <button onClick={onLogout} className="pg-press cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" title="Logout">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
@@ -113,6 +111,16 @@ export default function Layout() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  // PasarGuard-style collapsible desktop rail: 16rem expanded / 3rem icon-only,
+  // toggled by Ctrl+B, persisted in localStorage, remembered across reloads.
+  const [open, setOpen] = useState(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_KEY)
+      return stored === null ? true : stored === 'true'
+    } catch {
+      return true
+    }
+  })
   const me = useQuery({ queryKey: ['me'], queryFn: () => api.me(), staleTime: 60_000 })
   const system = useQuery({ queryKey: ['version'], queryFn: () => api.system(), staleTime: Infinity, select: (s) => s.version })
 
@@ -123,6 +131,29 @@ export default function Layout() {
     localStorage.setItem('pg_theme', next ? 'dark' : 'light')
   }
 
+  const toggleSidebar = () => {
+    // functional updater reads fresh state even from the long-lived keydown
+    // listener; persistence happens inside the updater
+    setOpen((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(SIDEBAR_KEY, String(next))
+      } catch { /* private mode — state still works in-session */ }
+      return next
+    })
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'b' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        toggleSidebar()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const logout = () => {
     setToken(null)
     qc.clear()
@@ -132,11 +163,11 @@ export default function Layout() {
   const sidebarProps = { me: me.data, system: system.data, dark, onToggleTheme: toggleTheme, onLogout: logout }
 
   return (
-    <div className="flex h-full flex-col lg:flex-row">
+    <div className="pg-shell flex h-full flex-col lg:flex-row" data-state={open ? 'expanded' : 'collapsed'}>
       {/* mobile top bar (Bootstrap offcanvas opens the nav) */}
-      <header className="flex items-center justify-between gap-2 border-b border-neutral-200/80 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900 lg:hidden">
+      <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-sidebar-border bg-sidebar/80 px-3 py-2.5 backdrop-blur-md lg:hidden">
         <button
-          className="pg-press inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
+          className="pg-press inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-border text-foreground"
           type="button"
           data-bs-toggle="offcanvas"
           data-bs-target="#pgSidebar"
@@ -146,17 +177,17 @@ export default function Layout() {
           <Menu className="h-5 w-5" />
         </button>
         <div className="flex min-w-0 items-center gap-2">
-          <ShieldHalf className="h-4 w-4 shrink-0" />
+          <ShieldHalf className="h-4 w-4 shrink-0 text-primary" />
           <span className="truncate text-sm font-bold tracking-tight">PortGuard</span>
-          <span className="rounded bg-neutral-100 px-1 py-0.5 font-mono text-2xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300">
+          <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-2xs font-medium text-muted-foreground">
             v{system.data || '…'}
           </span>
         </div>
         <div className="flex gap-0.5">
-          <button onClick={toggleTheme} className="pg-press rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Toggle theme">
+          <button onClick={toggleTheme} className="pg-press cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" title="Toggle theme">
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
-          <button onClick={logout} className="pg-press rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Logout">
+          <button onClick={logout} className="pg-press cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" title="Logout">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
@@ -164,26 +195,52 @@ export default function Layout() {
 
       {/* Bootstrap offcanvas nav: phones / tablets */}
       <div className="offcanvas offcanvas-start pg-offcanvas" tabIndex={-1} id="pgSidebar" aria-label="Navigation">
-        <div className="offcanvas-header border-b border-neutral-200/80 dark:border-neutral-800">
+        <div className="offcanvas-header border-b border-sidebar-border">
           <span className="text-sm font-semibold">Navigation</span>
-          <button type="button" className="pg-press rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800" data-bs-dismiss="offcanvas" aria-label="Close">
+          <button type="button" className="pg-press cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" data-bs-dismiss="offcanvas" aria-label="Close">
             <Menu className="h-4 w-4" />
           </button>
         </div>
         <div className="offcanvas-body flex flex-col p-0">
-          <SidebarContent {...sidebarProps} closeOnNav />
+          <SidebarContent {...sidebarProps} collapsed={false} />
         </div>
       </div>
 
-      {/* desktop rail */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-neutral-200/80 bg-white dark:border-neutral-800 dark:bg-neutral-900 lg:flex">
-        <SidebarContent {...sidebarProps} />
+      {/* desktop rail — PasarGuard-style collapsible (Ctrl+B / arrow button) */}
+      <aside
+        className="pg-sidebar bg-sidebar text-sidebar-foreground relative hidden shrink-0 flex-col border-r border-sidebar-border lg:flex"
+        style={{ width: 'var(--pg-sidebar-width)' }}
+      >
+        <SidebarContent {...sidebarProps} collapsed={!open} />
+        {/* collapse / expand trigger pinned to the rail edge */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          title={open ? 'Collapse sidebar (Ctrl+B)' : 'Expand sidebar (Ctrl+B)'}
+          className={`pg-press absolute top-[4.25rem] z-10 flex h-6 w-6 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground ${
+            open ? 'left-full' : 'left-full'
+          }`}
+        >
+          {open ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
+        </button>
       </aside>
 
       {/* Main */}
-      <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-neutral-50 dark:bg-neutral-950">
-        <div className="pg-page mx-auto max-w-6xl p-4 sm:p-6">
-          <Outlet />
+      <main className="pg-main min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-background">
+        <div className="pg-page mx-auto flex min-h-full max-w-6xl flex-col p-4 sm:p-6">
+          <div className="flex-1">
+            <Outlet />
+          </div>
+          {/* PasarGuard-style quiet footer */}
+          <div className="relative flex w-full pt-6 pb-3">
+            <p className="inline-block flex-grow text-center text-xs text-muted-foreground">
+              Made with &#10084;&#65039; by&nbsp;
+              <a className="text-primary hover:underline" href="https://github.com/syklonAK/portguard-v2" target="_blank" rel="noreferrer">
+                PortGuard
+              </a>{' '}
+              Team
+            </p>
+          </div>
         </div>
       </main>
     </div>

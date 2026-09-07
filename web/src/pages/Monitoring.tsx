@@ -19,7 +19,7 @@ export default function Monitoring() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Monitoring</h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-muted-foreground">
           Live backend health — TCP + HTTP checks run periodically (auto-refresh every 10s)
         </p>
       </div>
@@ -43,7 +43,7 @@ export default function Monitoring() {
               />
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                  <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                     <th className="px-5 py-2 font-medium">Target</th>
                     <th className="px-3 py-2 font-medium">Status</th>
                     <th className="px-3 py-2 font-medium">Latency</th>
@@ -51,12 +51,12 @@ export default function Monitoring() {
                     <th className="px-5 py-2 font-medium">Last check</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                <tbody className="divide-y divide-border">
                   {m.targets.map((t, i) => {
                     const h = healthMap.get(`${m.id}:${i}`)
                     const status = (h?.status || 'unknown') as 'up' | 'down' | 'unknown'
                     return (
-                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <tr key={i} className="hover:bg-muted/60">
                         <td className="px-5 py-2.5 font-mono text-xs">{t.host}:{t.port}{t.backup ? ' (backup)' : ''}</td>
                         <td className="px-3 py-2.5">
                           <span className="inline-flex items-center gap-1.5">
@@ -66,7 +66,7 @@ export default function Monitoring() {
                         </td>
                         <td className="px-3 py-2.5 font-mono text-xs">{h ? `${h.latency_ms.toFixed(1)} ms` : '—'}</td>
                         <td className="px-3 py-2.5 text-xs">{h?.fail_count ? <Badge color="red">{h.fail_count}</Badge> : '0'}</td>
-                        <td className="px-5 py-2.5 text-xs text-slate-500">
+                        <td className="px-5 py-2.5 text-xs text-muted-foreground">
                           {h?.last_check_at ? new Date(h.last_check_at).toLocaleTimeString() : '—'}
                         </td>
                       </tr>

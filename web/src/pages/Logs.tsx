@@ -48,7 +48,7 @@ export default function Logs() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Logs</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Allowlisted sources only (agent, nginx, haproxy, xray, hedioum, bridge, syslog) — bounded tails, never unrestricted file access.
           </p>
         </div>
@@ -87,13 +87,13 @@ export default function Logs() {
         ) : logs.error ? (
           <p className="p-6 text-center text-xs text-red-500">{(logs.error as any).message}</p>
         ) : (
-          <pre className="max-h-[600px] overflow-auto rounded-b-xl bg-slate-950 p-4 font-mono text-2xs leading-relaxed">
+          <pre className="max-h-[600px] overflow-auto rounded-b-xl bg-popover p-4 font-mono text-2xs leading-relaxed">
             {content.split('\n').map((line, i) => (
               <div key={i} className={
                 /\bemerg|alert|crit\b/i.test(line) ? 'text-red-400'
                 : /\berror\b/i.test(line) ? 'text-amber-400'
                 : /\bwarn\b/i.test(line) ? 'text-yellow-300'
-                : 'text-slate-300'
+                : 'text-foreground/70'
               }>{line || ' '}</div>
             ))}
           </pre>

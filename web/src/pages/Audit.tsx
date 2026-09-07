@@ -27,7 +27,7 @@ export default function Audit() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold">Audit Log</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Who did what — every state-changing action is recorded</p>
+          <p className="text-xs text-muted-foreground">Who did what — every state-changing action is recorded</p>
         </div>
         <Button variant="secondary" onClick={() => qc.invalidateQueries({ queryKey: ['audit'] })}>
           <RefreshCw className="h-4 w-4" /> Refresh
@@ -44,7 +44,7 @@ export default function Audit() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-medium">Time</th>
                   <th className="px-3 py-2.5 font-medium">Actor</th>
                   <th className="px-3 py-2.5 font-medium">Action</th>
@@ -52,15 +52,15 @@ export default function Audit() {
                   <th className="px-5 py-2.5 font-medium">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+              <tbody className="divide-y divide-border">
                 {audit.data.map((l) => (
-                  <tr key={l.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                    <td className="px-5 py-2.5 whitespace-nowrap font-mono text-xs text-slate-500">
+                  <tr key={l.id} className="hover:bg-muted/60">
+                    <td className="px-5 py-2.5 whitespace-nowrap font-mono text-xs text-muted-foreground">
                       {new Date(l.created_at).toLocaleString()}
                     </td>
                     <td className="px-3 py-2.5 font-medium">{l.actor}</td>
                     <td className="px-3 py-2.5"><Badge color={actionColor[l.action] || 'slate'}>{l.action}</Badge></td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500">{l.detail}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{l.detail}</td>
                     <td className="px-5 py-2.5"><Badge color={l.status === 'ok' ? 'green' : 'red'}>{l.status}</Badge></td>
                   </tr>
                 ))}

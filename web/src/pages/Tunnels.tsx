@@ -33,8 +33,8 @@ function StateBadge({ state }: { state?: string }) {
 
 function EnvRow({ label, ok, detail, missing }: { label: string; ok: boolean; detail?: string; missing?: string }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{label}</span>
+    <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {ok ? (
         <span className="flex items-center gap-1.5 text-2xs text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="h-3.5 w-3.5" /> {detail || 'ok'}
@@ -131,7 +131,7 @@ export default function Tunnels() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Tunnels — Hedioum</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Iran-side relays: users → this server → SOCKS5 hub → foreign egress → node.
           </p>
         </div>
@@ -190,7 +190,7 @@ export default function Tunnels() {
           />
         </div>
         {myRole === 'foreign' && (
-          <div className="border-t border-slate-200 px-5 py-4 text-2xs leading-relaxed text-amber-600 dark:border-slate-800 dark:text-amber-400">
+          <div className="border-t border-border px-5 py-4 text-2xs leading-relaxed text-amber-600 dark:text-amber-400">
             This box is the egress: relays configured below are meaningless here — set up the egress with the official
             hedioum-tunnel script and give the printed token to the Iran hub. Relay management belongs on the Iran server.
           </div>
@@ -208,7 +208,7 @@ export default function Tunnels() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                  <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                     <th className="px-5 py-2.5 font-medium">Name</th>
                     <th className="px-3 py-2.5 font-medium">Mode</th>
                     <th className="px-3 py-2.5 font-medium">Entry point</th>
@@ -217,9 +217,9 @@ export default function Tunnels() {
                     <th className="px-5 py-2.5 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                <tbody className="divide-y divide-border">
                   {relays.data.map((r) => (
-                    <tr key={r.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 ${!r.enabled ? 'opacity-60' : ''}`}>
+                    <tr key={r.id} className={`hover:bg-muted/60 ${!r.enabled ? 'opacity-60' : ''}`}>
                       <td className="px-5 py-3 font-medium">{r.name}</td>
                       <td className="px-3 py-3"><Badge color={r.mode === 'tls' ? 'purple' : 'blue'}>{r.mode}</Badge></td>
                       <td className="px-3 py-3 font-mono text-xs">
@@ -229,7 +229,7 @@ export default function Tunnels() {
                       </td>
                       <td className="px-3 py-3 font-mono text-xs">
                         {r.target_host}:{r.target_port}
-                        {r.host_header && <span className="block text-2xs text-slate-400">Host: {r.host_header}</span>}
+                        {r.host_header && <span className="block text-2xs text-muted-foreground">Host: {r.host_header}</span>}
                       </td>
                       <td className="px-3 py-3">
                         <Toggle checked={r.enabled} onChange={() => api.updateRelay(r.id, { ...r, enabled: !r.enabled }).then(refresh).catch((e: any) => push('error', e.message))} />
@@ -259,8 +259,8 @@ export default function Tunnels() {
               <EnvRow label="xray-core" ok={st.xray_installed} detail={st.xray_version} missing="not installed (see hint above)" />
               <EnvRow label="bridge service" ok={st.bridge_active === 'active'} detail={st.bridge_active} missing="not applied yet" />
               <EnvRow label="SOCKS5 hub" ok={!!st.socks_listening} detail={st.socks_listening} missing="no 40000-49999 loopback listener" />
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Detected role</span>
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                <span className="text-xs font-medium text-muted-foreground">Detected role</span>
                 <StateBadge state={st.role} />
               </div>
               {st.role === 'iran' && st.socks_listening && (
@@ -278,16 +278,16 @@ export default function Tunnels() {
           title="How the topology works"
           desc="PortGuard automates the Iran side of the hedioum-suite relay bridge"
         />
-        <div className="space-y-2 p-5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+        <div className="space-y-2 p-5 text-xs leading-relaxed text-muted-foreground">
           <div className="flex flex-wrap items-center gap-2 font-mono">
             <span className="rounded-lg bg-sky-100 px-2 py-1 dark:bg-sky-500/20">user</span>
-            <ArrowRight className="h-3 w-3 text-slate-400" />
+            <ArrowRight className="h-3 w-3 text-muted-foreground" />
             <span className="rounded-lg bg-sky-100 px-2 py-1 dark:bg-sky-500/20">Iran: entry</span>
-            <ArrowRight className="h-3 w-3 text-slate-400" />
+            <ArrowRight className="h-3 w-3 text-muted-foreground" />
             <span className="rounded-lg bg-violet-100 px-2 py-1 dark:bg-violet-500/20">xray dokodemo (bridge)</span>
-            <ArrowRight className="h-3 w-3 text-slate-400" />
+            <ArrowRight className="h-3 w-3 text-muted-foreground" />
             <span className="rounded-lg bg-violet-100 px-2 py-1 dark:bg-violet-500/20">SOCKS5 hub</span>
-            <ArrowRight className="h-3 w-3 text-slate-400" />
+            <ArrowRight className="h-3 w-3 text-muted-foreground" />
             <span className="rounded-lg bg-emerald-100 px-2 py-1 dark:bg-emerald-500/20">Hedioum egress</span>
           </div>
           <p><b>raw mode</b> — the bridge listens publicly on <code>listen_ip:listen_port</code> and passes TCP straight through; TLS/REALITY stays on the foreign node.</p>
@@ -353,7 +353,7 @@ export default function Tunnels() {
             </>
           )}
 
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Toggle checked={!!draft.udp} onChange={(v) => set('udp', v)} /> Forward UDP too (raw mode only meaningful)
           </label>
 
@@ -361,7 +361,7 @@ export default function Tunnels() {
             <Input value={draft.notes || ''} onChange={(e) => set('notes', e.target.value)} />
           </Field>
 
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
             <Button onClick={save} disabled={saving || !draft.name || !draft.target_host}>
               {saving ? 'Saving…' : 'Save relay'}
@@ -386,17 +386,17 @@ function RoleCard({ active, icon, title, desc, onClick }: {
       onClick={onClick}
       className={`rounded-xl border p-4 text-left transition-all ${
         active
-          ? 'border-indigo-400 bg-indigo-50 dark:border-indigo-500/60 dark:bg-indigo-500/10'
-          : 'border-slate-200 hover:border-indigo-300 dark:border-slate-700 dark:hover:border-indigo-500/40'
+          ? 'border-primary/40 bg-primary/10'
+          : 'border-border hover:border-primary/40'
       }`}
     >
       <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-lg ${
-        active ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+        active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
       }`}>
         {icon}
       </div>
       <div className="text-xs font-bold">{title}</div>
-      <p className="mt-1 text-2xs leading-relaxed text-slate-500 dark:text-slate-400">{desc}</p>
+      <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">{desc}</p>
     </button>
   )
 }

@@ -53,7 +53,7 @@ export default function Ports() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Ports</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Listening sockets detected on this server
             {ports.data?.last_scan_at ? ` · last scan ${new Date(ports.data.last_scan_at).toLocaleString()}` : ''}
           </p>
@@ -87,7 +87,7 @@ export default function Ports() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-medium">Port</th>
                   <th className="px-3 py-2.5 font-medium">Proto</th>
                   <th className="px-3 py-2.5 font-medium">Listen IP</th>
@@ -99,17 +99,17 @@ export default function Ports() {
                   <th className="px-5 py-2.5"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+              <tbody className="divide-y divide-border">
                 {rows.map((p: PortEntry, i) => (
-                  <tr key={`${p.proto}-${p.port}-${p.listen_ip}-${i}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <tr key={`${p.proto}-${p.port}-${p.listen_ip}-${i}`} className="hover:bg-muted/60">
                     <td className="px-5 py-2.5 font-mono font-semibold">{p.port}</td>
                     <td className="px-3 py-2.5">
                       <Badge color={p.proto === 'tcp' ? 'blue' : 'purple'}>{p.proto}</Badge>
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-slate-500">{p.listen_ip}</td>
-                    <td className="px-3 py-2.5">{p.process || <span className="text-slate-400">—</span>}</td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500">{p.pid || '—'}</td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500">{p.user || '—'}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{p.listen_ip}</td>
+                    <td className="px-3 py-2.5">{p.process || <span className="text-muted-foreground">—</span>}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{p.pid || '—'}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{p.user || '—'}</td>
                     <td className="px-3 py-2.5">
                       <Badge color={classColor(p.classification)}>{p.classification}</Badge>
                     </td>

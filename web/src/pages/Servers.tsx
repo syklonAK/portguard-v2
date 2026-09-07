@@ -230,7 +230,7 @@ export default function Servers() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Servers</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Manage every PortGuard server from this panel — profiles, tunnel roles and remote operations.
           </p>
         </div>
@@ -331,7 +331,7 @@ export default function Servers() {
                   <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
                     n.role === 'iran' ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-300'
                     : n.role === 'foreign' ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300'}`}>
+                    : 'bg-mutedslate text-muted-foreground dark:bg-mutedslate0/15'}`}>
                     {n.role === 'iran' ? <RadioTower className="h-5 w-5" /> :
                      n.role === 'foreign' ? <Globe2 className="h-5 w-5" /> :
                      <Server className="h-5 w-5" />}
@@ -341,23 +341,23 @@ export default function Servers() {
                       <span className="text-sm font-semibold">{n.name}</span>
                       <Badge color={ROLE_COLORS[n.role] || 'slate'}>{n.role}</Badge>
                     </div>
-                    <div className="font-mono text-2xs text-slate-400">{n.host}:{n.port}</div>
+                    <div className="font-mono text-2xs text-muted-foreground">{n.host}:{n.port}</div>
                   </div>
                 </div>
                 <span className={`flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-2xs font-medium ${
                   n.status === 'online' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                   : n.status === 'offline' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${n.status === 'online' ? 'bg-emerald-500' : n.status === 'offline' ? 'bg-red-500' : 'bg-slate-400'}`} />
+                  : 'bg-mutedslate text-muted-foreground'}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${n.status === 'online' ? 'bg-emerald-500' : n.status === 'offline' ? 'bg-red-500' : 'bg-muted-foreground'}`} />
                   {n.status}
                 </span>
               </div>
 
-              <div className="px-5 pb-3 text-2xs text-slate-400">
+              <div className="px-5 pb-3 text-2xs text-muted-foreground">
                 {n.notes || '—'} · seen {fmtAgo(n.last_seen)}
               </div>
 
-              <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-slate-200 p-4 dark:border-slate-800">
+              <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border p-4">
                 <Button variant="secondary" size="sm" onClick={() => probe.mutate(n)} disabled={probe.isPending}>
                   <Activity className="h-3.5 w-3.5" /> Probe
                 </Button>
@@ -399,7 +399,7 @@ export default function Servers() {
 
       <Card>
         <CardHeader title="How it works" desc="Master ↔ node handshake" />
-        <div className="space-y-2.5 p-5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+        <div className="space-y-2.5 p-5 text-xs leading-relaxed text-muted-foreground">
           <p><b>1.</b> Install PortGuard on every server (same one-liner). Each panel is fully standalone.</p>
           <p><b>2.</b> On the servers you want to manage remotely: set a <b>Node API token</b> above (or on that server's Settings → panel) — it becomes a manageable node.</p>
           <p><b>3.</b> On this master: <b>Add server</b>, fill host/port, paste that token, choose the role (generic / iran hub / foreign egress).</p>
@@ -434,7 +434,7 @@ export default function Servers() {
             <Input type="password" value={tokenDraft} onChange={(e) => setTokenDraft(e.target.value)} placeholder="paste the node token" />
           </Field>
           <Field label="Notes"><Input value={draft.notes || ''} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
             <Button onClick={save} disabled={saving || !draft.name || !draft.host}>{saving ? 'Saving…' : 'Save server'}</Button>
           </div>
@@ -445,7 +445,7 @@ export default function Servers() {
       <Modal open={deployModal} onClose={() => setDeployModal(false)} wide
         title="Deploy a new node — no panel install needed">
         <div className="space-y-4">
-          <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+          <p className="text-xs leading-relaxed text-muted-foreground">
             Run this single command on the new Ubuntu server — that's the whole flow. It downloads
             <b> this master's own binary</b>, installs it as a headless <b>portguard-agent</b> service
             (no account, no panel setup) and <b>self-registers</b> with this master. When the command
@@ -460,10 +460,10 @@ export default function Servers() {
             </div>
           </Field>
           <Field label="2. Pick the node role">
-            <div className="text-2xs leading-relaxed text-slate-500 dark:text-slate-400">
-              Pass <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">-role iran</code> or
-              <code className="mx-1 rounded bg-slate-100 px-1 dark:bg-slate-800">-role foreign</code> for tunnel
-              servers; default is <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">generic</code>.
+            <div className="text-2xs leading-relaxed text-muted-foreground">
+              Pass <code className="rounded bg-mutedslate px-1">-role iran</code> or
+              <code className="mx-1 rounded bg-mutedslate px-1">-role foreign</code> for tunnel
+              servers; default is <code className="rounded bg-mutedslate px-1">generic</code>.
             </div>
           </Field>
           <Field label="3. One-liner (run as root on the new server)">
@@ -486,14 +486,14 @@ export default function Servers() {
         {manageModal && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/60">
+              <div className="flex gap-1 rounded-xl border border-border bg-mutedslate p-1">
                 {(['mappings', 'certs'] as const).map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setManageTab(t)}
                     className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize ${
-                      manageTab === t ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-900 dark:text-indigo-300' : 'text-slate-500'
+                      manageTab === t ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground'
                     }`}
                   >
                     {t}
@@ -513,16 +513,16 @@ export default function Servers() {
                 {(remoteMappings ?? []).length === 0 ? (
                   <Empty message="No mappings on this node yet." />
                 ) : (
-                  <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="max-h-64 overflow-auto rounded-xl border border-border">
                     <table className="w-full text-sm">
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      <tbody className="divide-y divide-border">
                         {(remoteMappings ?? []).map((m: any) => (
                           <tr key={m.id}>
                             <td className="px-4 py-2.5 font-medium">{m.name}</td>
                             <td className="px-3 py-2.5"><Badge color={m.engine === 'nginx' ? 'green' : 'purple'}>{m.engine}</Badge></td>
                             <td className="px-3 py-2.5"><Badge color="slate">{m.protocol}</Badge></td>
                             <td className="px-3 py-2.5 font-mono text-xs">{m.listen_ip}:{m.listen_port}</td>
-                            <td className="px-3 py-2.5 text-xs text-slate-500">{m.targets?.map((t: any) => `${t.host}:${t.port}`).join(', ') || (m.path_routes?.length ? 'path routes' : '—')}</td>
+                            <td className="px-3 py-2.5 text-xs text-muted-foreground">{m.targets?.map((t: any) => `${t.host}:${t.port}`).join(', ') || (m.path_routes?.length ? 'path routes' : '—')}</td>
                             <td className="px-3 py-2.5 text-right">
                               <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteRemoteMapping(m.id)}>
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -535,7 +535,7 @@ export default function Servers() {
                   </div>
                 )}
                 <div>
-                  <div className="mb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <div className="mb-1.5 text-xs font-medium text-muted-foreground">
                     Create mapping (raw JSON — same shape as the local editor)
                   </div>
                   <CodeEditor
@@ -558,15 +558,15 @@ export default function Servers() {
                 {(remoteCerts ?? []).length === 0 ? (
                   <Empty message="No certificates on this node." />
                 ) : (
-                  <div className="max-h-48 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="max-h-48 overflow-auto rounded-xl border border-border">
                     <table className="w-full text-sm">
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      <tbody className="divide-y divide-border">
                         {(remoteCerts ?? []).map((c: any) => (
                           <tr key={c.id}>
                             <td className="px-4 py-2.5 font-medium">{c.name}</td>
                             <td className="px-3 py-2.5"><Badge color={c.type === 'manual' ? 'blue' : 'amber'}>{c.type}</Badge></td>
-                            <td className="px-3 py-2.5 text-xs text-slate-500">{(c.domains ?? []).join(', ')}</td>
-                            <td className="px-3 py-2.5 text-2xs text-slate-400">
+                            <td className="px-3 py-2.5 text-xs text-muted-foreground">{(c.domains ?? []).join(', ')}</td>
+                            <td className="px-3 py-2.5 text-2xs text-muted-foreground">
                               {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—'}
                             </td>
                           </tr>
@@ -575,7 +575,7 @@ export default function Servers() {
                     </table>
                   </div>
                 )}
-                <p className="text-2xs leading-relaxed text-slate-400">
+                <p className="text-2xs leading-relaxed text-muted-foreground">
                   Upload certs for this node from your local SSL Certs page: copy the PEM pair and POST it here
                   (API: <code>POST /api/nodes/{manageModal.id}/certs</code> with
                   <code> name / cert_pem / key_pem / domains</code>). The apply pipeline writes
@@ -598,14 +598,14 @@ export default function Servers() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                    <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                       <th className="px-2 py-2.5 font-medium">Tool</th>
                       <th className="px-2 py-2.5 font-medium">State</th>
                       <th className="px-2 py-2.5 font-medium">Binary</th>
                       <th className="px-2 py-2.5 text-right font-medium">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                  <tbody className="divide-y divide-border">
                     {(remoteTools ?? []).map((t) => (
                       <tr key={t.id}>
                         <td className="px-2 py-2.5 font-medium">{t.name}</td>
@@ -616,7 +616,7 @@ export default function Servers() {
                             <Badge color="red">missing</Badge>
                           )}
                         </td>
-                        <td className="px-2 py-2.5 font-mono text-2xs text-slate-400">{t.binary || '—'}</td>
+                        <td className="px-2 py-2.5 font-mono text-2xs text-muted-foreground">{t.binary || '—'}</td>
                         <td className="px-2 py-2.5">
                           <Button
                             size="sm"
@@ -638,12 +638,12 @@ export default function Servers() {
               <div>
                 <div className="mb-1.5 flex items-center gap-2">
                   <Badge color={toolOutput.ok ? 'green' : 'red'}>{toolOutput.ok ? 'ok' : 'error'}</Badge>
-                  <span className="text-2xs text-slate-400">finished in {toolOutput.elapsed}</span>
+                  <span className="text-2xs text-muted-foreground">finished in {toolOutput.elapsed}</span>
                 </div>
                 <CodeBlock code={toolOutput.output || '(no output)'} />
               </div>
             )}
-            <p className="text-2xs leading-relaxed text-slate-400">
+            <p className="text-2xs leading-relaxed text-muted-foreground">
               The installer runs on the remote server through its node API (official installers only).
               After installing <b>xray</b> for the tunnel bridge, disable the default xray service there
               (<code>systemctl disable --now xray</code>) — PortGuard runs the bridge as its own unit.
@@ -669,8 +669,8 @@ export default function Servers() {
               <Stat label="Backends up/down" value={`${summaryModal.data.health.up}/${summaryModal.data.health.down}`} />
               <Stat label="PortGuard" value={summaryModal.data.version} />
             </div>
-            <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+            <div className="rounded-xl border border-border p-4">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                 <Waypoints className="h-4 w-4" /> Tunnel state
               </div>
               <div className="grid grid-cols-2 gap-2 text-2xs sm:grid-cols-4">
@@ -689,8 +689,8 @@ export default function Servers() {
 
 function Stat({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-      <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-slate-400">
+    <div className="rounded-xl border border-border p-3">
+      <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         {icon} {label}
       </div>
       <div className="mt-1 text-sm font-bold">{value}</div>

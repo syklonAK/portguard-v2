@@ -17,7 +17,7 @@ const RANGES: { value: Range; label: string }[] = [
 function Sparkline({ points, color, height = 90 }: { points: number[]; color: string; height?: number }) {
   const W = 560
   if (points.length < 2) {
-    return <div className="flex items-center justify-center text-2xs text-slate-400" style={{ height }}>not enough samples yet</div>
+    return <div className="flex items-center justify-center text-2xs text-muted-foreground" style={{ height }}>not enough samples yet</div>
   }
   const max = Math.max(...points, 1)
   const step = W / (points.length - 1)
@@ -50,7 +50,7 @@ export default function Analytics() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Traffic Analytics</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Per-node bandwidth, connections and resource history — sampled every 30s, 7-day retention.
           </p>
         </div>
@@ -113,11 +113,11 @@ export default function Analytics() {
 
 function Stat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent?: 'indigo' }) {
   return (
-    <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
-      <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-slate-400">
+    <div className="rounded-xl border border-border p-3.5">
+      <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         {icon} {label}
       </div>
-      <div className={`mt-1 text-lg font-bold ${accent === 'indigo' ? 'text-indigo-600 dark:text-indigo-300' : ''}`}>{value}</div>
+      <div className={`mt-1 text-lg font-bold ${accent === 'indigo' ? 'text-primary' : ''}`}>{value}</div>
     </div>
   )
 }

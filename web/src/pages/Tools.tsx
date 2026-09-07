@@ -58,7 +58,7 @@ export default function Tools() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold">Tools</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Software PortGuard depends on — auto-detected, one-click install via the official installers.
             To install on a remote server, use Servers → its Tools.
           </p>
@@ -80,7 +80,7 @@ export default function Tools() {
               <CardHeader title={meta.label} desc={`${list.filter((t) => t.installed).length}/${list.length} installed`} />
               <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
                 {list.map((t) => (
-                  <div key={t.id} className="flex flex-col rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <div key={t.id} className="flex flex-col rounded-xl border border-border p-4">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
@@ -91,11 +91,11 @@ export default function Tools() {
                             <Badge color="red"><XCircle className="h-3 w-3" /> missing</Badge>
                           )}
                         </div>
-                        <p className="mt-1.5 text-2xs leading-relaxed text-slate-500 dark:text-slate-400">
+                        <p className="mt-1.5 text-2xs leading-relaxed text-muted-foreground">
                           {DESCRIPTIONS[t.id] || t.name}
                         </p>
                         {t.binary && (
-                          <p className="mt-1 font-mono text-2xs text-slate-400">{t.binary}</p>
+                          <p className="mt-1 font-mono text-2xs text-muted-foreground">{t.binary}</p>
                         )}
                       </div>
                     </div>
@@ -104,7 +104,7 @@ export default function Tools() {
                         href={DOCS[t.id] || '#'}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-2xs text-slate-400 hover:text-indigo-500"
+                        className="inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-primary"
                       >
                         <ExternalLink className="h-3 w-3" /> docs
                       </a>
@@ -155,7 +155,7 @@ export default function Tools() {
 
       <Card>
         <CardHeader title="Remote installation" desc="Install tools on your other servers from here" />
-        <div className="flex flex-wrap items-center gap-3 p-5 text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex flex-wrap items-center gap-3 p-5 text-xs text-muted-foreground">
           <Terminal className="h-4 w-4 shrink-0" />
           <span>
             Go to <b>Servers</b>, pick a server card and use its <b>Tools</b> action — the same registry runs on the

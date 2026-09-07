@@ -73,12 +73,12 @@ const TRANSPORT_META: Record<PathTransport, { label: string; hint: string; color
 
 function DiffView({ diff }: { diff: string }) {
   return (
-    <pre className="max-h-72 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-2xs leading-relaxed">
+    <pre className="max-h-72 overflow-auto rounded-lg bg-popover p-3 font-mono text-2xs leading-relaxed">
       {diff.split('\n').map((line, i) => (
         <div key={i} className={
           line.startsWith('+') ? 'text-emerald-400' :
           line.startsWith('-') ? 'text-red-400' :
-          line.startsWith('@@') ? 'text-sky-400' : 'text-slate-400'
+          line.startsWith('@@') ? 'text-sky-400' : 'text-muted-foreground'
         }>{line || ' '}</div>
       ))}
     </pre>
@@ -108,29 +108,29 @@ function RouteRulesEditor({ rules, onChange }: { rules: RouteRule[]; onChange: (
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-          Route rules <span className="text-2xs text-slate-400">— ordered path → target rules; mapping targets are the /* fallback</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          Route rules <span className="text-2xs text-muted-foreground">— ordered path → target rules; mapping targets are the /* fallback</span>
         </span>
         <Button variant="ghost" size="sm" onClick={add}><Plus className="h-3.5 w-3.5" /> Add rule</Button>
       </div>
       {rules.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-center text-2xs text-slate-400 dark:border-slate-600">
+        <div className="rounded-lg border border-dashed border-border px-4 py-3 text-center text-2xs text-muted-foreground">
           No route rules. Example: <b>/ws/* → node-01:10001</b>, <b>/xhttp/* → node-02:10002</b>, <b>/api/* → backend-api</b>.
         </div>
       ) : (
         <div className="space-y-2">
           {rules.map((r, i) => (
-            <div key={r.id} className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5 dark:border-slate-700 dark:bg-slate-800/40">
+            <div key={r.id} className="rounded-lg border border-border bg-mutedslate p-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex flex-col">
-                  <button className="text-slate-400 hover:text-slate-600 disabled:opacity-30" disabled={i === 0}
+                  <button className="text-muted-foreground hover:text-muted-foreground disabled:opacity-30" disabled={i === 0}
                     onClick={() => move(i, -1)} title="Move up">▲</button>
-                  <button className="text-slate-400 hover:text-slate-600 disabled:opacity-30" disabled={i === rules.length - 1}
+                  <button className="text-muted-foreground hover:text-muted-foreground disabled:opacity-30" disabled={i === rules.length - 1}
                     onClick={() => move(i, 1)} title="Move down">▼</button>
                 </div>
                 <Input className="h-8 w-36 font-mono" value={r.path} placeholder="/api/*"
                   onChange={(e) => update(i, { path: e.target.value })} />
-                <span className="text-slate-400">→</span>
+                <span className="text-muted-foreground">→</span>
                 {r.redirect ? (
                   <Input className="h-8 flex-1" placeholder="https://new.example.com"
                     value={r.redirect} onChange={(e) => update(i, { redirect: e.target.value })} />
@@ -161,7 +161,7 @@ function RouteRulesEditor({ rules, onChange }: { rules: RouteRule[]; onChange: (
                   </div>
                 )}
                 <span className="flex-1" />
-                <label className="flex items-center gap-1 text-2xs text-slate-500">
+                <label className="flex items-center gap-1 text-2xs text-muted-foreground">
                   <input type="checkbox" checked={r.enabled} onChange={(e) => update(i, { enabled: e.target.checked })} /> on
                 </label>
                 <Button variant="ghost" size="sm" onClick={() => update(i, { redirect: r.redirect ? '' : 'https://' })}
@@ -188,37 +188,37 @@ function PathRoutesEditor({ routes, onChange }: { routes: PathRoute[]; onChange:
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-          Path routes <span className="text-2xs text-slate-400">— /&lt;prefix&gt;/&lt;port&gt; → host:&lt;port&gt; (Xray-style dynamic forwarding)</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          Path routes <span className="text-2xs text-muted-foreground">— /&lt;prefix&gt;/&lt;port&gt; → host:&lt;port&gt; (Xray-style dynamic forwarding)</span>
         </span>
         <Button variant="ghost" size="sm" onClick={add}><Plus className="h-3.5 w-3.5" /> Add transport</Button>
       </div>
       {routes.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-center text-2xs text-slate-400 dark:border-slate-600">
+        <div className="rounded-lg border border-dashed border-border px-4 py-3 text-center text-2xs text-muted-foreground">
           No path routes. Add <b>ws</b>, <b>httpupgrade</b> or <b>xhttp</b> to route by path with a dynamic port.
         </div>
       ) : (
         <div className="space-y-2">
           {routes.map((r, i) => (
-            <div key={i} className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5 dark:border-slate-700 dark:bg-slate-800/40">
+            <div key={i} className="rounded-lg border border-border bg-mutedslate p-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <Select className="w-32" value={r.transport} onChange={(e) => update(i, { transport: e.target.value as PathTransport })}>
                   {(Object.keys(TRANSPORT_META) as PathTransport[]).map((t) => (
                     <option key={t} value={t}>{TRANSPORT_META[t].label}</option>
                   ))}
                 </Select>
-                <div className="flex items-center gap-1 text-2xs font-mono text-slate-400">
+                <div className="flex items-center gap-1 text-2xs font-mono text-muted-foreground">
                   /<Input className="h-8 w-24 font-mono" placeholder="prefix" value={r.prefix} onChange={(e) => update(i, { prefix: e.target.value })} />/
-                  <span className="rounded bg-indigo-100 px-1.5 py-0.5 font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">port</span>
+                  <span className="rounded bg-primary/15 px-1.5 py-0.5 font-bold text-primary">port</span>
                 </div>
                 <div className="ml-auto flex items-center gap-1">
                   <Input className="h-8 w-20" type="number" placeholder="min port" value={r.min_port || ''} onChange={(e) => update(i, { min_port: parseInt(e.target.value, 10) || 0 })} />
-                  <span className="text-2xs text-slate-400">—</span>
+                  <span className="text-2xs text-muted-foreground">—</span>
                   <Input className="h-8 w-20" type="number" placeholder="max port" value={r.max_port || ''} onChange={(e) => update(i, { max_port: parseInt(e.target.value, 10) || 0 })} />
                   <Button variant="ghost" size="sm" className="text-red-500" onClick={() => remove(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               </div>
-              <p className="mt-1.5 text-2xs text-slate-400">{TRANSPORT_META[r.transport].hint}</p>
+              <p className="mt-1.5 text-2xs text-muted-foreground">{TRANSPORT_META[r.transport].hint}</p>
             </div>
           ))}
         </div>
@@ -262,9 +262,9 @@ function RoutePreview({ draft }: { draft: Partial<Mapping> }) {
   }
   if (lines.length === 0) lines.push('— nothing routed yet —')
   return (
-    <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/5 short:p-2 short:rounded-md">
-      <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-indigo-500 short:mb-0.5">Live preview</div>
-      <div className="space-y-1 font-mono text-2xs text-slate-600 dark:text-slate-300 short:space-y-0.5">
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 short:p-2 short:rounded-md">
+      <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-primary short:mb-0.5">Live preview</div>
+      <div className="space-y-1 font-mono text-2xs text-muted-foreground short:space-y-0.5">
         {lines.map((l, i) => <div key={i}>{l}</div>)}
       </div>
     </div>
@@ -281,11 +281,11 @@ function TemplateGallery({ templates, onPick }: { templates: MappingTemplate[]; 
           key={t.id}
           type="button"
           onClick={() => onPick(t)}
-          className="group rounded-xl border border-slate-200 bg-white p-3.5 text-left transition-all hover:border-indigo-300 hover:shadow-md
-            dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-indigo-500/50"
+          className="group rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:border-primary/40 hover:shadow-md
+"
         >
-          <div className="mb-1 text-xs font-semibold text-slate-700 group-hover:text-indigo-600 dark:text-slate-200 dark:group-hover:text-indigo-300">{t.name}</div>
-          <div className="text-2xs leading-relaxed text-slate-400">{t.description}</div>
+          <div className="mb-1 text-xs font-semibold text-foreground group-hover:text-primary">{t.name}</div>
+          <div className="text-2xs leading-relaxed text-muted-foreground">{t.description}</div>
           <div className="mt-2 flex flex-wrap gap-1">
             <Badge color={t.mapping.engine === 'nginx' ? 'green' : 'purple'}>{t.mapping.engine}</Badge>
             {t.mapping.protocol && <Badge color="slate">{t.mapping.protocol}</Badge>}
@@ -494,7 +494,7 @@ export default function Mappings() {
       <div className="pg-sticky-bar flex flex-wrap items-center justify-between gap-3 short:gap-2">
         <div className="min-w-0">
           <h1 className="text-lg font-bold short:text-base">Mappings</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 short:hidden">
+          <p className="text-xs text-muted-foreground short:hidden">
             Route listeners to backends via nginx or HAProxy. Changes take effect after <b>Apply</b>.
           </p>
         </div>
@@ -538,7 +538,7 @@ export default function Mappings() {
           <div className="overflow-x-auto">
             <table className="pg-dense w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-medium">Name</th>
                   <th className="px-3 py-2.5 font-medium">Engine</th>
                   <th className="px-3 py-2.5 font-medium short:hidden">Protocol</th>
@@ -549,9 +549,9 @@ export default function Mappings() {
                   <th className="px-5 py-2.5 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+              <tbody className="divide-y divide-border">
                 {mappings.data.map((m) => (
-                  <tr key={m.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 ${!m.enabled ? 'opacity-60' : ''}`}>
+                  <tr key={m.id} className={`hover:bg-muted/60 ${!m.enabled ? 'opacity-60' : ''}`}>
                     <td className="max-w-56 truncate px-5 py-3 font-medium" title={m.name}>
                       {m.name}
                       {m.websocket && <Badge color="blue">ws</Badge>}
@@ -560,7 +560,7 @@ export default function Mappings() {
                     <td className="px-3 py-3"><Badge color={m.engine === 'nginx' ? 'green' : 'purple'}>{m.engine}</Badge></td>
                     <td className="px-3 py-3 short:hidden"><Badge color="slate">{m.protocol}</Badge></td>
                     <td className="px-3 py-3 font-mono text-xs">{m.listen_ip}:{m.listen_port}</td>
-                    <td className="px-3 py-3 text-xs text-slate-500 short:hidden">{m.server_names.join(', ') || '—'}</td>
+                    <td className="px-3 py-3 text-xs text-muted-foreground short:hidden">{m.server_names.join(', ') || '—'}</td>
                     <td className="px-3 py-3 text-xs">
                       {m.path_routes?.length ? (
                         <div className="flex flex-wrap items-center gap-1">
@@ -569,7 +569,7 @@ export default function Mappings() {
                               <Badge color={TRANSPORT_META[pr.transport]?.color || 'blue'}>/{pr.prefix}/</Badge>
                             </span>
                           ))}
-                          <span className="text-slate-400">→ dynamic ports</span>
+                          <span className="text-muted-foreground">→ dynamic ports</span>
                         </div>
                       ) : m.redirect_to ? (
                         <span className="text-amber-500">→ {m.redirect_to}</span>
@@ -716,8 +716,8 @@ export default function Mappings() {
               {isL7 && !isRedirect && draft.engine === 'nginx' && (
                 <div>
                   <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      Decoy site (anti-DPI) <span className="text-2xs text-slate-400">— serve a real-looking website on unmatched paths instead of 404</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Decoy site (anti-DPI) <span className="text-2xs text-muted-foreground">— serve a real-looking website on unmatched paths instead of 404</span>
                     </span>
                   </div>
                   <Select
@@ -735,11 +735,11 @@ export default function Mappings() {
                       value={draft.decoy_html || ''}
                       onChange={(e) => setDraftField('decoy_html', e.target.value)}
                       placeholder="<!DOCTYPE html>… your camouflage page …"
-                      className="mt-2 w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                      className="mt-2 w-full resize-y rounded-lg border border-border bg-popover p-3 font-mono text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   )}
                   {draft.decoy && (
-                    <p className="mt-1 text-2xs text-slate-400">
+                    <p className="mt-1 text-2xs text-muted-foreground">
                       Served from /var/lib/portguard/decoy/ — users (and DPI probes) that hit a path outside your ws/hu/xhttp routes see a normal website.
                     </p>
                   )}
@@ -760,9 +760,9 @@ export default function Mappings() {
 
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                      <span className="text-xs font-medium text-muted-foreground">
                         Backend targets
-                        {hasPathRoutes && <span className="ml-1 text-2xs text-slate-400">— first host is used by path routes</span>}
+                        {hasPathRoutes && <span className="ml-1 text-2xs text-muted-foreground">— first host is used by path routes</span>}
                       </span>
                       <Button variant="ghost" size="sm" onClick={addTarget}><Plus className="h-3.5 w-3.5" /> Add</Button>
                     </div>
@@ -779,7 +779,7 @@ export default function Mappings() {
                               <Input type="number" placeholder="weight" value={t.weight ?? ''} onChange={(e) => setTarget(i, { weight: parseInt(e.target.value, 10) || undefined })} />
                             </div>
                           )}
-                          <label className="flex items-center gap-1 text-2xs text-slate-500">
+                          <label className="flex items-center gap-1 text-2xs text-muted-foreground">
                             <input type="checkbox" checked={!!t.backup} onChange={(e) => setTarget(i, { backup: e.target.checked })} /> backup
                           </label>
                           <Button variant="ghost" size="sm" onClick={() => removeTarget(i)} className="text-red-500"><Trash2 className="h-3.5 w-3.5" /></Button>
@@ -791,11 +791,11 @@ export default function Mappings() {
               )}
 
               {/* Advanced section */}
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="rounded-lg border border-border">
                 <button
                   type="button"
                   onClick={() => setShowAdvanced((v) => !v)}
-                  className="flex w-full items-center justify-between px-3.5 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  className="flex w-full items-center justify-between px-3.5 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground dark:text-muted-foreground "
                 >
                   <span className="flex items-center gap-1.5">
                     Advanced
@@ -806,13 +806,13 @@ export default function Mappings() {
                   {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 </button>
                 {showAdvanced && (
-                  <div className="space-y-4 border-t border-slate-200 p-3.5 dark:border-slate-700">
+                  <div className="space-y-4 border-t border-border p-3.5">
                     <div className="flex flex-wrap items-end gap-6">
-                      <label className="flex items-center gap-2 pb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      <label className="flex items-center gap-2 pb-1.5 text-xs font-medium text-muted-foreground">
                         <Toggle checked={!!draft.websocket} onChange={(v) => setDraftField('websocket', v)} /> WebSocket
                       </label>
                       {draft.protocol === 'https' && (
-                        <label className="flex items-center gap-2 pb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                        <label className="flex items-center gap-2 pb-1.5 text-xs font-medium text-muted-foreground">
                           <Toggle checked={!!draft.http2} onChange={(v) => setDraftField('http2', v)} /> HTTP/2
                         </label>
                       )}
@@ -849,13 +849,13 @@ export default function Mappings() {
                     {/* Access control */}
                     <div>
                       <div className="mb-1.5 flex items-center justify-between">
-                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                          Access list <span className="text-2xs text-slate-400">— first match wins; any “allow” denies everyone else</span>
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Access list <span className="text-2xs text-muted-foreground">— first match wins; any “allow” denies everyone else</span>
                         </span>
                         <Button variant="ghost" size="sm" onClick={addRule}><Plus className="h-3.5 w-3.5" /> Add rule</Button>
                       </div>
                       {(draft.access_rules || []).length === 0 ? (
-                        <p className="text-2xs text-slate-400">No rules — the listener accepts traffic from all sources.</p>
+                        <p className="text-2xs text-muted-foreground">No rules — the listener accepts traffic from all sources.</p>
                       ) : (
                         <div className="space-y-2">
                           {(draft.access_rules || []).map((r, i) => (
@@ -883,7 +883,7 @@ export default function Mappings() {
 
           {formTab === 'json' && (
             <div className="space-y-2">
-              <p className="text-2xs text-slate-400">
+              <p className="text-2xs text-muted-foreground">
                 Full mapping object — edit freely and press Save. Unknown fields are ignored; validation runs server-side.
               </p>
               <CodeEditor
@@ -918,15 +918,15 @@ export default function Mappings() {
               <Empty message="No existing nginx/HAProxy configuration found on this server — nothing to import." />
             ) : (
               <>
-                <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   Found {importModal.mappings.length} importable server block(s). Everything imports <b>disabled</b> —
                   review, fix any gaps flagged below, enable what you want, then Apply. PortGuard never overwrites
                   your live config until you press Apply.
                 </p>
                 {importModal.mappings.length > 0 && (
-                  <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="max-h-64 overflow-auto rounded-xl border border-border">
                     <table className="w-full text-xs">
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      <tbody className="divide-y divide-border">
                         {importModal.mappings.map((m, i) => (
                           <tr key={i}>
                             <td className="px-3 py-2">
@@ -944,7 +944,7 @@ export default function Mappings() {
                             <td className="px-3 py-2">{m.engine}</td>
                             <td className="px-3 py-2">{m.protocol}</td>
                             <td className="px-3 py-2 font-mono">:{m.listen_port}</td>
-                            <td className="px-3 py-2 text-slate-500">
+                            <td className="px-3 py-2 text-muted-foreground">
                               {(m as any).targets?.map((t: any) => `${t.host}:${t.port}`).join(', ') || (m as any).redirect_to || '—'}
                             </td>
                           </tr>
@@ -985,7 +985,7 @@ export default function Mappings() {
                   <Badge color={engine === 'nginx' ? 'green' : 'purple'}>{engine}</Badge>
                   {v.ok ? <Badge color="green">valid</Badge> : <Badge color="red">error</Badge>}
                   {!v.ok && <span className="text-2xs text-red-500">{v.error}</span>}
-                  {v.ok && !v.diff && <span className="text-2xs text-slate-400">no changes</span>}
+                  {v.ok && !v.diff && <span className="text-2xs text-muted-foreground">no changes</span>}
                 </div>
                 {v.ok && v.diff && <DiffView diff={v.diff} />}
               </div>
