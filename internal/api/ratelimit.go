@@ -16,7 +16,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"portguard/internal/nodeclient"
 	"portguard/internal/ratelimit"
 	"portguard/internal/store"
 )
@@ -558,7 +557,7 @@ func (a *App) pushNodePlan(nodeID int64) error {
 		return err
 	}
 	plan := a.buildNodePlan(nodeID)
-	cli := nodeclient.New(n.Host, n.Port, n.APIToken)
+	cli := a.nodeClientFor(*n)
 	_, err = cli.Post("/ratelimit/apply", plan)
 	return err
 }

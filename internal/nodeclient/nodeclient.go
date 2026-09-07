@@ -1,50 +1,66 @@
 // Package nodeclient talks to remote PortGuard nodes over their node API:
-// GET/POST /api/node/* endpoints authenticated with the shared node token.
-package nodeclient
+	// GET/POST /api/node/* endpoints authenticated with the shared node token.
+	package nodeclient
 
-import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
-)
+	import (
+		"bytes"
+		"encoding/json"
+		"fmt"
+		"io"
+		"net/http"
+		"strconv"
+		"strings"
+		"time"
+	)
 
-// Client is an authenticated client for one remote node.
-type Client struct {
-	BaseURL string
-	Token   string
-	HTTP    *http.Client
-}
-
-// sharedTransport keeps idle keep-alive connections to nodes open so the
-// frequent polling loops (metrics, alerter, bandwidth sync) reuse TCP
-// connections instead of re-handshaking on every request.
-var sharedTransport = &http.Transport{
-	Proxy:               http.ProxyFromEnvironment,
-	MaxIdleConns:        100,
-	MaxIdleConnsPerHost: 8,
-	IdleConnTimeout:     90 * time.Second,
-}
-
-func New(host string, port int, token string) *Client {
-	scheme := "http"
-	base := strings.TrimSuffix(host, "/")
-	if strings.HasPrefix(host, "https://") {
-		scheme = "https"
-		base = strings.TrimPrefix(host, "https://")
-	} else if strings.HasPrefix(host, "http://") {
-		base = strings.TrimPrefix(host, "http://")
+	// Client is an authenticated client for one remote node.
+	type Client struct {
+		BaseURL string
+		Token   string
+		HTTP    *http.Client
 	}
-	return &Client{
-		BaseURL: fmt.Sprintf("%s://%s:%d", scheme, base, port),
-		Token:   token,
-		HTTP:    &http.Client{Timeout: 15 * time.Second, Transport: sharedTransport},
+
+	// RoundTripperFunc allows custom transport implementations.
+	type RoundTripperFunc func(*http.Request) (*http.Response, error)
+
+	func (f RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+		return f(req)
 	}
-}
+
+	// sharedTransport keeps idle keep-alive connections to nodes open so the
+	// frequent polling loops (metrics, alerter, bandwidth sync) reuse TCP
+	// connections instead of re-handshaking on every request.
+	var sharedTransport = &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 8,
+		IdleConnTimeout:     90 * time.Second,
+	}
+
+	func New(host string, port int, token string) *Client {
+		scheme := "http"
+		base := strings.TrimSuffix(host, "/")
+		if strings.HasPrefix(host, "https://") {
+			scheme = "https"
+			base = strings.TrimPrefix(host, "https://")
+		} else if strings.HasPrefix(host, "http://") {
+			base = strings.TrimPrefix(host, "http://")
+		}
+		return &Client{
+			BaseURL: fmt.Sprintf("%s://%s:%d", scheme, base, port),
+			Token:   token,
+			HTTP:    &http.Client{Timeout: 15 * time.Second, Transport: sharedTransport},
+		}
+	}
+
+	// NewWithTransport creates a client with a custom RoundTripper (e.g., hub-backed).
+	func NewWithTransport(transport http.RoundTripper, token string) *Client {
+		return &Client{
+			BaseURL: "hub://",
+			Token:   token,
+			HTTP:    &http.Client{Timeout: 15 * time.Second, Transport: transport},
+		}
+	}
 
 func (c *Client) do(method, path string, body any, out any) error {
 	var rd io.Reader

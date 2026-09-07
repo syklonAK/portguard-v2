@@ -142,16 +142,18 @@ type Mapping struct {
 type ServerNode struct {
 	ID        int64      `json:"id"`
 	Name      string     `json:"name"`
-	Host      string     `json:"host"` // public address of the node panel
-	Port      int        `json:"port"` // node panel port
-	APIToken  string     `json:"-"`    // shared secret for the node API (never exposed)
-	Role      string     `json:"role"` // standalone | master | iran | foreign | generic
+	Host      string     `json:"host"`
+	Port      int        `json:"port"`
+	APIToken  string     `json:"-"`
+	Role      string     `json:"role"`
 	Enabled   bool       `json:"enabled"`
 	Notes     string     `json:"notes"`
-	Status    string     `json:"status"` // online | offline | unknown (last probe)
+	Status    string     `json:"status"`
 	LastSeen  *time.Time `json:"last_seen"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
+	ConnMode  string     `json:"conn_mode"`
+	UID       string     `json:"uid"`
 }
 
 // ---- rate limiting (PasarGuard per-UUID bandwidth) ----

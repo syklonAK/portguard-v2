@@ -16,6 +16,7 @@ import (
 
 	"portguard/internal/alerter"
 	"portguard/internal/health"
+	"portguard/internal/nodehub"
 	"portguard/internal/proxy"
 	"portguard/internal/ratelimit"
 	"portguard/internal/scanner"
@@ -32,9 +33,10 @@ type App struct {
 	Scanner            *scanner.Scanner
 	PanelPort          int
 	Version            string
-	RateApplierFactory func() *ratelimit.Applier // set by main; lazily builds the node applier
-	Alerter            *alerter.Alerter          // optional (nil until main wires it)
-	Jobs               *JobManager               // long shell ops with live terminal output
+	RateApplierFactory func() *ratelimit.Applier
+	Alerter            *alerter.Alerter
+	Jobs               *JobManager
+	Hub                *nodehub.Hub
 }
 
 // RateApplier returns the bandwidth applier for this host (agent or panel).

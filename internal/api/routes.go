@@ -150,6 +150,13 @@ func (a *App) Router() http.Handler {
 		pr.Delete("/api/users/{id}", a.Auth.RequireRole("owner", a.handleDeleteUser))
 	})
 
+	// reverse connections: agents dial this WS endpoint and hold it open —
+	// the master pushes every /api/node/* request through the tunnel
+	// (PasarGuard-style node → panel communication, no inbound port needed
+	// on the node). Registered BEFORE the Agent mount so the exact path
+	// wins over the /api/node/* catch-all.
+	r.Get("/api/node/ws", a.handleNodeWS)
+
 	// node API (master→node, token-authenticated, no admin JWT). Panels and
 	// headless agents expose the same surface; the Agent router carries the
 	// full contract (mappings/certs CRUD, apply, tools, tunnel, ...).

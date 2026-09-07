@@ -14,8 +14,9 @@ func scanServerNode(row interface{ Scan(...any) error }) (ServerNode, error) {
 	var enabled int
 	var lastSeen sql.NullInt64
 	var createdTS, updatedTS int64
+	var connMode, uid sql.NullString
 	err := row.Scan(&n.ID, &n.Name, &n.Host, &n.Port, &n.APIToken, &n.Role, &enabled,
-		&n.Notes, &n.Status, &lastSeen, &createdTS, &updatedTS)
+		&n.Notes, &n.Status, &lastSeen, &createdTS, &updatedTS, &connMode, &uid)
 	if err != nil {
 		return n, err
 	}
@@ -26,10 +27,18 @@ func scanServerNode(row interface{ Scan(...any) error }) (ServerNode, error) {
 	}
 	n.CreatedAt = time.Unix(createdTS, 0)
 	n.UpdatedAt = time.Unix(updatedTS, 0)
+	if connMode.Valid {
+		n.ConnMode = connMode.String
+	} else {
+		n.ConnMode = "direct"
+	}
+	if uid.Valid {
+		n.UID = uid.String
+	}
 	return n, nil
 }
 
-const serverNodeCols = `id, name, host, port, api_token, role, enabled, notes, status, last_seen, created_at, updated_at`
+const serverNodeCols = `id, name, host, port, api_token, role, enabled, notes, status, last_seen, created_at, updated_at, conn_mode, uid`
 
 func (s *Store) ListServerNodesPaged(limit, offset int) ([]ServerNode, error) {
 	rows, err := s.DB.Query(`SELECT `+serverNodeCols+` FROM server_nodes ORDER BY id LIMIT ? OFFSET ?`, limit, offset)
@@ -88,8 +97,8 @@ func (s *Store) UpsertServerNodeByHostPort(n *ServerNode) (int64, bool, error) {
 	err := s.DB.QueryRow(`SELECT id FROM server_nodes WHERE host=? AND port=?`, n.Host, n.Port).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		ts := nowTS()
-		res, err := s.DB.Exec(`INSERT INTO server_nodes(name, host, port, api_token, role, enabled, notes, status, created_at, updated_at)
-			VALUES(?,?,?,?,?,?,?,'unknown',?,?)`,
+		res, err := s.DB.Exec(`INSERT INTO server_nodes(name, host, port, api_token, role, enabled, notes, status, conn_mode, uid, created_at, updated_at)
+			VALUES(?,?,?,?,?,?,?,'unknown','direct','',?,?)`,
 			n.Name, n.Host, n.Port, n.APIToken, n.Role, b2i(n.Enabled), n.Notes, ts, ts)
 		if err != nil {
 			return 0, false, err
@@ -107,9 +116,13 @@ func (s *Store) UpsertServerNodeByHostPort(n *ServerNode) (int64, bool, error) {
 
 func (s *Store) CreateServerNode(n *ServerNode) (int64, error) {
 	ts := nowTS()
-	res, err := s.DB.Exec(`INSERT INTO server_nodes(name, host, port, api_token, role, enabled, notes, status, created_at, updated_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?)`,
-		n.Name, n.Host, n.Port, n.APIToken, n.Role, b2i(n.Enabled), n.Notes, "unknown", ts, ts)
+	connMode := n.ConnMode
+	if connMode == "" {
+		connMode = "direct"
+	}
+	res, err := s.DB.Exec(`INSERT INTO server_nodes(name, host, port, api_token, role, enabled, notes, status, conn_mode, uid, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		n.Name, n.Host, n.Port, n.APIToken, n.Role, b2i(n.Enabled), n.Notes, "unknown", connMode, n.UID, ts, ts)
 	if err != nil {
 		return 0, err
 	}
@@ -117,13 +130,28 @@ func (s *Store) CreateServerNode(n *ServerNode) (int64, error) {
 }
 func (s *Store) UpdateServerNode(n *ServerNode) error {
 	// api_token is only replaced when a non-empty one is provided
-	_, err := s.DB.Exec(`UPDATE server_nodes SET name=?, host=?, port=?, role=?, enabled=?, notes=?, status=?, last_seen=?, updated_at=?
+	connMode := n.ConnMode
+	if connMode == "" {
+		connMode = "direct"
+	}
+	_, err := s.DB.Exec(`UPDATE server_nodes SET name=?, host=?, port=?, role=?, enabled=?, notes=?, status=?, last_seen=?, conn_mode=?, uid=?, updated_at=?
 		WHERE id=?`,
-		n.Name, n.Host, n.Port, n.Role, b2i(n.Enabled), n.Notes, n.Status, nullTime(n.LastSeen), nowTS(), n.ID)
+		n.Name, n.Host, n.Port, n.Role, b2i(n.Enabled), n.Notes, n.Status, nullTime(n.LastSeen), connMode, n.UID, nowTS(), n.ID)
 	return err
 }
 func (s *Store) UpdateServerNodeToken(id int64, token string) error {
 	_, err := s.DB.Exec(`UPDATE server_nodes SET api_token=?, updated_at=? WHERE id=?`, token, nowTS(), id)
+	return err
+}
+
+// SetServerNodeConnMode updates how the master reaches this node
+// ("direct" = master dials the node API, "reverse" = the node holds a WS
+// tunnel into the panel hub).
+func (s *Store) SetServerNodeConnMode(id int64, mode, uid string) error {
+	if mode == "" {
+		mode = "direct"
+	}
+	_, err := s.DB.Exec(`UPDATE server_nodes SET conn_mode=?, uid=?, updated_at=? WHERE id=?`, mode, uid, nowTS(), id)
 	return err
 }
 func (s *Store) TouchServerNode(id int64, status string) error {

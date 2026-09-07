@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"portguard/internal/nodeclient"
 	"portguard/internal/store"
 	"portguard/internal/sysinfo"
 )
@@ -243,7 +242,7 @@ func (a *App) SampleRemoteMetrics(nodeID int64, prev *store.MetricPoint) {
 	if err != nil || !n.Enabled {
 		return
 	}
-	cli := nodeclient.New(n.Host, n.Port, n.APIToken)
+	cli := a.nodeClientFor(n)
 	sum, err := cli.GetSummary()
 	if err != nil {
 		return

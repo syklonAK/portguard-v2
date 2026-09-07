@@ -23,6 +23,7 @@ func migrate(db *sql.DB) error {
 	}
 	// v2.0.0 mappings gained balance/path_prefix/access_rules columns; v2.1.0 added
 	// path_routes; v2.2.0 added host_header/decoy/decoy_html; v2.7.0 added admins.role.
+	// v2.11: server_nodes gained conn_mode and uid.
 	// ALTER for older DBs.
 	for _, col := range []struct{ table, name, ddl string }{
 		{"mappings", "balance", `ALTER TABLE mappings ADD COLUMN balance TEXT NOT NULL DEFAULT ''`},
@@ -35,6 +36,8 @@ func migrate(db *sql.DB) error {
 		{"admins", "role", `ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT 'owner'`},
 		{"mappings", "service_id", `ALTER TABLE mappings ADD COLUMN service_id INTEGER`},
 		{"mappings", "routes", `ALTER TABLE mappings ADD COLUMN routes TEXT NOT NULL DEFAULT '[]'`},
+		{"server_nodes", "conn_mode", `ALTER TABLE server_nodes ADD COLUMN conn_mode TEXT NOT NULL DEFAULT 'direct'`},
+		{"server_nodes", "uid", `ALTER TABLE server_nodes ADD COLUMN uid TEXT NOT NULL DEFAULT ''`},
 	} {
 		// pragma functions cannot be parameterized reliably across drivers —
 		// the table name is from our fixed list above, never user input
@@ -140,6 +143,8 @@ CREATE TABLE IF NOT EXISTS server_nodes (
 	notes TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL DEFAULT 'unknown',
 	last_seen INTEGER,
+	conn_mode TEXT NOT NULL DEFAULT 'direct',
+	uid TEXT NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL
 );

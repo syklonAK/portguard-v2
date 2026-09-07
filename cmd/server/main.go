@@ -20,6 +20,7 @@ import (
 	"portguard/internal/config"
 	"portguard/internal/conntrack"
 	"portguard/internal/health"
+	"portguard/internal/nodeagent"
 	"portguard/internal/proxy"
 	"portguard/internal/ratelimit"
 	"portguard/internal/scanner"
@@ -121,6 +122,10 @@ func main() {
 	// minute, dedups with cooldowns and notifies the configured channels
 	alertEngine := alerter.New(st, broker.Publish)
 	app.Alerter = alertEngine
+	// hub-aware node client: reverse-mode nodes are reached through their
+	// persistent WS connection instead of direct HTTP
+	app.NewHub()
+	alertEngine.NodeClient = app.NodeClientFor
 	go alertEngine.Run(ctx.Done())
 
 	interval := config.DefaultCheckInterval
@@ -340,9 +345,17 @@ func runAgent(args []string) {
 	dbPath := fs.String("db", envStr("PORTGUARD_DB", "/var/lib/portguard/node.db"), "sqlite database path")
 	token := fs.String("token", envStr("PORTGUARD_NODE_TOKEN", ""), "master token (also settable via the DB)")
 	role := fs.String("role", envStr("PORTGUARD_NODE_ROLE", "generic"), "node role: generic|iran|foreign")
+	master := fs.String("master", envStr("PORTGUARD_MASTER_URL", ""), "master panel URL — reverse mode: dial the master and serve over the tunnel (e.g. http://master:8080)")
+	uid := fs.String("uid", envStr("PORTGUARD_NODE_UID", ""), "unique node id reported to the master")
 	_ = fs.Parse(args)
 
-	log.Printf("PortGuard agent v%s starting on %s:%d", version, *host, *port)
+	direct := *master == ""
+	log.Printf("PortGuard agent v%s starting (%s)", version, map[bool]string{true: "direct", false: "reverse"}[direct])
+	if !direct {
+		log.Printf("reverse mode: dialing master %s — no inbound port required", *master)
+	} else {
+		log.Printf("listening on %s:%d", *host, *port)
+	}
 
 	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o755); err != nil {
 		log.Fatalf("cannot create data dir: %v", err)
@@ -427,25 +440,55 @@ func runAgent(args []string) {
 	// the master's nodeclient addresses the agent at /api/node/* while the
 	// Agent router registers bare paths (/ping, /summary, ...) - strip the
 	// prefix here so the two halves of the protocol line up
-	nodeHandler := http.StripPrefix("/api/node", agent.Router())
-	srv := &http.Server{
-		Addr:              net.JoinHostPort(*host, strconv.Itoa(*port)),
-		Handler:           nodeHandler,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("agent listen: %v", err)
+	nodeRouter := http.StripPrefix("/api/node", agent.Router())
+
+	// reverse mode: dial the master and serve the same /api/node/* contract
+	// through the persistent WS tunnel instead of a listening socket
+	if !direct {
+		hostname, _ := os.Hostname()
+		if *uid == "" {
+			*uid = hostname
 		}
-	}()
-	log.Printf("PortGuard agent ready on %s:%d (role=%s)", displayHost(*host), *port, st.GetSettingOr("node_role", "generic"))
+		go func() {
+			if err := nodeagent.Run(ctx, nodeagent.Config{
+				MasterURL: *master,
+				Token:     st.GetSettingOr("node_token", ""),
+				Router:   nodeRouter,
+				Version:  version,
+				Role:     st.GetSettingOr("node_role", "generic"),
+				UID:      *uid,
+				Hostname: hostname,
+			}); err != nil {
+				log.Printf("node agent: %v", err)
+			}
+		}()
+	}
+
+	var srv *http.Server
+	if direct {
+		srv = &http.Server{
+			Addr:              net.JoinHostPort(*host, strconv.Itoa(*port)),
+			Handler:           nodeRouter,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		go func() {
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("agent listen: %v", err)
+			}
+		}()
+		log.Printf("PortGuard agent ready on %s:%d (role=%s)", displayHost(*host), *port, st.GetSettingOr("node_role", "generic"))
+	} else {
+		log.Printf("PortGuard agent ready in reverse mode → %s (role=%s)", *master, st.GetSettingOr("node_role", "generic"))
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Println("agent shutting down...")
-	shCtx, shCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer shCancel()
-	_ = srv.Shutdown(shCtx)
+	if srv != nil {
+		shCtx, shCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shCancel()
+		_ = srv.Shutdown(shCtx)
+	}
 	cancel()
 }

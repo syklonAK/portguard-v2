@@ -1,17 +1,20 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"portguard/internal/conntrack"
 	"portguard/internal/nodeclient"
+	"portguard/internal/nodehub"
 	"portguard/internal/store"
 	"portguard/internal/sysinfo"
 	"portguard/internal/tools"
@@ -365,7 +368,7 @@ func (a *App) nodeClient(r *http.Request) (*nodeclient.Client, int64, error) {
 	if !n.Enabled {
 		return nil, 0, errString("server is disabled")
 	}
-	return nodeclient.New(n.Host, n.Port, n.APIToken), id, nil
+	return a.nodeClientFor(n), id, nil
 }
 
 // handleNodeMappingsProxy forwards the mapping list from a remote node.
@@ -582,6 +585,15 @@ func (a *App) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	if n.Notes == "" {
 		n.Notes = cur.Notes
 	}
+	if n.ConnMode == "" {
+		n.ConnMode = cur.ConnMode
+	}
+	if n.UID == "" {
+		n.UID = cur.UID
+	}
+	if n.ConnMode != "direct" && n.ConnMode != "reverse" {
+		n.ConnMode = "direct"
+	}
 	// enabled: zero-value false on a partial PUT would silently disable the
 	// node — only apply the flag when the client explicitly sent it
 	if r.ContentLength >= 0 {
@@ -635,7 +647,7 @@ func (a *App) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, errString("server is disabled"), http.StatusUnprocessableEntity)
 		return
 	}
-	cli := nodeClientNew(n.Host, n.Port, n.APIToken)
+	cli := a.nodeClientFor(n)
 	switch action {
 	case "probe":
 		if err := cli.Ping(); err != nil {
@@ -749,6 +761,83 @@ func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)
 }
 
-func nodeClientNew(host string, port int, token string) *nodeclient.Client {
-	return nodeclient.New(host, port, token)
+// ---- reverse connections (PasarGuard-style node → panel tunnel) ----
+
+// hubResolve maps an incoming agent WS bearer token to its node row.
+// The token must match a known node's api_token (or the cluster token).
+func (a *App) hubResolve(token string) (int64, string, bool) {
+	if token == "" {
+		return 0, "", false
+	}
+	nodes, err := a.St.ListServerNodes()
+	if err != nil {
+		return 0, "", false
+	}
+	for _, n := range nodes {
+		if n.APIToken != "" && n.APIToken == token {
+			return n.ID, n.UID, true
+		}
+	}
+	return 0, "", false
+}
+
+// handleNodeWS upgrades a reverse-mode agent connection into the hub.
+func (a *App) handleNodeWS(w http.ResponseWriter, r *http.Request) {
+	if a.Hub == nil {
+		http.Error(w, "hub disabled", http.StatusServiceUnavailable)
+		return
+	}
+	a.Hub.ServeWS(w, r)
+}
+
+// NewHub builds the panel-side hub with store-backed callbacks.
+func (a *App) NewHub() *nodehub.Hub {
+	a.Hub = nodehub.NewHub(a.hubResolve, func(nodeID int64, online bool) {
+		status := "offline"
+		if online {
+			status = "online"
+		}
+		_ = a.St.TouchServerNode(nodeID, status)
+		if a.Broker != nil {
+			a.Broker.Publish("nodes", map[string]any{"action": "state", "id": nodeID, "online": online})
+		}
+	})
+	return a.Hub
+}
+
+// NodeClientFor is the exported hub-aware node client factory (wired into
+// the alerter and other background loops by main).
+func (a *App) NodeClientFor(n store.ServerNode) *nodeclient.Client {
+	return a.nodeClientFor(n)
+}
+
+// nodeClientFor returns the right transport for a node: reverse-mode nodes
+// that are connected through the hub get a hub-backed client (requests are
+// pushed over the agent's persistent WS connection), everything else keeps
+// the classic direct HTTP client.
+func (a *App) nodeClientFor(n store.ServerNode) *nodeclient.Client {
+	if a.Hub != nil && n.ConnMode == "reverse" && a.Hub.IsOnline(n.ID) {
+		rt := nodeclient.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			var body []byte
+			if req.Body != nil {
+				b, err := io.ReadAll(req.Body)
+				if err != nil {
+					return nil, err
+				}
+				body = b
+				req.Body.Close()
+			}
+			resp, err := a.Hub.Request(n.ID, req.Method, req.URL.Path, body, 15*time.Second)
+			if err != nil {
+				return nil, err
+			}
+			return &http.Response{
+				StatusCode: resp.Status,
+				Body:       io.NopCloser(bytes.NewReader(resp.Body)),
+				Header:     make(http.Header),
+			}, nil
+		})
+		return nodeclient.NewWithTransport(rt, n.APIToken)
+	}
+	return nodeclient.New(n.Host, n.Port, n.APIToken)
 }

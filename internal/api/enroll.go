@@ -27,10 +27,12 @@ func (a *App) handleNodeSelfRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name string `json:"name"`
-		Host string `json:"host"`
-		Port int    `json:"port"`
-		Role string `json:"role"`
+		Name     string `json:"name"`
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		Role     string `json:"role"`
+		ConnMode string `json:"conn_mode"`
+		UID      string `json:"uid"`
 	}
 	if !readJSON(w, r, &body) {
 		return
@@ -52,6 +54,10 @@ func (a *App) handleNodeSelfRegister(w http.ResponseWriter, r *http.Request) {
 	default:
 		role = "generic"
 	}
+	connMode := body.ConnMode
+	if connMode != "reverse" {
+		connMode = "direct"
+	}
 	name := strings.TrimSpace(body.Name)
 	name = strings.ReplaceAll(name, "\"", "")
 	if name == "" {
@@ -61,12 +67,16 @@ func (a *App) handleNodeSelfRegister(w http.ResponseWriter, r *http.Request) {
 
 	n := store.ServerNode{
 		Name: name, Host: host, Port: body.Port, APIToken: clusterToken,
-		Role: role, Enabled: true,
+		Role: role, Enabled: true, ConnMode: connMode, UID: body.UID,
 	}
 	id, created, err := a.St.UpsertServerNodeByHostPort(&n)
 	if err != nil {
 		errJSON(w, err, http.StatusInternalServerError)
 		return
+	}
+	// a reverse-mode re-registration refreshes the stored conn mode
+	if !created && connMode == "reverse" {
+		_ = a.St.SetServerNodeConnMode(id, connMode, body.UID)
 	}
 	if created {
 		a.St.Audit("agent", "node.self-register", name+" ("+host+")", "ok")
@@ -77,7 +87,7 @@ func (a *App) handleNodeSelfRegister(w http.ResponseWriter, r *http.Request) {
 		a.Broker.Publish("nodes", map[string]any{"action": "registered", "id": id, "name": name})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "id": id, "created": created, "host": host, "port": body.Port,
+		"ok": true, "id": id, "created": created, "host": host, "port": body.Port, "conn_mode": connMode,
 		"note": "the node is now visible and manageable from the master's Servers page",
 	})
 }

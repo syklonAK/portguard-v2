@@ -20,11 +20,22 @@ type Alerter struct {
 	St  *store.Store
 	Bus func(event string, payload any) // optional SSE broker publish
 
+	// NodeClient returns the transport for one node — wired to the panel's
+	// hub-aware factory when reverse-mode nodes exist (nil = direct HTTP).
+	NodeClient func(n store.ServerNode) *nodeclient.Client
+
 	httpClient *http.Client
 }
 
 func New(st *store.Store, bus func(string, any)) *Alerter {
 	return &Alerter{St: st, Bus: bus, httpClient: &http.Client{Timeout: 10 * time.Second}}
+}
+
+func (a *Alerter) clientFor(n store.ServerNode) *nodeclient.Client {
+	if a.NodeClient != nil {
+		return a.NodeClient(n)
+	}
+	return nodeclient.New(n.Host, n.Port, n.APIToken)
 }
 
 func (a *Alerter) Run(stop <-chan struct{}) {
@@ -134,7 +145,7 @@ func (a *Alerter) checkNodes() {
 		wg.Add(1)
 		go func(n store.ServerNode) {
 			defer wg.Done()
-			cli := nodeclient.New(n.Host, n.Port, n.APIToken)
+			cli := a.clientFor(n)
 			online := cli.Ping() == nil
 			prev := n.Status
 			if online && (prev == "offline") {
