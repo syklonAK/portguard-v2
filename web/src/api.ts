@@ -627,6 +627,8 @@ export interface ServerNode {
   notes: string
   status: 'online' | 'offline' | 'unknown'
   last_seen: string | null
+  conn_mode: 'direct' | 'reverse'
+  uid: string
   created_at: string
   updated_at: string
 }

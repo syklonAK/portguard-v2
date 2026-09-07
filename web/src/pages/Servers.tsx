@@ -24,7 +24,7 @@ const ROLE_COLORS: Record<string, 'slate' | 'cyan' | 'blue' | 'purple' | 'green'
 }
 
 function emptyNode(): Partial<ServerNode> {
-  return { name: '', host: '', port: 8080, role: 'generic', enabled: true, notes: '' }
+  return { name: '', host: '', port: 8080, role: 'generic', enabled: true, notes: '', conn_mode: 'reverse' }
 }
 
 export default function Servers() {
@@ -340,8 +340,17 @@ export default function Servers() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold">{n.name}</span>
                       <Badge color={ROLE_COLORS[n.role] || 'slate'}>{n.role}</Badge>
+                      {n.conn_mode === 'reverse' && (
+                        <Badge color="purple">
+                          <span className="flex items-center gap-1">
+                            <Waypoints className="h-3 w-3" /> reverse
+                          </span>
+                        </Badge>
+                      )}
                     </div>
-                    <div className="font-mono text-2xs text-muted-foreground">{n.host}:{n.port}</div>
+                    <div className="font-mono text-2xs text-muted-foreground">
+                      {n.conn_mode === 'reverse' ? 'via tunnel → master' : `${n.host}:${n.port}`}
+                    </div>
                   </div>
                 </div>
                 <span className={`flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-2xs font-medium ${
@@ -404,6 +413,7 @@ export default function Servers() {
           <p><b>2.</b> On the servers you want to manage remotely: set a <b>Node API token</b> above (or on that server's Settings → panel) — it becomes a manageable node.</p>
           <p><b>3.</b> On this master: <b>Add server</b>, fill host/port, paste that token, choose the role (generic / iran hub / foreign egress).</p>
           <p><b>4.</b> Probe checks reachability, Overview pulls live CPU/RAM/mappings/health/tunnel state, Apply runs the safe render→validate→backup→reload pipeline on the remote server.</p>
+          <p><b>5.</b> Connection mode: <b>reverse</b> nodes dial this panel themselves (no inbound port — ideal behind NAT); <b>direct</b> nodes are reached at host:port. Reverse needs an agent installed with the one-liner above.</p>
           <p className="rounded-lg bg-sky-50 p-2.5 text-2xs text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
             Tunnel tip: mark the <b>Iran hub</b> and <b>Foreign egress</b> roles on the two servers, then use Tunnels on the Iran side to configure the relays.
           </p>
@@ -434,6 +444,20 @@ export default function Servers() {
             <Input type="password" value={tokenDraft} onChange={(e) => setTokenDraft(e.target.value)} placeholder="paste the node token" />
           </Field>
           <Field label="Notes"><Input value={draft.notes || ''} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
+          <Field
+            label="Connection mode"
+            hint={draft.conn_mode === 'reverse'
+              ? 'reverse: the agent dials this panel — no inbound port needed (works behind NAT/firewall)'
+              : 'direct: the panel reaches the node at host:port — the node must be reachable'}
+          >
+            <Select
+              value={draft.conn_mode || 'reverse'}
+              onChange={(e) => setDraft({ ...draft, conn_mode: e.target.value as ServerNode['conn_mode'] })}
+            >
+              <option value="reverse">reverse — dial the panel (WS tunnel)</option>
+              <option value="direct">direct — panel → node HTTP</option>
+            </Select>
+          </Field>
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
             <Button onClick={save} disabled={saving || !draft.name || !draft.host}>{saving ? 'Saving…' : 'Save server'}</Button>

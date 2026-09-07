@@ -75,6 +75,14 @@ mv "${APP_DIR}/portguard.new" "${APP_DIR}/portguard"
 
 # ---- data dir + systemd ----
 mkdir -p /var/lib/portguard
+if [ -n "$MASTER" ]; then
+  # reverse mode: the agent dials the master over a persistent WS tunnel and
+  # needs NO inbound port — -master keeps it behind firewalls/NAT
+  AGENT_ARGS="agent -master ${MASTER} -token ${TOKEN} -role ${ROLE}"
+  if [ -n "${NODE_UID:-}" ]; then AGENT_ARGS="${AGENT_ARGS} -uid ${NODE_UID}"; fi
+else
+  AGENT_ARGS="agent -port ${AGENT_PORT} -token ${TOKEN} -role ${ROLE}"
+fi
 cat > "$UNIT" <<EOF
 [Unit]
 Description=PortGuard managed node (agent)
@@ -83,7 +91,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${APP_DIR}/portguard agent -port ${AGENT_PORT} -token ${TOKEN} -role ${ROLE}
+ExecStart=${APP_DIR}/portguard ${AGENT_ARGS}
 Restart=always
 RestartSec=3
 LimitNOFILE=1000000
@@ -94,24 +102,33 @@ EOF
 systemctl daemon-reload
 systemctl enable --now portguard-agent
 
-# ---- firewall ----
-if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi "Status: active"; then
+# ---- firewall: only needed in direct mode (reverse dials out) ----
+if [ -z "$MASTER" ] && command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi "Status: active"; then
   ufw allow "${AGENT_PORT}/tcp" >/dev/null 2>&1 && say "ufw: allowed ${AGENT_PORT}/tcp"
 fi
 
 sleep 1
-systemctl is-active --quiet portguard-agent \
-  && say "agent running on port ${AGENT_PORT} (role: ${ROLE}) — add this server in the master's Servers page now:" \
-  && say "   host: <this-server-ip>   port: ${AGENT_PORT}   token: (the one you used)" \
-  || { journalctl -u portguard-agent -n 20 --no-pager; die "agent failed to start"; }
+if systemctl is-active --quiet portguard-agent; then
+  if [ -n "$MASTER" ]; then
+    say "agent running in REVERSE mode → ${MASTER} (role: ${ROLE})"
+    say "   no inbound port open — the master manages it over the WS tunnel"
+  else
+    say "agent running on port ${AGENT_PORT} (role: ${ROLE}) — add this server in the master's Servers page now:"
+    say "   host: <this-server-ip>   port: ${AGENT_PORT}   token: (the one you used)"
+  fi
+else
+  journalctl -u portguard-agent -n 20 --no-pager; die "agent failed to start"
+fi
 
 # ---- self-register: announce this server to the master ----
 REG_NAME="${NAME:-$(hostname)}"
 REG_HOST="${HOSTIP:-$(curl -fsSL -m 8 "${MASTER}/api/node/myip" 2>/dev/null || true)}"
 REG_NAME=${REG_NAME//\"/}
 if [ -n "$REG_HOST" ]; then
-  if curl -fsSL -m 10 -X POST -H "Authorization: Bearer ${TOKEN}" -H 'Content-Type: application/json' -d "{\"name\":\"${REG_NAME}\",\"host\":\"${REG_HOST}\",\"port\":${AGENT_PORT},\"role\":\"${ROLE}\"}" "${MASTER}/api/nodes/self-register" >/dev/null 2>&1; then
-    say "registered with the master (${REG_HOST}:${AGENT_PORT}) - manage it from the Servers page"
+  REG_CONN="direct"
+  [ -n "$MASTER" ] && REG_CONN="reverse"
+  if curl -fsSL -m 10 -X POST -H "Authorization: Bearer ${TOKEN}" -H 'Content-Type: application/json' -d "{\"name\":\"${REG_NAME}\",\"host\":\"${REG_HOST}\",\"port\":${AGENT_PORT},\"role\":\"${ROLE}\",\"conn_mode\":\"${REG_CONN}\"}" "${MASTER}/api/nodes/self-register" >/dev/null 2>&1; then
+    say "registered with the master (${REG_HOST}:${AGENT_PORT}, ${REG_CONN}) - manage it from the Servers page"
   else
     say "WARNING: self-register failed - add the node manually in the master's Servers page"
   fi
