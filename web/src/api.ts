@@ -838,6 +838,18 @@ export interface TunnelRelay {
   updated_at: string
 }
 
+/** Uniform error message from API failures (string body, {error}, etc). */
+export function apiErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (typeof e === 'string') return e
+  try {
+    const anyE = e as any
+    return anyE?.message || anyE?.error || 'request failed'
+  } catch {
+    return 'request failed'
+  }
+}
+
 export function fmtBytes(n: number): string {
   if (!n) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']

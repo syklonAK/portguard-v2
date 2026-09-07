@@ -301,17 +301,6 @@ func (a *App) handleListRatePolicies(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (a *App) validNode(id int64) (*store.ServerNode, error) {
-	n, err := a.St.GetServerNode(id)
-	if err != nil {
-		return nil, errString("node not found")
-	}
-	if !n.Enabled {
-		return nil, errString("node is disabled")
-	}
-	return &n, nil
-}
-
 func (a *App) handleUpsertRatePolicy(w http.ResponseWriter, r *http.Request) {
 	var p store.RateLimitPolicy
 	if !readJSON(w, r, &p) {

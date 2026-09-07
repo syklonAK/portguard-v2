@@ -7,6 +7,8 @@ import {
 import { api, type ServerNode, type NodeSummary, type ToolState, type ToolInstallResult } from '../api'
 import { Badge, Button, Card, CardHeader, CodeBlock, CodeEditor, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
+import DeployModal from '../components/servers/DeployModal'
+import ManageModal from '../components/servers/ManageModal'
 import { fmtAgo, fmtUptimeShort } from '../lib/format'
 
 const ROLES: { value: ServerNode['role']; label: string; desc: string }[] = [
@@ -153,6 +155,17 @@ export default function Servers() {
     onSuccess: () => push('success', 'Apply triggered on the remote server.'),
     onError: (e: any) => push('error', e.message),
   })
+
+  const regenerateDeployToken = async () => {
+    const t = genToken()
+    setDeployToken(t)
+    try {
+      await api.putNodeSelf({ token: t })
+      push('success', 'New token saved — re-run the one-liner on nodes that used the old one.')
+    } catch (e: any) {
+      push('error', e.message)
+    }
+  }
 
   const openSummary = async (n: ServerNode) => {
     try {
@@ -512,165 +525,31 @@ export default function Servers() {
         </div>
       </Modal>
 
-      {/* deploy new node modal: one-liner + token */}
-      <Modal open={deployModal} onClose={() => setDeployModal(false)} wide
-        title="Deploy a new node — no panel install needed">
-        <div className="space-y-4">
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Run this single command on the new Ubuntu server — that's the whole flow. It downloads
-            <b> this master's own binary</b>, installs it as a headless <b>portguard-agent</b> service
-            (no account, no panel setup) and <b>self-registers</b> with this master. When the command
-            finishes, the node appears in the list below as <b>online</b> and is fully managed from here.
-          </p>
-          <Field label="1. Node token (generated — copy it)">
-            <div className="flex gap-2">
-              <Input readOnly className="font-mono" value={deployToken} />
-              <Button
-                variant="secondary"
-                onClick={async () => {
-                  const t = genToken()
-                  setDeployToken(t)
-                  try {
-                    await api.putNodeSelf({ token: t })
-                    push('success', 'New token saved — re-run the one-liner on nodes that used the old one.')
-                  } catch (e: any) {
-                    push('error', e.message)
-                  }
-                }}
-                title="Regenerate & save"
-              >
-                <KeyRound className="h-4 w-4" />
-              </Button>
-            </div>
-          </Field>
-          <Field label="2. Pick the node role">
-            <div className="text-2xs leading-relaxed text-muted-foreground">
-              Pass <code className="rounded bg-mutedslate px-1">-role iran</code> or
-              <code className="mx-1 rounded bg-mutedslate px-1">-role foreign</code> for tunnel
-              servers; default is <code className="rounded bg-mutedslate px-1">generic</code>.
-            </div>
-          </Field>
-          <Field label="3. One-liner (run as root on the new server)">
-            <CodeBlock
-              label=""
-              code={`sudo bash -c "$(curl -fsSL ${origin}/api/agent-install.sh)" -- -master ${origin} -token ${deployToken}`}
-            />
-          </Field>
-          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-2xs leading-relaxed text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
-            The token above was <b>already saved</b> to this panel — the installer's binary download and
-            self-registration authenticate with it. No inbound port is opened on the node (reverse mode);
-            give it a friendly name with <code className="mx-1">-name mynode</code>. Re-running the command
-            on the same server just refreshes it.
-          </div>
-        </div>
-      </Modal>
+      <DeployModal
+        open={deployModal}
+        onClose={() => setDeployModal(false)}
+        origin={origin}
+        token={deployToken}
+        onRegenerate={regenerateDeployToken}
+      />
 
-      {/* manage remote node modal: mappings + certs */}
-      <Modal open={manageModal !== null} onClose={() => setManageModal(null)} wide
-        title={manageModal ? `Manage — ${manageModal.name} (${manageModal.host}:${manageModal.port})` : ''}>
-        {manageModal && (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex gap-1 rounded-xl border border-border bg-mutedslate p-1">
-                {(['mappings', 'certs'] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setManageTab(t)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize ${
-                      manageTab === t ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="sm" onClick={reloadManage}><RefreshCw className="h-3.5 w-3.5" /></Button>
-                <Button variant="success" size="sm" onClick={applyRemote}><Zap className="h-3.5 w-3.5" /> Apply on node</Button>
-              </div>
-            </div>
-
-            {manageLoading ? (
-              <div className="flex justify-center py-12"><Spinner /></div>
-            ) : manageTab === 'mappings' ? (
-              <>
-                {(remoteMappings ?? []).length === 0 ? (
-                  <Empty message="No mappings on this node yet." />
-                ) : (
-                  <div className="max-h-64 overflow-auto rounded-xl border border-border">
-                    <table className="w-full text-sm">
-                      <tbody className="divide-y divide-border">
-                        {(remoteMappings ?? []).map((m: any) => (
-                          <tr key={m.id}>
-                            <td className="px-4 py-2.5 font-medium">{m.name}</td>
-                            <td className="px-3 py-2.5"><Badge color={m.engine === 'nginx' ? 'green' : 'purple'}>{m.engine}</Badge></td>
-                            <td className="px-3 py-2.5"><Badge color="slate">{m.protocol}</Badge></td>
-                            <td className="px-3 py-2.5 font-mono text-xs">{m.listen_ip}:{m.listen_port}</td>
-                            <td className="px-3 py-2.5 text-xs text-muted-foreground">{m.targets?.map((t: any) => `${t.host}:${t.port}`).join(', ') || (m.path_routes?.length ? 'path routes' : '—')}</td>
-                            <td className="px-3 py-2.5 text-right">
-                              <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteRemoteMapping(m.id)}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <div>
-                  <div className="mb-1.5 text-xs font-medium text-muted-foreground">
-                    Create mapping (raw JSON — same shape as the local editor)
-                  </div>
-                  <CodeEditor
-                    rows={7}
-                    value={newMappingJSON}
-                    onChange={setNewMappingJSON}
-                    onValidate={(ok) => setJsonInvalid(!ok)}
-                    invalid={jsonInvalid}
-                    placeholder={`{\n  "name": "web",\n  "enabled": true,\n  "engine": "nginx",\n  "protocol": "http",\n  "listen_ip": "0.0.0.0",\n  "listen_port": 8081,\n  "server_names": ["example.com"],\n  "targets": [{ "host": "127.0.0.1", "port": 3000 }]\n}`}
-                  />
-                  <div className="mt-2 flex justify-end">
-                    <Button size="sm" onClick={createRemoteMapping} disabled={!newMappingJSON.trim() || jsonInvalid}>
-                      <Plus className="h-3.5 w-3.5" /> Create on node
-                    </Button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-3">
-                {(remoteCerts ?? []).length === 0 ? (
-                  <Empty message="No certificates on this node." />
-                ) : (
-                  <div className="max-h-48 overflow-auto rounded-xl border border-border">
-                    <table className="w-full text-sm">
-                      <tbody className="divide-y divide-border">
-                        {(remoteCerts ?? []).map((c: any) => (
-                          <tr key={c.id}>
-                            <td className="px-4 py-2.5 font-medium">{c.name}</td>
-                            <td className="px-3 py-2.5"><Badge color={c.type === 'manual' ? 'blue' : 'amber'}>{c.type}</Badge></td>
-                            <td className="px-3 py-2.5 text-xs text-muted-foreground">{(c.domains ?? []).join(', ')}</td>
-                            <td className="px-3 py-2.5 text-2xs text-muted-foreground">
-                              {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <p className="text-2xs leading-relaxed text-muted-foreground">
-                  Upload certs for this node from your local SSL Certs page: copy the PEM pair and POST it here
-                  (API: <code>POST /api/nodes/{manageModal.id}/certs</code> with
-                  <code> name / cert_pem / key_pem / domains</code>). The apply pipeline writes
-                  <code> .crt/.key</code> files on the node automatically.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
+      <ManageModal
+        node={manageModal}
+        tab={manageTab}
+        onTab={setManageTab}
+        loading={manageLoading}
+        mappings={remoteMappings}
+        certs={remoteCerts}
+        newJSON={newMappingJSON}
+        setNewJSON={setNewMappingJSON}
+        jsonInvalid={jsonInvalid}
+        onClose={() => setManageModal(null)}
+        onReload={reloadManage}
+        onApply={applyRemote}
+        onCreate={createRemoteMapping}
+        onDeleteMapping={deleteRemoteMapping}
+        onJsonValid={(ok) => setJsonInvalid(!ok)}
+      />
 
       {/* remote tools modal */}
       <Modal open={toolsModal !== null} onClose={() => setToolsModal(null)} wide
