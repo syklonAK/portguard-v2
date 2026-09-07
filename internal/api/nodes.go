@@ -511,16 +511,12 @@ func (a *App) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseInt64(chi.URLParam(r, "id"))
 	action := chi.URLParam(r, "action")
-	n, err := a.St.GetServerNode(id)
+	n, err := a.validNode(id)
 	if err != nil {
-		errJSON(w, err, http.StatusNotFound)
+		errJSON(w, err, http.StatusUnprocessableEntity)
 		return
 	}
-	if !n.Enabled {
-		errJSON(w, errString("server is disabled"), http.StatusUnprocessableEntity)
-		return
-	}
-	cli := a.nodeClientFor(n)
+	cli := a.nodeClientFor(*n)
 	switch action {
 	case "probe":
 		if err := cli.Ping(); err != nil {
