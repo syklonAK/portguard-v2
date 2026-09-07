@@ -125,11 +125,15 @@ export function Modal({
   wide?: boolean
 }) {
   if (!open) return null
+  // the outer layer scrolls; inner min-h-full + my-4 guarantees the card
+  // never clips at the top on short viewports (flex centering alone would
+  // push the header out of reach)
   return (
-    <div className="pg-modal-bg fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="pg-modal-bg fixed inset-0 z-50 overflow-y-auto">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative flex min-h-full items-center justify-center p-4 sm:p-6">
       <div
-        className={`pg-modal-card relative max-h-[90vh] w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} overflow-y-auto rounded-xl border
+        className={`pg-modal-card relative my-4 w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl border
           border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900`}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
@@ -139,6 +143,7 @@ export function Modal({
           </button>
         </div>
         <div className="p-5">{children}</div>
+      </div>
       </div>
     </div>
   )
