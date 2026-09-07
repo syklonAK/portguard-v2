@@ -63,6 +63,17 @@
 	}
 
 func (c *Client) do(method, path string, body any, out any) error {
+	// generic helpers (Get/Post/Delete) receive bare agent-router paths
+	// ("/mappings", "/certs", "/ratelimit/apply", ...) while the typed
+	// methods pass fully-qualified "/api/node/..." paths — normalize bare
+	// ones so both transports hit the same node routes
+	if !strings.HasPrefix(path, "/api/node/") {
+		p := "/" + strings.TrimPrefix(path, "/")
+		if !strings.HasPrefix(p, "/api/node/") {
+			p = "/api/node" + p
+		}
+		path = p
+	}
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
