@@ -158,6 +158,9 @@ func (a *App) Router() http.Handler {
 	// node bootstrap: the master serves its own binary + the installer
 	// script so a new server needs nothing but curl.
 	r.Get("/api/node/binary", a.handleNodeBinary)
+	// agent self-registration (node-token authed, not admin JWT)
+	r.Get("/api/node/myip", a.handleNodeMyIP)
+	r.Post("/api/nodes/self-register", a.handleNodeSelfRegister)
 	r.Get("/api/agent-install.sh", a.handleAgentInstaller)
 
 	// SPA (embedded)
