@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -282,4 +283,90 @@ func (a *App) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	go func() { _ = cmd.Wait() }()
 	a.St.Audit(actorFrom(r.Context()), "update.start", "self-update started", "ok")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "note": "update started; the panel will restart shortly"})
+}
+
+// ---- ICMP tunnel (PingTunnel) — Iran ↔ foreign over ICMP echo ----
+
+// handlePingTunnelStatus reports the ICMP tunnel environment.
+func (a *App) handlePingTunnelStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, tunnel.DetectPingTunnel())
+}
+
+// handlePingTunnelInstall installs the pingtunnel core (pinned upstream release).
+func (a *App) handlePingTunnelInstall(w http.ResponseWriter, r *http.Request) {
+	if err := tunnel.InstallPingTunnelCore(""); err != nil {
+		a.St.Audit(actorFrom(r.Context()), "pingtunnel.install", err.Error(), "error")
+		errJSON(w, errString(err.Error()), http.StatusInternalServerError)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "pingtunnel.install", "core installed", "ok")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handlePingTunnelCreate provisions one tunnel side as a systemd unit.
+// Body: {"side":"iran"|"foreign", "port":8443, "foreign_ip":"1.2.3.4", "target_port":8443}
+func (a *App) handlePingTunnelCreate(w http.ResponseWriter, r *http.Request) {
+	if !tunnel.DetectPingTunnel().Installed {
+		errJSON(w, errString("pingtunnel core is not installed — install it first"), http.StatusUnprocessableEntity)
+		return
+	}
+	var body struct {
+		Side       string `json:"side"`
+		Port       int    `json:"port"`
+		ForeignIP  string `json:"foreign_ip"`
+		TargetPort int    `json:"target_port"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	var side int
+	switch body.Side {
+	case "iran":
+		side = 0
+	case "foreign":
+		side = 1
+	default:
+		errJSON(w, errString("side must be iran or foreign"), http.StatusUnprocessableEntity)
+		return
+	}
+	// refuse duplicate ports
+	for _, u := range tunnel.DetectPingTunnel().Services {
+		if u.Role == "iran" && u.Port == body.Port {
+			errJSON(w, errString(fmt.Sprintf("an ICMP tunnel on port %d already exists", body.Port)), http.StatusConflict)
+			return
+		}
+	}
+	name, unit, err := tunnel.BuildPingTunnelUnit(side, body.Port, body.ForeignIP, body.TargetPort)
+	if err != nil {
+		errJSON(w, errString(err.Error()), http.StatusUnprocessableEntity)
+		return
+	}
+	if err := tunnel.InstallPingTunnelUnit(name, unit); err != nil {
+		a.St.Audit(actorFrom(r.Context()), "pingtunnel.create", name+": "+err.Error(), "error")
+		errJSON(w, errString("failed to install service: "+err.Error()), http.StatusInternalServerError)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "pingtunnel.create", name+" ("+body.Side+")", "ok")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "unit": name})
+}
+
+// handlePingTunnelDelete removes one pingtunnel unit.
+func (a *App) handlePingTunnelDelete(w http.ResponseWriter, r *http.Request) {
+	unit := chi.URLParam(r, "unit")
+	if err := tunnel.DeletePingTunnelUnit(unit); err != nil {
+		errJSON(w, errString(err.Error()), http.StatusBadRequest)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "pingtunnel.delete", unit, "ok")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handlePingTunnelCoreRemove deletes the core when no services remain.
+func (a *App) handlePingTunnelCoreRemove(w http.ResponseWriter, r *http.Request) {
+	if err := tunnel.RemovePingTunnelCore(); err != nil {
+		errJSON(w, errString(err.Error()), http.StatusConflict)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "pingtunnel.core-remove", "core removed", "ok")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

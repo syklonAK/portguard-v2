@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, RefreshCw, ShieldCheck, ArrowRight, CheckCircle2, XCircle, Zap, RadioTower, Globe2 } from 'lucide-react'
-import { api, type TunnelRelay, type TunnelStatus } from '../api'
+import { Plus, Pencil, Trash2, RefreshCw, ShieldCheck, ArrowRight, CheckCircle2, XCircle, Zap, RadioTower, Globe2, Activity, Download } from 'lucide-react'
+import { api, type TunnelRelay, type TunnelStatus, type PingTunnelStatus } from '../api'
 import { Badge, Button, Card, CardHeader, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
 
@@ -53,6 +53,7 @@ export default function Tunnels() {
   const { push } = useToast()
 
   const status = useQuery({ queryKey: ['tunnel-status'], queryFn: () => api.tunnelStatus() })
+  const ptStatus = useQuery({ queryKey: ['pingtunnel-status'], queryFn: () => api.pingTunnelStatus() })
   const relays = useQuery({ queryKey: ['relays'], queryFn: () => api.listRelays() })
   const certs = useQuery({ queryKey: ['certs'], queryFn: () => api.listCerts() })
   const selfInfo = useQuery({ queryKey: ['node-self'], queryFn: () => api.nodeSelf() })
@@ -60,6 +61,10 @@ export default function Tunnels() {
   const [modal, setModal] = useState<null | 'create' | 'edit'>(null)
   const [draft, setDraft] = useState<Partial<TunnelRelay>>(emptyRelay())
   const [saving, setSaving] = useState(false)
+  // ICMP tunnel (pingtunnel)
+  const [ptSide, setPtSide] = useState<null | 'iran' | 'foreign'>(null)
+  const [ptDraft, setPtDraft] = useState({ port: 8443, foreign_ip: '', target_port: 8443 })
+  const [ptBusy, setPtBusy] = useState(false)
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['tunnel-status'] })
@@ -114,7 +119,47 @@ export default function Tunnels() {
     onError: (e: any) => push('error', e.message),
   })
 
+  const ptRefresh = () => qc.invalidateQueries({ queryKey: ['pingtunnel-status'] })
+
+  const ptInstall = useMutation({
+    mutationFn: () => api.pingTunnelInstall(),
+    onSuccess: () => {
+      push('success', 'PingTunnel core installed.')
+      ptRefresh()
+    },
+    onError: (e: any) => push('error', e.message),
+  })
+
+  const ptCreate = async () => {
+    if (!ptSide) return
+    setPtBusy(true)
+    try {
+      const body = ptSide === 'iran'
+        ? { side: 'iran' as const, port: ptDraft.port, foreign_ip: ptDraft.foreign_ip, target_port: ptDraft.target_port }
+        : { side: 'foreign' as const }
+      const res = await api.pingTunnelCreate(body)
+      push('success', `ICMP tunnel created (${res.unit}).`)
+      setPtSide(null)
+      ptRefresh()
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setPtBusy(false)
+    }
+  }
+
+  const ptDelete = async (unit: string) => {
+    try {
+      await api.pingTunnelDelete(unit)
+      push('success', `${unit} removed.`)
+      ptRefresh()
+    } catch (e: any) {
+      push('error', e.message)
+    }
+  }
+
   const st: TunnelStatus | undefined = status.data
+  const pt: PingTunnelStatus | undefined = ptStatus.data
   const myRole = selfInfo.data?.role || 'standalone'
 
   const setRole = useMutation({
@@ -272,6 +317,112 @@ export default function Tunnels() {
           ) : null}
         </Card>
       </div>
+
+      <Card>
+        <CardHeader
+          title="ICMP tunnel (PingTunnel)"
+          desc="Tunnel TCP over ICMP echo — works where UDP/TCP to the foreign side is throttled. Iran side forwards a local port; foreign side runs the ICMP server."
+          right={<Badge color={pt?.installed ? 'green' : 'red'}>{pt?.installed ? (pt.version || 'installed') : 'not installed'}</Badge>}
+        />
+        {pt && !pt.installed && (
+          <div className="border-b border-border px-5 py-4">
+            <Button variant="secondary" size="sm" onClick={() => ptInstall.mutate()} disabled={ptInstall.isPending}>
+              <Download className="h-3.5 w-3.5" /> Install PingTunnel core (v2.8)
+            </Button>
+            <span className="ml-3 text-2xs text-muted-foreground">downloads the pinned upstream release for this architecture</span>
+          </div>
+        )}
+        <div className="space-y-3 p-5">
+          {pt && !pt.icmp_echo_ignored && pt.installed && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-2xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              The kernel still answers ICMP echo itself — pingtunnel needs it silent. Applying any tunnel (or the core install) sets
+              <code className="mx-1 rounded bg-amber-100 px-1 dark:bg-amber-500/20">net.ipv4.icmp_echo_ignore_all=1</code> automatically.
+            </div>
+          )}
+
+          {pt && pt.services.length > 0 && (
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-4 py-2 font-medium">Service</th>
+                    <th className="px-3 py-2 font-medium">Role</th>
+                    <th className="px-3 py-2 font-medium">Port / Target</th>
+                    <th className="px-3 py-2 font-medium">State</th>
+                    <th className="px-4 py-2 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {pt.services.map((u) => (
+                    <tr key={u.unit}>
+                      <td className="px-4 py-2.5 font-mono text-xs">{u.unit}</td>
+                      <td className="px-3 py-2.5"><Badge color={u.role === 'iran' ? 'cyan' : 'blue'}>{u.role}</Badge></td>
+                      <td className="px-3 py-2.5 font-mono text-xs">
+                        {u.role === 'iran' ? `:${u.port} → ${u.target || '?'}` : 'ICMP server'}
+                      </td>
+                      <td className="px-3 py-2.5"><StateBadge state={u.active} /></td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => ptDelete(u.unit)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {pt && pt.services.length === 0 && (
+            <Empty message="No ICMP tunnels yet. Configure one for the Iran or the foreign server." />
+          )}
+
+          {!ptSide ? (
+            <div className="flex gap-2">
+              <Button size="sm" disabled={!pt?.installed} onClick={() => { setPtSide('iran'); setPtDraft({ port: 8443, foreign_ip: '', target_port: 8443 }) }}>
+                <Plus className="h-3.5 w-3.5" /> Iran side (client)
+              </Button>
+              <Button size="sm" variant="secondary" disabled={!pt?.installed} onClick={() => setPtSide('foreign')}>
+                <Plus className="h-3.5 w-3.5" /> Foreign side (server)
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-xl border border-border p-4">
+              <div className="text-xs font-bold">{ptSide === 'iran' ? 'New ICMP tunnel — Iran (client)' : 'New ICMP tunnel — Foreign (server)'}</div>
+              {ptSide === 'iran' ? (
+                <>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <Field label="Foreign server IP">
+                      <Input value={ptDraft.foreign_ip} onChange={(e) => setPtDraft({ ...ptDraft, foreign_ip: e.target.value })} placeholder="5.6.7.8" />
+                    </Field>
+                    <Field label="Tunnel port (local)" hint="the xray inbound this tunnel serves">
+                      <Input type="number" value={ptDraft.port} onChange={(e) => setPtDraft({ ...ptDraft, port: parseInt(e.target.value, 10) })} />
+                    </Field>
+                    <Field label="Target port (on foreign)" hint="the real service port on the foreign box">
+                      <Input type="number" value={ptDraft.target_port} onChange={(e) => setPtDraft({ ...ptDraft, target_port: parseInt(e.target.value, 10) })} />
+                    </Field>
+                  </div>
+                  <p className="text-2xs leading-relaxed text-muted-foreground">
+                    Traffic flow: user → <code>this box :port</code> → ICMP → foreign → <code>127.0.0.1:target_port</code> (its xray inbound).
+                    The foreign server must have run the <b>foreign side</b> once, and this port must be free here.
+                  </p>
+                </>
+              ) : (
+                <p className="text-2xs leading-relaxed text-muted-foreground">
+                  Registers the ICMP echo server unit (<code>pingtunnel-kharej.service</code>). ICMP itself must be allowed through this
+                  server's firewall — most providers do by default.
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setPtSide(null)}>Cancel</Button>
+                <Button size="sm" onClick={ptCreate}
+                  disabled={ptBusy || (ptSide === 'iran' && (!ptDraft.foreign_ip || !ptDraft.port || !ptDraft.target_port))}>
+                  {ptBusy ? 'Creating…' : 'Create tunnel'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
 
       <Card>
         <CardHeader

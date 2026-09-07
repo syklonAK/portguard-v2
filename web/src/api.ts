@@ -448,6 +448,14 @@ export const api = {
   tunnelValidate: () => req<{ ok: boolean; error?: string; note?: string }>('POST', '/api/tunnels/validate'),
   tunnelApply: () => req<{ ok: boolean; relays: number }>('POST', '/api/tunnels/apply'),
 
+  // ICMP tunnel (pingtunnel)
+  pingTunnelStatus: () => req<PingTunnelStatus>('GET', '/api/tunnels/pingtunnel'),
+  pingTunnelInstall: () => req<{ ok: boolean }>('POST', '/api/tunnels/pingtunnel/install'),
+  pingTunnelCreate: (body: { side: 'iran' | 'foreign'; port?: number; foreign_ip?: string; target_port?: number }) =>
+    req<{ ok: boolean; unit: string }>('POST', '/api/tunnels/pingtunnel', body),
+  pingTunnelDelete: (unit: string) => req<{ ok: boolean }>('DELETE', `/api/tunnels/pingtunnel/${unit}`),
+  pingTunnelCoreRemove: () => req<{ ok: boolean }>('POST', '/api/tunnels/pingtunnel/core-remove'),
+
   // v2.2: self-updater
   selfUpdate: () => req<{ ok: boolean; note: string }>('POST', '/api/update'),
 
@@ -793,6 +801,22 @@ export interface TunnelStatus {
   bridge_active: string
   socks_listening?: string
   role: string
+}
+
+export interface PingTunnelUnit {
+  unit: string
+  active: string
+  role: 'iran' | 'foreign'
+  port: number
+  target: string
+}
+
+export interface PingTunnelStatus {
+  installed: boolean
+  version?: string
+  binary?: string
+  services: PingTunnelUnit[]
+  icmp_echo_ignored: boolean
 }
 
 export interface TunnelRelay {
