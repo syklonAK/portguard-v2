@@ -424,9 +424,13 @@ func runAgent(args []string) {
 	}()
 
 	agent := &api.Agent{App: app}
+	// the master's nodeclient addresses the agent at /api/node/* while the
+	// Agent router registers bare paths (/ping, /summary, ...) - strip the
+	// prefix here so the two halves of the protocol line up
+	nodeHandler := http.StripPrefix("/api/node", agent.Router())
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(*host, strconv.Itoa(*port)),
-		Handler:           agent.Router(),
+		Handler:           nodeHandler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
