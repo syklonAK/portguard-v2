@@ -590,7 +590,19 @@ export default function Mappings() {
       </Card>
 
       <Modal open={modal !== null} onClose={() => setModal(null)} wide
-        title={modal === 'create' ? 'New mapping' : `Edit mapping #${draft.id}`}>
+        title={modal === 'create' ? 'New mapping' : `Edit mapping #${draft.id}`}
+        footer={formTab !== 'templates' ? (
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
+            <Button
+              onClick={save}
+              disabled={saving || !draft.name || (formTab === 'json' && jsonInvalid) || needsNames}
+              title={needsNames ? 'Add at least one domain under Server names' : undefined}
+            >
+              {saving ? 'Saving…' : 'Save mapping'}
+            </Button>
+          </div>
+        ) : null}>
         <div className="space-y-4">
           <Tabs
             tabs={[
@@ -879,25 +891,20 @@ export default function Mappings() {
               {jsonInvalid && <p className="text-2xs text-red-500">Invalid JSON syntax</p>}
             </div>
           )}
-
-          {formTab !== 'templates' && (
-            <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
-              <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
-              <Button
-                onClick={save}
-                disabled={saving || !draft.name || (formTab === 'json' && jsonInvalid) || needsNames}
-                title={needsNames ? 'Add at least one domain under Server names' : undefined}
-              >
-                {saving ? 'Saving…' : 'Save mapping'}
-              </Button>
-            </div>
-          )}
         </div>
       </Modal>
 
       {/* Import existing configs modal */}
       <Modal open={importModal !== null} onClose={() => setImportModal(null)} wide
-        title="Import existing nginx / HAProxy configs">
+        title="Import existing nginx / HAProxy configs"
+        footer={importModal?.found ? (
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setImportModal(null)}>Cancel</Button>
+            <Button onClick={confirmImport} disabled={importing || importChecked.length === 0}>
+              {importing ? 'Importing…' : `Import ${importChecked.length} mapping(s)`}
+            </Button>
+          </div>
+        ) : null}>
         {importModal && (
           <div className="space-y-4">
             {!importModal.found ? (
@@ -946,12 +953,6 @@ export default function Mappings() {
                     ))}
                   </div>
                 )}
-                <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
-                  <Button variant="secondary" onClick={() => setImportModal(null)}>Cancel</Button>
-                  <Button onClick={confirmImport} disabled={importing || importChecked.length === 0}>
-                    {importing ? 'Importing…' : `Import ${importChecked.length} mapping(s)`}
-                  </Button>
-                </div>
               </>
             )}
           </div>
@@ -959,7 +960,16 @@ export default function Mappings() {
       </Modal>
 
       {/* Validate / diff modal */}
-      <Modal open={diffModal !== null} onClose={() => setDiffModal(null)} wide title="Dry run — staged configuration vs live">
+      <Modal open={diffModal !== null} onClose={() => setDiffModal(null)} wide title="Dry run — staged configuration vs live"
+        footer={diffModal ? (
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setDiffModal(null)}>Close</Button>
+            <Button variant="success" disabled={!Object.values(diffModal).every((v) => v.ok)}
+              onClick={() => { setDiffModal(null); apply.mutate() }}>
+              <Wand2 className="h-4 w-4" /> Apply now
+            </Button>
+          </div>
+        ) : null}>
         {diffModal && (
           <div className="space-y-4">
             {Object.entries(diffModal).map(([engine, v]) => (
@@ -973,13 +983,6 @@ export default function Mappings() {
                 {v.ok && v.diff && <DiffView diff={v.diff} />}
               </div>
             ))}
-            <div className="flex justify-end gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
-              <Button variant="secondary" onClick={() => setDiffModal(null)}>Close</Button>
-              <Button variant="success" disabled={!Object.values(diffModal).every((v) => v.ok)}
-                onClick={() => { setDiffModal(null); apply.mutate() }}>
-                <Wand2 className="h-4 w-4" /> Apply now
-              </Button>
-            </div>
           </div>
         )}
       </Modal>

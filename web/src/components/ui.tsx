@@ -116,34 +116,41 @@ export function Modal({
   onClose,
   title,
   children,
+  footer,
   wide = false,
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
+  footer?: ReactNode
   wide?: boolean
 }) {
   if (!open) return null
-  // the outer layer scrolls; inner min-h-full + my-4 guarantees the card
-  // never clips at the top on short viewports (flex centering alone would
-  // push the header out of reach)
+  // the overlay never scrolls — the card is clamped to the viewport and only
+  // its body scrolls between the pinned header and footer, so the backdrop
+  // keeps covering the page and actions stay reachable on short viewports
   return (
-    <div className="pg-modal-bg fixed inset-0 z-50 overflow-y-auto">
+    <div className="pg-modal-bg fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex min-h-full items-center justify-center p-4 sm:p-6">
-      <div
-        className={`pg-modal-card relative my-4 w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl border
-          border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900`}
-      >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <button onClick={onClose} className="pg-press rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800">
-            <X className="h-4 w-4" />
-          </button>
+      <div className="relative flex h-full items-center justify-center p-4 sm:p-6">
+        <div
+          className={`pg-modal-card flex max-h-full w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} flex-col rounded-xl border
+            border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900`}
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
+            <h2 className="text-sm font-semibold">{title}</h2>
+            <button onClick={onClose} className="pg-press rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+          {footer && (
+            <div className="shrink-0 rounded-b-xl border-t border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
+              {footer}
+            </div>
+          )}
         </div>
-        <div className="p-5">{children}</div>
-      </div>
       </div>
     </div>
   )
