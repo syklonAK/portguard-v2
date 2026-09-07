@@ -97,9 +97,13 @@ func (s *Store) UpsertServerNodeByHostPort(n *ServerNode) (int64, bool, error) {
 	err := s.DB.QueryRow(`SELECT id FROM server_nodes WHERE host=? AND port=?`, n.Host, n.Port).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		ts := nowTS()
+		connMode := n.ConnMode
+		if connMode == "" {
+			connMode = "direct"
+		}
 		res, err := s.DB.Exec(`INSERT INTO server_nodes(name, host, port, api_token, role, enabled, notes, status, conn_mode, uid, created_at, updated_at)
-			VALUES(?,?,?,?,?,?,?,'unknown','direct','',?,?)`,
-			n.Name, n.Host, n.Port, n.APIToken, n.Role, b2i(n.Enabled), n.Notes, ts, ts)
+			VALUES(?,?,?,?,?,?,?,'unknown',?,?,?)`,
+			n.Name, n.Host, n.Port, n.APIToken, n.Role, b2i(n.Enabled), n.Notes, connMode, n.UID, ts, ts)
 		if err != nil {
 			return 0, false, err
 		}
@@ -109,8 +113,8 @@ func (s *Store) UpsertServerNodeByHostPort(n *ServerNode) (int64, bool, error) {
 	if err != nil {
 		return 0, false, err
 	}
-	_, err = s.DB.Exec(`UPDATE server_nodes SET api_token=?, role=?, enabled=1, updated_at=? WHERE id=?`,
-		n.APIToken, n.Role, nowTS(), id)
+	_, err = s.DB.Exec(`UPDATE server_nodes SET api_token=?, role=?, conn_mode=?, uid=?, enabled=1, updated_at=? WHERE id=?`,
+		n.APIToken, n.Role, n.ConnMode, n.UID, nowTS(), id)
 	return id, false, err
 }
 
