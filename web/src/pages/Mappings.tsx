@@ -232,6 +232,7 @@ function PathRoutesEditor({ routes, onChange }: { routes: PathRoute[]; onChange:
 function RoutePreview({ draft }: { draft: Partial<Mapping> }) {
   const host = draft.targets?.[0]?.host || '127.0.0.1'
   const scheme = draft.protocol === 'https' ? 'https' : 'http'
+  const needsNames = (draft.protocol === 'http' || draft.protocol === 'https') && !(draft.server_names || []).length
   const domain = draft.server_names?.[0] || `${draft.listen_ip || '0.0.0.0'}:${draft.listen_port}`
   const lines: string[] = []
   if (draft.path_routes?.length) {
@@ -477,6 +478,9 @@ export default function Mappings() {
 
   const isL7 = draft.protocol === 'http' || draft.protocol === 'https'
   const needsCert = draft.protocol === 'https'
+  // the backend rejects http/https mappings without a domain - surface that
+  // in the form instead of failing at save time with a transient toast
+  const needsNames = isL7 && !(draft.server_names || []).length
   const isRedirect = !!draft.redirect_to
   const hasPathRoutes = (draft.path_routes?.length ?? 0) > 0
   const balanceOptions = useMemo(() => {
@@ -643,12 +647,20 @@ export default function Mappings() {
 
               {isL7 && (
                 <>
-                  <Field label="Server names / domains" hint="Comma separated, e.g. example.com, www.example.com (use * for catch-all)">
+                  <Field
+                    label="Server names / domains"
+                    hint="Comma separated, e.g. example.com, www.example.com (use * for catch-all)"
+                  >
                     <Input
                       value={(draft.server_names || []).join(', ')}
                       onChange={(e) => setDraftField('server_names', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
                     />
                   </Field>
+                  {needsNames && (
+                    <p className="-mt-1 text-2xs text-amber-600 dark:text-amber-400">
+                      Required: http/https mappings need at least one domain, otherwise nginx/HAProxy reject the config.
+                    </p>
+                  )}
                   {needsCert && (
                     <Field label="SSL certificate">
                       <Select
@@ -871,7 +883,11 @@ export default function Mappings() {
           {formTab !== 'templates' && (
             <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
               <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
-              <Button onClick={save} disabled={saving || !draft.name || (formTab === 'json' && jsonInvalid)}>
+              <Button
+                onClick={save}
+                disabled={saving || !draft.name || (formTab === 'json' && jsonInvalid) || needsNames}
+                title={needsNames ? 'Add at least one domain under Server names' : undefined}
+              >
                 {saving ? 'Saving…' : 'Save mapping'}
               </Button>
             </div>
