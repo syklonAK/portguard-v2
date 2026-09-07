@@ -135,6 +135,7 @@ func (a *App) Router() http.Handler {
 		pr.Put("/api/nodes/{id}/mappings/{mid}", a.Auth.RequireRole("admin", a.handleNodeMappingUpdate))
 		pr.Delete("/api/nodes/{id}/mappings/{mid}", a.Auth.RequireRole("admin", a.handleNodeMappingDelete))
 		pr.Post("/api/nodes/{id}/certs", a.Auth.RequireRole("admin", a.handleNodeCertCreate))
+		pr.Delete("/api/nodes/{id}/certs/{cid}", a.Auth.RequireRole("admin", a.handleNodeCertDelete))
 		pr.Post("/api/update", a.Auth.RequireRole("admin", a.handleUpdate))
 		pr.Post("/api/account/password", a.handleChangePassword)
 		// v2.8: services (admin writes)

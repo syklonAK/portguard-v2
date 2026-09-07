@@ -237,6 +237,9 @@ func (c *Client) Logs(source string, lines int) (string, error) {
 // InstallTool runs the official installer for one tool on the node.
 func (c *Client) InstallTool(id string) (*InstallResult, error) {
 	var out InstallResult
+	// official installers download and configure real packages — 15s would
+	// abort mid-flight; give the whole run 10 minutes
+	c.HTTP.Timeout = 10 * time.Minute
 	if err := c.do(http.MethodPost, "/api/node/tools/"+id+"/install", nil, &out); err != nil {
 		return nil, err
 	}

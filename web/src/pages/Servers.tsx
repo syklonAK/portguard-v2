@@ -52,6 +52,30 @@ export default function Servers() {
   const [manageLoading, setManageLoading] = useState(false)
   const [newMappingJSON, setNewMappingJSON] = useState('')
   const [jsonInvalid, setJsonInvalid] = useState(false)
+  const [mappingBusy, setMappingBusy] = useState(false)
+  const [editMapping, setEditMapping] = useState<any | null>(null)
+  const [certForm, setCertForm] = useState<{ name: string; domains: string; cert_pem: string; key_pem: string } | null>(null)
+  const [certBusy, setCertBusy] = useState(false)
+  const [applyBusy, setApplyBusy] = useState(false)
+
+  const MAPPING_TEMPLATE = `{
+  "name": "web",
+  "enabled": true,
+  "engine": "nginx",
+  "protocol": "http",
+  "listen_ip": "0.0.0.0",
+  "listen_port": 8081,
+  "server_names": ["example.com"],
+  "targets": [{ "host": "127.0.0.1", "port": 3000 }]
+}`
+  const MAPPING_FIELDS = [
+    ['name', 'Name', 'web'],
+    ['listen_ip', 'Listen IP', '0.0.0.0'],
+    ['listen_port', 'Listen port', '8081'],
+    ['server_name', 'Server name (domain)', 'example.com'],
+    ['target_host', 'Target host', '127.0.0.1'],
+    ['target_port', 'Target port', '3000'],
+  ] as const
 
   // location of this master panel (for the one-liner)
   const [origin, setOrigin] = useState('')
@@ -165,15 +189,19 @@ export default function Servers() {
       setToolOutput(res)
       if (res.ok) {
         push('success', `${toolId} installed on ${toolsModal.name} (${res.elapsed}).`)
-        const refreshed = await api.nodeTools(toolsModal.id)
-        setRemoteTools(refreshed.tools)
       } else {
         push('error', `${toolId} install reported problems on ${toolsModal.name}.`)
       }
     } catch (e: any) {
-      push('error', e.message)
+      push('error', `${toolId}: ${e.message}`)
     } finally {
       setInstallingTool(null)
+      // always refresh state — installs can succeed after a transient
+      // response error, or fail after installer output looked fine
+      try {
+        const refreshed = await api.nodeTools(toolsModal.id)
+        setRemoteTools(refreshed.tools)
+      } catch { /* keep the old list */ }
     }
   }
 

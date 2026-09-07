@@ -499,6 +499,23 @@ func (a *App) handleNodeCertCreate(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(out)
 }
 
+// handleNodeCertDelete deletes a certificate ON the remote node.
+func (a *App) handleNodeCertDelete(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Delete("/certs/" + chi.URLParam(r, "cid"))
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.cert.delete", "via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
 // readJSONRaw decodes the request body preserving the raw JSON.
 func readJSONRaw(w http.ResponseWriter, r *http.Request, v *json.RawMessage) bool {
 	defer r.Body.Close()

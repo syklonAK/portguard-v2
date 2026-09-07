@@ -172,21 +172,35 @@ func probe(bin string) (string, string) {
 	return bin, firstVersionToken(string(out))
 }
 
-// firstVersionToken extracts the first x.y.z-looking token from installer output.
+// firstVersionToken extracts the first version-looking token from tool
+// output. Handles distro suffixes ("2.4.30-0ubuntu0.22.04.2"), combined
+// forms ("nginx/1.18.0") and go-runtime noise; date-like tokens (2026/06/19)
+// fail the shape check or degrade into digits-only rejects.
 func firstVersionToken(s string) string {
 	for _, line := range strings.Split(s, "\n") {
-		fields := strings.Fields(line)
-		for _, f := range fields {
-			if looksLikeVersion(f) {
-				return strings.TrimPrefix(f, "v")
+		for _, f := range fieldsKeepVer(line) {
+			if strings.HasPrefix(f, "v") {
+				f = f[1:]
+			}
+			// head before the first letter = version part of distro strings
+			head := strings.Split(reCharSplit(f), " ")[0]
+			head = head[strings.LastIndex(head, "/")+1:]
+			if i := strings.LastIndex(head, "-"); i > 0 {
+				head = head[:i]
+			}
+			head = strings.Trim(head, "-./")
+			if looksLikeVersion(head) {
+				return head
 			}
 		}
 	}
 	return ""
 }
 
+// looksLikeVersion reports whether s is a bare dotted-numeric version
+// (optionally v-prefixed), e.g. 1.8.4, v2.6.12, 26.3.27 — but not 2026/06/19
+// (slashes are gone by then) nor a bare year.
 func looksLikeVersion(s string) bool {
-	// optional leading v (stripped by the caller when reporting)
 	if strings.HasPrefix(s, "v") {
 		s = s[1:]
 	}
@@ -204,6 +218,36 @@ func looksLikeVersion(s string) bool {
 		}
 	}
 	return dots >= 1
+}
+
+// fieldsKeepVer splits a line on everything except version-ish characters.
+func fieldsKeepVer(line string) []string {
+	var out []string
+	cur := ""
+	for _, r := range line {
+		isKeep := (r >= '0' && r <= '9') || r == '.' || r == 'v' || r == '/' || r == '-'
+		if isKeep {
+			cur += string(r)
+		} else if cur != "" {
+			out = append(out, cur)
+			cur = ""
+		}
+	}
+	if cur != "" {
+		out = append(out, cur)
+	}
+	return out
+}
+
+// reCharSplit is strings.Split on the first letter run — implemented without
+// regexp to keep this hot path dependency-free.
+func reCharSplit(s string) string {
+	for i, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			return s[:i]
+		}
+	}
+	return s
 }
 
 // InstallResult reports the outcome of one install run.

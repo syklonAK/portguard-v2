@@ -465,6 +465,7 @@ export const api = {
   nodeUpdateMapping: (nodeId: number, mid: number, m: any) => req<any>('PUT', `/api/nodes/${nodeId}/mappings/${mid}`, m),
   nodeDeleteMapping: (nodeId: number, mid: number) => req<any>('DELETE', `/api/nodes/${nodeId}/mappings/${mid}`),
   nodeCerts: (nodeId: number) => req<any[]>('GET', `/api/nodes/${nodeId}/certs`),
+  nodeDeleteCert: (nodeId: number, cid: number) => req<any>('DELETE', `/api/nodes/${nodeId}/certs/${cid}`),
   nodeCreateCert: (nodeId: number, c: any) => req<any>('POST', `/api/nodes/${nodeId}/certs`, c),
   nodeApply: (nodeId: number) => req<any>('POST', `/api/nodes/${nodeId}/apply`),
 
