@@ -1,5 +1,6 @@
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes } from 'react'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Check, Copy } from 'lucide-react'
 
 export function Button({
@@ -129,30 +130,36 @@ export function Modal({
   if (!open) return null
   // the overlay never scrolls — the card is clamped to the viewport and only
   // its body scrolls between the pinned header and footer, so the backdrop
-  // keeps covering the page and actions stay reachable on short viewports
-  return (
+  // keeps covering the page and actions stay reachable on short viewports.
+  // Portal to <body>: pages animate in with transforms (.pg-page fade-up),
+  // and a transformed ancestor becomes the containing block for fixed children,
+  // which would shrink the overlay to the page container instead of the
+  // viewport. pg-modal-* hooks let index.css squeeze the chrome in compact
+  // mode (h <= 480px): less padding, full-width layout, shorter action buttons.
+  return createPortal(
     <div className="pg-modal-bg fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex h-full items-center justify-center p-4 sm:p-6">
+      <div className="pg-modal-wrap short:items-stretch relative flex h-full items-center justify-center p-4 sm:p-6">
         <div
-          className={`pg-modal-card flex max-h-full w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} flex-col rounded-xl border
+          className={`pg-modal-card short:max-w-5xl short:rounded-xl flex max-h-full w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} flex-col rounded-xl border
             border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900`}
         >
-          <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
-            <h2 className="text-sm font-semibold">{title}</h2>
-            <button onClick={onClose} className="pg-press rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800">
+          <div className="pg-modal-header flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900 short:py-2">
+            <h2 className="truncate text-sm font-semibold">{title}</h2>
+            <button onClick={onClose} className="pg-press shrink-0 rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800">
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+          <div className="pg-modal-body min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
           {footer && (
-            <div className="shrink-0 rounded-b-xl border-t border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="pg-modal-footer shrink-0 rounded-b-xl border-t border-neutral-200 bg-white px-5 py-3.5 dark:border-neutral-700 dark:bg-neutral-900">
               {footer}
             </div>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -176,7 +183,7 @@ export function StatusDot({ status }: { status: 'up' | 'down' | 'unknown' | 'ok'
 }
 
 export function Empty({ message }: { message: string }) {
-  return <div className="px-5 py-12 text-center text-sm text-neutral-400">{message}</div>
+  return <div className="px-5 py-12 text-center text-sm text-neutral-400 short:py-8 short:text-xs">{message}</div>
 }
 
 export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -205,7 +212,7 @@ export function Tabs({
   onChange: (id: string) => void
 }) {
   return (
-    <div className="flex gap-1 rounded-xl border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-800/60">
+    <div className="flex gap-1 rounded-xl border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-800/60 short:gap-0.5 short:rounded-lg short:p-0.5">
       {tabs.map((t) => {
         const Icon = t.icon
         return (
@@ -213,7 +220,7 @@ export function Tabs({
             key={t.id}
             type="button"
             onClick={() => onChange(t.id)}
-            className={`pg-press flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`pg-press flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors short:gap-1 short:py-1 ${
               active === t.id
                 ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-800 dark:text-white'
                 : 'text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'

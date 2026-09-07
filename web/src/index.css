@@ -2,6 +2,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* compact mode for short viewports (h <= 480px, e.g. half-height windows):
+   `short:` utilities apply, plus the plain-CSS overrides below (unlayered
+   rules always beat Tailwind's layered utilities, so they win over sm:*) */
+@custom-variant short (@media (max-height: 30rem));
+
 @theme {
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
@@ -152,4 +157,85 @@ html:not(.dark) .pg-offcanvas {
 /* keep bootstrap's reboot from changing our button/link base */
 .pg-offcanvas a {
   text-decoration: none;
+}
+
+/* ---- short-viewport (compact) mode ---- */
+/* Pure-CSS density overrides for h <= 480px. Unlayered on purpose: Tailwind
+   utilities live in @layer utilities, so these rules win even against sm:*
+   variants without needing !important. Mappings.tsx leans on the sticky
+   header + hard max-heights below; the short: variant handles one-off cases. */
+
+/* modal chrome shrinks: less header/footer padding, wider use of space */
+@media (max-height: 30rem) {
+  .pg-modal-wrap {
+    padding: 0.5rem !important;
+    align-items: stretch;
+  }
+  .pg-modal-card {
+    max-height: 100% !important;
+    border-radius: 0.75rem;
+    box-shadow: 0 12px 32px -8px rgb(0 0 0 / 0.4);
+  }
+  .pg-modal-header {
+    padding: 0.5rem 1rem !important;
+  }
+  .pg-modal-body {
+    padding: 0.75rem 1rem !important;
+  }
+  .pg-modal-footer {
+    padding: 0.5rem 1rem !important;
+  }
+  .pg-modal-footer .pg-press {
+    height: 2rem;
+  }
+
+  /* form fields collapse to one dense row height */
+  .pg-modal-body input,
+  .pg-modal-body select,
+  .pg-modal-body textarea {
+    height: 2rem;
+    font-size: 0.75rem;
+  }
+  .pg-modal-body label > span:first-child {
+    margin-bottom: 0.125rem;
+    font-size: 0.625rem;
+  }
+
+  /* sticky page toolbar (Mappings) stays visible while the table scrolls */
+  .pg-sticky-bar {
+    position: sticky;
+    top: -1rem;
+    z-index: 20;
+    margin: -1rem -1rem 0;
+    padding: 0.5rem 1rem;
+    background: color-mix(in oklab, white 86%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgb(229 229 229);
+  }
+  html.dark .pg-sticky-bar {
+    background: color-mix(in oklab, #0a0a0a 86%, transparent);
+    border-bottom-color: rgb(38 38 38);
+  }
+}
+@media (min-height: 30.02rem) {
+  .pg-sticky-bar {
+    background: transparent;
+  }
+}
+
+/* dense tables in compact mode: tighter rows, smaller controls */
+@media (max-height: 30rem) {
+  .pg-dense tbody tr:where(:not(.pg-row-keep)) td {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+    font-size: 0.75rem;
+  }
+  .pg-dense tbody tr:where(:not(.pg-row-keep)) .pg-press {
+    height: 1.75rem;
+  }
+  .pg-dense thead th {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+    font-size: 0.625rem;
+  }
 }

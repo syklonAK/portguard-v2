@@ -262,9 +262,9 @@ function RoutePreview({ draft }: { draft: Partial<Mapping> }) {
   }
   if (lines.length === 0) lines.push('— nothing routed yet —')
   return (
-    <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/5">
-      <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-indigo-500">Live preview</div>
-      <div className="space-y-1 font-mono text-2xs text-slate-600 dark:text-slate-300">
+    <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/5 short:p-2 short:rounded-md">
+      <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-indigo-500 short:mb-0.5">Live preview</div>
+      <div className="space-y-1 font-mono text-2xs text-slate-600 dark:text-slate-300 short:space-y-0.5">
         {lines.map((l, i) => <div key={i}>{l}</div>)}
       </div>
     </div>
@@ -490,28 +490,32 @@ export default function Mappings() {
   }, [draft.engine, draft.protocol])
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-bold">Mappings</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+    <div className="space-y-4 short:space-y-2.5">
+      <div className="pg-sticky-bar flex flex-wrap items-center justify-between gap-3 short:gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold short:text-base">Mappings</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 short:hidden">
             Route listeners to backends via nginx or HAProxy. Changes take effect after <b>Apply</b>.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => validate.mutate()} disabled={validate.isPending}>
+        <div className="flex gap-2 short:gap-1.5">
+          <Button variant="secondary" onClick={() => validate.mutate()} disabled={validate.isPending}
+            title="Validate / Diff" className="short:px-2.5">
             <FileDiff className="h-4 w-4" />
-            Validate / Diff
+            <span className="short:hidden">Validate / Diff</span>
           </Button>
-          <Button variant="success" onClick={() => apply.mutate()} disabled={apply.isPending}>
+          <Button variant="success" onClick={() => apply.mutate()} disabled={apply.isPending}
+            title="Apply configuration" className="short:px-2.5">
             <Zap className={`h-4 w-4 ${apply.isPending ? 'animate-pulse' : ''}`} />
-            {apply.isPending ? 'Applying…' : 'Apply'}
+            <span className="short:hidden">{apply.isPending ? 'Applying…' : 'Apply'}</span>
           </Button>
-          <Button variant="secondary" onClick={runImportScan} title="Import existing nginx/haproxy configs">
+          <Button variant="secondary" onClick={runImportScan} title="Import existing nginx/haproxy configs" className="short:px-2.5">
             <Download className="h-4 w-4" />
-            Import existing
+            <span className="short:hidden">Import existing</span>
           </Button>
           <Button
+            title="New mapping"
+            className="short:px-2.5"
             onClick={() => {
               setDraft(emptyMapping())
               setFormTab('visual')
@@ -519,7 +523,7 @@ export default function Mappings() {
             }}
           >
             <Plus className="h-4 w-4" />
-            New mapping
+            <span className="short:hidden">New mapping</span>
           </Button>
         </div>
       </div>
@@ -527,19 +531,19 @@ export default function Mappings() {
       <Card>
         <CardHeader title="All mappings" desc={`${mappings.data?.length ?? 0} total`} />
         {mappings.isLoading ? (
-          <div className="flex justify-center py-16"><Spinner /></div>
+          <div className="flex justify-center py-16 short:py-8"><Spinner /></div>
         ) : !mappings.data?.length ? (
           <Empty message="No mappings yet. Click “New mapping” to create your first route." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="pg-dense w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-2xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
                   <th className="px-5 py-2.5 font-medium">Name</th>
                   <th className="px-3 py-2.5 font-medium">Engine</th>
-                  <th className="px-3 py-2.5 font-medium">Protocol</th>
+                  <th className="px-3 py-2.5 font-medium short:hidden">Protocol</th>
                   <th className="px-3 py-2.5 font-medium">Listen</th>
-                  <th className="px-3 py-2.5 font-medium">Domains</th>
+                  <th className="px-3 py-2.5 font-medium short:hidden">Domains</th>
                   <th className="px-3 py-2.5 font-medium">Routes / Targets</th>
                   <th className="px-3 py-2.5 font-medium">Enabled</th>
                   <th className="px-5 py-2.5 text-right font-medium">Actions</th>
@@ -548,15 +552,15 @@ export default function Mappings() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
                 {mappings.data.map((m) => (
                   <tr key={m.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 ${!m.enabled ? 'opacity-60' : ''}`}>
-                    <td className="px-5 py-3 font-medium">
+                    <td className="max-w-56 truncate px-5 py-3 font-medium" title={m.name}>
                       {m.name}
                       {m.websocket && <Badge color="blue">ws</Badge>}
                       {m.redirect_to && <Badge color="amber">redirect</Badge>}
                     </td>
                     <td className="px-3 py-3"><Badge color={m.engine === 'nginx' ? 'green' : 'purple'}>{m.engine}</Badge></td>
-                    <td className="px-3 py-3"><Badge color="slate">{m.protocol}</Badge></td>
+                    <td className="px-3 py-3 short:hidden"><Badge color="slate">{m.protocol}</Badge></td>
                     <td className="px-3 py-3 font-mono text-xs">{m.listen_ip}:{m.listen_port}</td>
-                    <td className="px-3 py-3 text-xs text-slate-500">{m.server_names.join(', ') || '—'}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500 short:hidden">{m.server_names.join(', ') || '—'}</td>
                     <td className="px-3 py-3 text-xs">
                       {m.path_routes?.length ? (
                         <div className="flex flex-wrap items-center gap-1">
@@ -603,7 +607,7 @@ export default function Mappings() {
             </Button>
           </div>
         ) : null}>
-        <div className="space-y-4">
+        <div className="space-y-4 short:space-y-2.5">
           <Tabs
             tabs={[
               { id: 'visual', label: 'Visual builder', icon: Wand2 },
@@ -624,11 +628,13 @@ export default function Mappings() {
 
           {formTab === 'visual' && (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 short:grid-cols-4 short:gap-2">
                 <Field label="Name">
                   <Input value={draft.name || ''} onChange={(e) => setDraftField('name', e.target.value)} placeholder="my-app" />
                 </Field>
-                <div className="grid grid-cols-2 gap-3">
+                {/* short:contents flattens this wrapper so Engine/Protocol
+                    join the parent grid as direct cells in compact mode */}
+                <div className="grid grid-cols-2 gap-3 short:contents">
                   <Field label="Engine">
                     <Select value={draft.engine} onChange={(e) => setDraftField('engine', e.target.value as any)}>
                       <option value="nginx">nginx</option>
@@ -646,7 +652,7 @@ export default function Mappings() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 short:gap-2">
                 <Field label="Listen IP" hint="0.0.0.0 = all interfaces">
                   <Input value={draft.listen_ip || ''} onChange={(e) => setDraftField('listen_ip', e.target.value)} />
                 </Field>
@@ -886,6 +892,7 @@ export default function Mappings() {
                 onValidate={(ok) => setJsonInvalid(!ok)}
                 invalid={jsonInvalid}
                 rows={16}
+                className="short:h-44"
                 placeholder='{ "name": "..." }'
               />
               {jsonInvalid && <p className="text-2xs text-red-500">Invalid JSON syntax</p>}
