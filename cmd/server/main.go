@@ -29,7 +29,7 @@ import (
 	"portguard/internal/sysinfo"
 )
 
-var version = "2.12.0"
+var version = "2.13.0"
 
 func envInt(key string, def int) int {
 	if v := os.Getenv(key); v != "" {

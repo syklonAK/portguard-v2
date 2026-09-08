@@ -160,6 +160,154 @@ func (a *App) handleNodeCertDelete(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(out)
 }
 
+// ---- v2.13: trojan suite / tuning / firewall pass-through ----
+// Raw JSON bodies flow through untouched; the node validates exactly like
+// the local endpoints (the same App handlers run on the agent side).
+
+// handleNodeTrojanRelays lists trojan relays ON a node.
+func (a *App) handleNodeTrojanRelays(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Get("/trojan/relays")
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeTrojanIngresses lists trojan ingresses ON a node.
+func (a *App) handleNodeTrojanIngresses(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Get("/trojan/ingresses")
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeTrojanBridgeApply applies the trojan bridge ON a node.
+func (a *App) handleNodeTrojanBridgeApply(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	var body json.RawMessage
+	if !readJSONRaw(w, r, &body) {
+		return
+	}
+	out, err := cli.Post("/trojan/bridge/apply", body)
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.trojan.bridge", "applied via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeTrojanIngressApply applies the trojan ingress ON a node.
+func (a *App) handleNodeTrojanIngressApply(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	var body json.RawMessage
+	if !readJSONRaw(w, r, &body) {
+		return
+	}
+	out, err := cli.Post("/trojan/ingress/apply", body)
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.trojan.ingress", "applied via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeBBRStatus reports the tuning state ON a node.
+func (a *App) handleNodeBBRStatus(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Get("/tuning/bbr")
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeBBRApply applies network tuning ON a node.
+func (a *App) handleNodeBBRApply(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Post("/tuning/bbr/apply", nil)
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.bbr.apply", "via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeFirewallStatus reports the firewall kind ON a node.
+func (a *App) handleNodeFirewallStatus(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	out, err := cli.Get("/firewall")
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// handleNodeFirewallAllow opens a port ON a node.
+func (a *App) handleNodeFirewallAllow(w http.ResponseWriter, r *http.Request) {
+	cli, _, err := a.nodeClient(r)
+	if err != nil {
+		errJSON(w, err, http.StatusBadGateway)
+		return
+	}
+	var body json.RawMessage
+	if !readJSONRaw(w, r, &body) {
+		return
+	}
+	out, err := cli.Post("/firewall/allow", body)
+	if err != nil {
+		errJSON(w, errString("node: "+err.Error()), http.StatusBadGateway)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.firewall.allow", "via "+chi.URLParam(r, "id"), "ok")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
 // readJSONRaw decodes the request body preserving the raw JSON.
 func readJSONRaw(w http.ResponseWriter, r *http.Request, v *json.RawMessage) bool {
 	defer r.Body.Close()

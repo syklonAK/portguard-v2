@@ -456,6 +456,32 @@ export const api = {
   pingTunnelDelete: (unit: string) => req<{ ok: boolean }>('DELETE', `/api/tunnels/pingtunnel/${unit}`),
   pingTunnelCoreRemove: () => req<{ ok: boolean }>('POST', '/api/tunnels/pingtunnel/core-remove'),
 
+  // v2.13: Trojan L4 relays (hedioum-allinone suite)
+  listTrojanRelays: () => req<TrojanRelayRow[]>('GET', '/api/tunnels/trojan/relays'),
+  createTrojanRelay: (r: Partial<TrojanRelayRow>) => req<{ id: number }>('POST', '/api/tunnels/trojan/relays', r),
+  updateTrojanRelay: (id: number, r: Partial<TrojanRelayRow>) => req<{ ok: boolean }>('PUT', `/api/tunnels/trojan/relays/${id}`, r),
+  deleteTrojanRelay: (id: number) => req<{ ok: boolean }>('DELETE', `/api/tunnels/trojan/relays/${id}`),
+  trojanBridgeValidate: () => req<{ ok: boolean; error?: string; note?: string; relays?: number }>('POST', '/api/tunnels/trojan/bridge/validate'),
+  trojanBridgeApply: () => req<{ ok: boolean; relays: number; note?: string }>('POST', '/api/tunnels/trojan/bridge/apply'),
+  listTrojanIngresses: () => req<TrojanIngressRow[]>('GET', '/api/tunnels/trojan/ingresses'),
+  createTrojanIngress: (r: Partial<TrojanIngressRow>) => req<{ id: number }>('POST', '/api/tunnels/trojan/ingresses', r),
+  updateTrojanIngress: (id: number, r: Partial<TrojanIngressRow>) => req<{ ok: boolean }>('PUT', `/api/tunnels/trojan/ingresses/${id}`, r),
+  deleteTrojanIngress: (id: number) => req<{ ok: boolean }>('DELETE', `/api/tunnels/trojan/ingresses/${id}`),
+  trojanIngressApply: () => req<{ ok: boolean; forwarders: number; note?: string }>('POST', '/api/tunnels/trojan/ingress/apply'),
+
+  // v2.13: hedioum wizards + egress check
+  hedioumSetupForeign: () => req<{ ok: boolean; token: string; output: string; error?: string }>('POST', '/api/tunnels/hedioum/setup-foreign'),
+  hedioumSetupIran: (body: { alias: string; token: string; socks_port?: number }) =>
+    req<{ ok: boolean; output: string; egress_ip?: string; socks?: string; error?: string }>('POST', '/api/tunnels/hedioum/setup-iran', body),
+  hedioumEgress: () => req<{ hub_alive: boolean; egress_ip: string; socks: string }>('GET', '/api/tunnels/hedioum/egress'),
+
+  // v2.13: network tuning + firewall
+  bbrStatus: () => req<BBRStatus>('GET', '/api/tuning/bbr'),
+  bbrApply: () => req<{ ok: boolean; status: BBRStatus; note?: string; error?: string }>('POST', '/api/tuning/bbr/apply'),
+  firewallStatus: () => req<{ kind: string }>('GET', '/api/firewall'),
+  firewallAllow: (body: { port: number; source?: string }) =>
+    req<{ ok: boolean; firewall: string; message: string }>('POST', '/api/firewall/allow', body),
+
   // v2.2: self-updater
   selfUpdate: () => req<{ ok: boolean; note: string }>('POST', '/api/update'),
 
@@ -836,6 +862,44 @@ export interface TunnelRelay {
   notes: string
   created_at: string
   updated_at: string
+}
+
+// ---- v2.13: trojan suite / wizards / tuning / firewall ----
+
+export interface TrojanRelayRow {
+  id: number
+  name: string
+  domain: string
+  https_port: number
+  foreign_ip: string
+  foreign_port: number
+  bridge_port: number
+  route: '' | 'tunnel' | 'direct'
+  socks_port: number
+  enabled: boolean
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TrojanIngressRow {
+  id: number
+  name: string
+  listen_port: number
+  node_port: number
+  enabled: boolean
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface BBRStatus {
+  sysctl_file: boolean
+  available: boolean
+  active: boolean
+  current_cc: string
+  qdisc?: string
+  sysctl_output?: string
 }
 
 /** Uniform error message from API failures (string body, {error}, etc). */

@@ -86,6 +86,16 @@ func (ag *Agent) Router() http.Handler {
 
 	// tunnel state
 	r.Get("/tunnel", ag.tunnelState)
+	// v2.13: the master can also drive the trojan suite, tuning and firewall
+	// on managed nodes — same contract as the local endpoints.
+	r.Get("/trojan/relays", ag.trojanRelays)
+	r.Get("/trojan/ingresses", ag.trojanIngresses)
+	r.Post("/trojan/bridge/apply", ag.trojanBridgeApply)
+	r.Post("/trojan/ingress/apply", ag.trojanIngressApply)
+	r.Get("/tuning/bbr", ag.bbrStatus)
+	r.Post("/tuning/bbr/apply", ag.bbrApply)
+	r.Get("/firewall", ag.firewallStatus)
+	r.Post("/firewall/allow", ag.firewallAllow)
 
 	// rate limiting (bandwidth plans pushed by the master)
 	r.Post("/ratelimit/apply", ag.ratelimitApply)
@@ -359,6 +369,24 @@ func (ag *Agent) installTool(w http.ResponseWriter, r *http.Request) {
 func (ag *Agent) tunnelState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tunnel.Detect())
 }
+
+// ---- v2.13: trojan suite / tuning / firewall on this node ----
+// The remote handlers reuse the local App methods: the payload shapes and
+// validation are identical, so the master gets exactly what a local admin
+// gets. (The functions live in trojan.go.)
+
+func (ag *Agent) trojanRelays(w http.ResponseWriter, r *http.Request)  { ag.App.handleListTrojanRelays(w, r) }
+func (ag *Agent) trojanIngresses(w http.ResponseWriter, r *http.Request) { ag.App.handleListTrojanIngresses(w, r) }
+func (ag *Agent) trojanBridgeApply(w http.ResponseWriter, r *http.Request) {
+	ag.App.handleTrojanBridgeApply(w, r)
+}
+func (ag *Agent) trojanIngressApply(w http.ResponseWriter, r *http.Request) {
+	ag.App.handleTrojanIngressApply(w, r)
+}
+func (ag *Agent) bbrStatus(w http.ResponseWriter, r *http.Request)  { ag.App.handleBBRStatus(w, r) }
+func (ag *Agent) bbrApply(w http.ResponseWriter, r *http.Request)   { ag.App.handleBBRApply(w, r) }
+func (ag *Agent) firewallStatus(w http.ResponseWriter, r *http.Request) { ag.App.handleFirewallStatus(w, r) }
+func (ag *Agent) firewallAllow(w http.ResponseWriter, r *http.Request)  { ag.App.handleFirewallAllow(w, r) }
 
 // ---- rate limiting (bandwidth enforcement on this node) ----
 

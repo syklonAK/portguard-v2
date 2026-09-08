@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, RefreshCw, ShieldCheck, ArrowRight, CheckCircle2,
 import { api, type TunnelRelay, type TunnelStatus, type PingTunnelStatus } from '../api'
 import { Badge, Button, Card, CardHeader, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../components/ui'
 import { useToast } from '../components/toast'
+import TrojanSuite from '../components/tunnels/TrojanSuite'
 
 function emptyRelay(): Partial<TunnelRelay> {
   return {
@@ -317,6 +318,8 @@ export default function Tunnels() {
           ) : null}
         </Card>
       </div>
+
+      <TrojanSuite status={st} />
 
       <Card>
         <CardHeader

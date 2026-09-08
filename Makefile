@@ -1,7 +1,7 @@
 APP := portguard
 GOFLAGS := CGO_ENABLED=0
 LDFLAGS := -s -w -X main.version=$(VERSION)
-VERSION ?= 2.12.0
+VERSION ?= 2.13.0
 
 .PHONY: all web server linux test clean
 
