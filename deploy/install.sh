@@ -15,23 +15,23 @@ APP_DIR="/opt/portguard"
 DATA_DIR="/var/lib/portguard"
 PANEL_PORT="${PORTGUARD_PORT:-8080}"
 GO_VERSION="${GO_VERSION:-1.24.5}"
-# module proxy: probe candidates and pin the first that answers, because
-# go does NOT fall back on HTTP errors (a 403 from proxy.golang.org aborts
-# the whole build). Override freely with GOPROXY=... .
+# module proxy probe: go only advances the GOPROXY list on 404/410 — a 403
+# (export-blocked or rate-limited proxy, e.g. google CDNs vs Iranian IPs)
+# aborts the whole build. The probe pre-selects a candidate by fetching the
+# exact resource type a build needs (a module .zip, not just metadata); the
+# build itself then retries every candidate via build_with_fallback so a
+# lying probe can never kill the install. Override freely with GOPROXY=...
 pick_goproxy() {
   for p in https://proxy.golang.org https://goproxy.cn https://goproxy.io; do
-    code="$(curl -s -o /dev/null --connect-timeout 5 --max-time 10 \
-      -w '%{http_code}' "$p/modernc.org/sqlite/@v/list" 2>/dev/null)"
-    case "$code" in 2*) echo "$p,direct"; return ;; esac
+    code="$(curl -s -o /dev/null -r 0-1023 --connect-timeout 5 --max-time 15 \
+      -w '%{http_code}' "$p/modernc.org/sqlite/@v/v1.38.0.zip" 2>/dev/null)"
+    case "$code" in 200|206) echo "$p,direct"; return ;; esac
   done
   echo "direct"
 }
-export GOPROXY="${GOPROXY:-$(pick_goproxy)}"
 
 log()  { echo -e "\033[1;34m[PortGuard]\033[0m $*"; }
 fail() { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }
-
-log "GOPROXY=${GOPROXY}"
 
 [ "$(id -u)" = "0" ] || fail "run as root (sudo bash install.sh)"
 
@@ -59,8 +59,27 @@ ensure_go || fail "Go toolchain could not be installed — see guidance above"
 
 log "building PortGuard…"
 export CGO_ENABLED=0
-go mod tidy
-go build -trimpath -ldflags "-s -w" -o bin/portguard ./cmd/server
+
+# try a REAL build per candidate proxy — first success wins and stays
+# exported for future go commands on this machine
+build_with_fallback() {
+  local gp seen=""
+  local candidates=("${GOPROXY:-$(pick_goproxy)}" "https://goproxy.cn,direct" "https://proxy.golang.org,direct" "https://goproxy.io,direct" "direct")
+  for gp in "${candidates[@]}"; do
+    [ -n "$gp" ] || continue
+    case ",$seen," in *",$gp,"*) continue ;; esac
+    seen="$seen,$gp"
+    log "building with GOPROXY=${gp}…"
+    GOPROXY="$gp" go mod tidy >/dev/null 2>&1 || true
+    if GOPROXY="$gp" go build -trimpath -ldflags "-s -w" -o bin/portguard ./cmd/server; then
+      export GOPROXY="$gp"
+      log "module proxy OK: ${gp}"
+      return 0
+    fi
+  done
+  return 1
+}
+build_with_fallback || fail "build failed with every module proxy — check this server's network (or set GOPROXY manually)"
 log "binary ready: $APP_DIR/bin/portguard"
 
 # ---- data dirs ----

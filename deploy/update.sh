@@ -43,21 +43,34 @@ fi
 
 say "building (CGO_ENABLED=0, frontend embedded)…"
 export CGO_ENABLED=0
-# module proxy: probe candidates and pin the first that answers, because
-# go does NOT fall back on HTTP errors (a 403 from proxy.golang.org aborts
-# the whole build). Override freely with GOPROXY=... .
+# probe + per-candidate build retry (same rationale as install.sh): a 403
+# from one proxy aborts the go process, so every candidate gets a real build
+# attempt and the first success wins.
 pick_goproxy() {
   for p in https://proxy.golang.org https://goproxy.cn https://goproxy.io; do
-    code="$(curl -s -o /dev/null --connect-timeout 5 --max-time 10 \
-      -w '%{http_code}' "$p/modernc.org/sqlite/@v/list" 2>/dev/null)"
-    case "$code" in 2*) echo "$p,direct"; return ;; esac
+    code="$(curl -s -o /dev/null -r 0-1023 --connect-timeout 5 --max-time 15 \
+      -w '%{http_code}' "$p/modernc.org/sqlite/@v/v1.38.0.zip" 2>/dev/null)"
+    case "$code" in 200|206) echo "$p,direct"; return ;; esac
   done
   echo "direct"
 }
-export GOPROXY="${GOPROXY:-$(pick_goproxy)}"
-say "GOPROXY=${GOPROXY}"
-go mod tidy >/dev/null 2>&1 || true
-go build -trimpath -ldflags "-s -w" -o "${BIN}.new" ./cmd/server || die "build failed — keeping the running binary"
+build_with_fallback() {
+  local gp seen=""
+  local candidates=("${GOPROXY:-$(pick_goproxy)}" "https://goproxy.cn,direct" "https://proxy.golang.org,direct" "https://goproxy.io,direct" "direct")
+  for gp in "${candidates[@]}"; do
+    [ -n "$gp" ] || continue
+    case ",$seen," in *",$gp,"*) continue ;; esac
+    seen="$seen,$gp"
+    say "trying GOPROXY=${gp}…"
+    GOPROXY="$gp" go mod tidy >/dev/null 2>&1 || true
+    if GOPROXY="$gp" go build -trimpath -ldflags "-s -w" -o "${BIN}.new" ./cmd/server; then
+      export GOPROXY="$gp"
+      return 0
+    fi
+  done
+  return 1
+}
+build_with_fallback || die "build failed with every module proxy — keeping the running binary"
 
 say "swapping binary…"
 if [ -f "${BIN}" ]; then
