@@ -57,8 +57,9 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
   const [ingDraft, setIngDraft] = useState<Partial<TrojanIngressRow>>(emptyTrojanIngress())
   // hedioum wizard state
   const [wizard, setWizard] = useState<null | 'foreign' | 'iran'>(null)
-  const [iranDraft, setIranDraft] = useState({ alias: 'relay01', token: '' })
+  const [iranDraft, setIranDraft] = useState({ alias: 'relay01', token: '', force: false })
   const [pairToken, setPairToken] = useState('')
+  const [pairInfo, setPairInfo] = useState<{ exit_ip?: string; persona?: string; endpoints?: Record<string, number>; is_v2?: boolean } | null>(null)
   const [fwPort, setFwPort] = useState('')
 
   const rSet = <K extends keyof TrojanRelayRow>(k: K, v: TrojanRelayRow[K]) => setRelayDraft((d) => ({ ...d, [k]: v }))
@@ -139,11 +140,15 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
   })
 
   const runForeign = useMutation({
-    mutationFn: () => api.hedioumSetupForeign(),
+    mutationFn: (opts?: { force?: boolean }) => api.hedioumSetupForeign(opts),
     onSuccess: (res) => {
       setPairToken(res.token || '')
+      setPairInfo(res.token_is_v2
+        ? { exit_ip: res.exit_ip, persona: res.persona, endpoints: res.endpoints, is_v2: true }
+        : { is_v2: false })
       push(res.ok ? 'success' : 'warning', res.ok ? 'Egress configured — pairing token captured below.' : 'setup-foreign reported problems.')
       qc.invalidateQueries({ queryKey: ['tunnel-status'] })
+      qc.invalidateQueries({ queryKey: ['hedioum-egress'] })
     },
     onError: (e: any) => push('error', e.message),
   })
@@ -323,14 +328,26 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
             {wizard === 'foreign' && (
               <div className="space-y-2 rounded-xl border border-border p-3">
                 <p className="text-2xs leading-relaxed text-muted-foreground">
-                  Runs <code>hedioum-tunnel setup-foreign</code> and captures the printed pairing token — give it to the Iran side.
+                  Runs <code>hedioum-tunnel setup-foreign</code> on this server and captures the printed
+                  <b> v2 pairing token</b> (exit IP + every mimic port + persona + key). This is for the FOREIGN node —
+                  on a live Iran hub it is refused (it would overwrite the hub config) unless you tick the override.
                 </p>
-                <Button size="sm" onClick={() => runForeign.mutate()} disabled={runForeign.isPending}>
+                {pairInfo && (
+                  <div className="rounded-lg bg-sky-50 p-2.5 text-2xs leading-relaxed text-sky-800 dark:bg-sky-500/10 dark:text-sky-300">
+                    {pairInfo.is_v2 ? (
+                      <>Decoded token — persona <b>{pairInfo.persona || 'custom'}</b>, exit IP <b>{pairInfo.exit_ip}</b>,
+                        endpoints: {Object.entries(pairInfo.endpoints || {}).map(([k, v]) => `${k}:${v}`).join(', ') || '—'}</>
+                    ) : (
+                      <>Legacy raw hex token captured — consider re-running setup-foreign on a newer hedioum for a v2 paste-only token.</>
+                    )}
+                  </div>
+                )}
+                <Button size="sm" onClick={() => runForeign.mutate({ force: false })} disabled={runForeign.isPending}>
                   {runForeign.isPending ? 'Running…' : 'Run setup-foreign'}
                 </Button>
                 {pairToken && (
                   <div className="rounded-lg bg-amber-50 p-2.5 font-mono text-xs break-all dark:bg-amber-500/10">
-                    <div className="mb-1 text-2xs font-bold uppercase text-amber-700 dark:text-amber-400">Pairing token</div>
+                    <div className="mb-1 text-2xs font-bold uppercase text-amber-700 dark:text-amber-400">Pairing token — paste into the Iran hub</div>
                     {pairToken}
                   </div>
                 )}
@@ -338,12 +355,16 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
             )}
             {wizard === 'iran' && (
               <div className="space-y-2 rounded-xl border border-border p-3">
-                <Field label="Pairing token (from the foreign node)">
-                  <Input value={iranDraft.token} onChange={(e) => setIranDraft({ ...iranDraft, token: e.target.value })} placeholder="32-128 hex chars" />
+                <Field label="Pairing token (from the foreign node)" hint="the long base64 v2 token — raw 32-hex keys are rejected">
+                  <Input value={iranDraft.token} onChange={(e) => setIranDraft({ ...iranDraft, token: e.target.value })} placeholder="paste the v2 pairing token" />
                 </Field>
                 <Field label="Hub alias">
                   <Input value={iranDraft.alias} onChange={(e) => setIranDraft({ ...iranDraft, alias: e.target.value })} />
                 </Field>
+                <label className="flex items-center gap-2 text-2xs text-amber-600 dark:text-amber-400">
+                  <input type="checkbox" checked={iranDraft.force} onChange={(e) => setIranDraft({ ...iranDraft, force: e.target.checked })} />
+                  Override an existing FOREIGN config on this box (dangerous)
+                </label>
                 <Button size="sm" onClick={() => runIran.mutate()} disabled={runIran.isPending || !iranDraft.token.trim()}>
                   {runIran.isPending ? 'Running…' : 'Run setup-iran'}
                 </Button>

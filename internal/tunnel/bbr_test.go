@@ -27,8 +27,13 @@ func TestAllowPortFirewalldSourceValidation(t *testing.T) {
 }
 
 func TestHedBinaryAbsent(t *testing.T) {
-	// the test host has no hedioum — Setup* must fail cleanly, not panic
-	if _, _, err := SetupForeign(); err == nil {
+	// on a host WITH hedioum the old assertion ("must fail with not installed")
+	// is wrong — SetupForeign now runs for real. Only check the error surface
+	// when the binary is absent.
+	if HedBinary() != "" {
+		t.Skip("hedioum-tunnel installed on this host")
+	}
+	if _, _, _, _, err := SetupForeign(SetupForeignConfig{}); err == nil {
 		t.Log("hedioum binary found on this host?!")
 	} else if !strings.Contains(err.Error(), "not installed") {
 		t.Errorf("unexpected error: %v", err)

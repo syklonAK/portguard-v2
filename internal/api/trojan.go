@@ -487,12 +487,29 @@ func (a *App) handleTrojanIngressApply(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---- hedioum wizards (egress/hub setup) ----
+// Contract mirrors upstream hedioum-tunnel (see tunnel/hedioum.go): the
+// foreign wizard prints a v2 pairing token; the iran wizard consumes it.
+// Both refuse to overwrite a DIFFERENT existing role unless force=true.
 
 func (a *App) handleHedioumSetupForeign(w http.ResponseWriter, r *http.Request) {
-	token, output, err := tunnel.SetupForeign()
-	if output != "" {
-		_ = output // full transcript is audited in trimmed form
+	var body struct {
+		Persona  string `json:"persona"`   // auto|cpanel|directadmin|devops
+		Domain   string `json:"domain"`    // optional Let's Encrypt domain
+		PublicIP string `json:"public_ip"` // optional pinned exit IP
+		Token    string `json:"token"`     // optional explicit auth key
+		MoveSSH  bool   `json:"move_ssh"`  // relocate OpenSSH to the decoy port
+		Force    bool   `json:"force"`     // overwrite a different-role config
 	}
+	_ = readJSON(w, r, &body) // body is optional — an empty POST uses defaults
+	cfg := tunnel.SetupForeignConfig{
+		Persona:  body.Persona,
+		Domain:   body.Domain,
+		PublicIP: body.PublicIP,
+		Token:    body.Token,
+		MoveSSH:  body.MoveSSH,
+		Force:    body.Force,
+	}
+	token, isV2, decoded, output, err := tunnel.SetupForeign(cfg)
 	if err != nil {
 		a.St.Audit(actorFrom(r.Context()), "hedioum.setup-foreign", trimAudit(err.Error()), "error")
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
@@ -500,8 +517,22 @@ func (a *App) handleHedioumSetupForeign(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	a.St.Audit(actorFrom(r.Context()), "hedioum.setup-foreign", "egress configured, token captured", "ok")
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "token": token, "output": output})
+	detail := "egress configured"
+	if isV2 && decoded != nil {
+		detail = fmt.Sprintf("egress configured: persona=%s exit_ip=%s endpoints=%d",
+			decoded.Persona, decoded.ExitIP, len(decoded.Endpoints))
+	} else if token != "" {
+		detail = "egress configured: legacy hex token captured"
+	}
+	a.St.Audit(actorFrom(r.Context()), "hedioum.setup-foreign", detail, "ok")
+	resp := map[string]any{"ok": true, "token": token, "token_is_v2": isV2, "output": output}
+	if decoded != nil {
+		resp["exit_ip"] = decoded.ExitIP
+		resp["persona"] = decoded.Persona
+		resp["sni"] = decoded.SNI
+		resp["endpoints"] = decoded.Endpoints
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (a *App) handleHedioumSetupIran(w http.ResponseWriter, r *http.Request) {
@@ -509,6 +540,7 @@ func (a *App) handleHedioumSetupIran(w http.ResponseWriter, r *http.Request) {
 		Alias     string `json:"alias"`
 		Token     string `json:"token"`
 		SocksPort int    `json:"socks_port"`
+		Force     bool   `json:"force"`
 	}
 	if !readJSON(w, r, &body) {
 		return
@@ -517,7 +549,7 @@ func (a *App) handleHedioumSetupIran(w http.ResponseWriter, r *http.Request) {
 	if body.SocksPort > 0 {
 		port = body.SocksPort
 	}
-	output, err := tunnel.SetupIran(tunnel.SetupIranConfig{Alias: body.Alias, Token: body.Token, SocksPort: port})
+	output, err := tunnel.SetupIran(tunnel.SetupIranConfig{Alias: body.Alias, Token: body.Token, SocksPort: port, Force: body.Force})
 	if err != nil {
 		a.St.Audit(actorFrom(r.Context()), "hedioum.setup-iran", trimAudit(err.Error()), "error")
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"ok": false, "error": err.Error(), "output": output})
@@ -532,7 +564,14 @@ func (a *App) handleHedioumEgressIP(w http.ResponseWriter, r *http.Request) {
 	host, port := a.tunnelSOCKS()
 	ip := tunnel.EgressIP(host, port)
 	hub := tunnel.HubAlive(host, port)
-	writeJSON(w, http.StatusOK, map[string]any{"hub_alive": hub, "egress_ip": ip, "socks": fmt.Sprintf("%s:%d", host, port)})
+	resp := map[string]any{
+		"hub_alive":  hub,
+		"egress_ip":  ip,
+		"socks":      fmt.Sprintf("%s:%d", host, port),
+		"hed_role":   tunnel.HedRole(),  // "" = unconfigured, iran, foreign
+		"hed_version": tunnel.HedVersion(),
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ---- network tuning (BBR) ----

@@ -470,10 +470,11 @@ export const api = {
   trojanIngressApply: () => req<{ ok: boolean; forwarders: number; note?: string }>('POST', '/api/tunnels/trojan/ingress/apply'),
 
   // v2.13: hedioum wizards + egress check
-  hedioumSetupForeign: () => req<{ ok: boolean; token: string; output: string; error?: string }>('POST', '/api/tunnels/hedioum/setup-foreign'),
-  hedioumSetupIran: (body: { alias: string; token: string; socks_port?: number }) =>
+  hedioumSetupForeign: (body?: { persona?: string; domain?: string; public_ip?: string; token?: string; move_ssh?: boolean; force?: boolean }) =>
+    req<HedioumForeignResult>('POST', '/api/tunnels/hedioum/setup-foreign', body),
+  hedioumSetupIran: (body: { alias: string; token: string; socks_port?: number; force?: boolean }) =>
     req<{ ok: boolean; output: string; egress_ip?: string; socks?: string; error?: string }>('POST', '/api/tunnels/hedioum/setup-iran', body),
-  hedioumEgress: () => req<{ hub_alive: boolean; egress_ip: string; socks: string }>('GET', '/api/tunnels/hedioum/egress'),
+  hedioumEgress: () => req<{ hub_alive: boolean; egress_ip: string; socks: string; hed_role?: string; hed_version?: string }>('GET', '/api/tunnels/hedioum/egress'),
 
   // v2.13: network tuning + firewall
   bbrStatus: () => req<BBRStatus>('GET', '/api/tuning/bbr'),
@@ -900,6 +901,20 @@ export interface BBRStatus {
   current_cc: string
   qdisc?: string
   sysctl_output?: string
+}
+
+/** Decoded v2 pairing token info returned by setup-foreign (upstream
+ *  Hedioum-Pool-Tunnel pairing.Token shape). */
+export interface HedioumForeignResult {
+  ok: boolean
+  token: string
+  token_is_v2?: boolean
+  exit_ip?: string
+  persona?: string
+  sni?: string
+  endpoints?: Record<string, number>
+  output: string
+  error?: string
 }
 
 /** Uniform error message from API failures (string body, {error}, etc). */

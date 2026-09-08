@@ -49,10 +49,19 @@ var Registry = []Tool{
 	{
 		ID:   "hedioum",
 		Name: "Hedioum Pool Tunnel",
-		Description: "The pool tunnel itself (egress + hub sides). Installs hedioum-tunnel via the official bootstrap; " +
-			"then run its setup-foreign / setup-iran flows (see the Tunnels page).",
-		Category:   "tunnel",
-		InstallCmd: `bash <(curl -fsSL https://raw.githubusercontent.com/hedioum/Hedioum-Pool-Tunnel/main/install.sh)`,
+		Description: "The pool tunnel itself (egress + hub sides). Non-interactive install per the official " +
+			"upstream flow: download the pinned release binary → run its `install` subcommand (self-copies to " +
+			"/usr/local/bin, installs the systemd unit, enables BBR) — NO interactive wizard, so it is safe to run " +
+			"from the panel. Configure the sides afterwards from the Tunnels page (setup-foreign / setup-iran).",
+		Category: "tunnel",
+		// upstream install.sh is a thin bootstrap whose last step is
+		// `exec hedioum-tunnel` (the interactive TUI) — that would hang or
+		// EOF under the panel. Its real work is exactly: download the
+		// latest release binary for the arch → run `<bin> install`.
+		InstallCmd: `set -e; case "$(uname -m)" in aarch64|arm64) ASSET=hedioum-tunnel-arm64;; *) ASSET=hedioum-tunnel;; esac; ` +
+			`URL="https://github.com/hedioum/Hedioum-Pool-Tunnel/releases/latest/download/$ASSET"; TMP="$(mktemp)"; ` +
+			`for a in 1 2 3; do curl -fL --connect-timeout 15 -o "$TMP" "$URL" && break; sleep 2; done; ` +
+			`chmod +x "$TMP"; "$TMP" install; rm -f "$TMP"`,
 		VerifyBins: []string{"/usr/local/bin/hedioum-tunnel", "/usr/bin/hedioum-tunnel", "/opt/hedioum/hedioum-tunnel"},
 		DocsURL:    "https://github.com/hedioum/Hedioum-Pool-Tunnel",
 	},

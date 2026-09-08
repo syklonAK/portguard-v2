@@ -96,6 +96,9 @@ func (ag *Agent) Router() http.Handler {
 	r.Post("/tuning/bbr/apply", ag.bbrApply)
 	r.Get("/firewall", ag.firewallStatus)
 	r.Post("/firewall/allow", ag.firewallAllow)
+	// hedioum wizards (role-guarded on the node itself, same as local)
+	r.Post("/tunnels/hedioum/setup-foreign", ag.hedSetupForeign)
+	r.Post("/tunnels/hedioum/setup-iran", ag.hedSetupIran)
 
 	// rate limiting (bandwidth plans pushed by the master)
 	r.Post("/ratelimit/apply", ag.ratelimitApply)
@@ -387,6 +390,12 @@ func (ag *Agent) bbrStatus(w http.ResponseWriter, r *http.Request)  { ag.App.han
 func (ag *Agent) bbrApply(w http.ResponseWriter, r *http.Request)   { ag.App.handleBBRApply(w, r) }
 func (ag *Agent) firewallStatus(w http.ResponseWriter, r *http.Request) { ag.App.handleFirewallStatus(w, r) }
 func (ag *Agent) firewallAllow(w http.ResponseWriter, r *http.Request)  { ag.App.handleFirewallAllow(w, r) }
+func (ag *Agent) hedSetupForeign(w http.ResponseWriter, r *http.Request) {
+	ag.App.handleHedioumSetupForeign(w, r)
+}
+func (ag *Agent) hedSetupIran(w http.ResponseWriter, r *http.Request) {
+	ag.App.handleHedioumSetupIran(w, r)
+}
 
 // ---- rate limiting (bandwidth enforcement on this node) ----
 
