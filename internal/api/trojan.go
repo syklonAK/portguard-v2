@@ -862,3 +862,71 @@ func (a *App) handleTrojanPurge(w http.ResponseWriter, r *http.Request) {
 		"ok": true, "relays_removed": len(relays), "ingresses_removed": len(ings), "result": rep,
 	})
 }
+
+// ---- standalone hedioum core (download/install/lifecycle) ----
+
+func (a *App) handleHedCoreStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, tunnel.DetectHedCore())
+}
+
+// handleHedCoreInstall runs the pinned-release install as a background job
+// (live terminal view via the Jobs system, same as tool installs).
+func (a *App) handleHedCoreInstall(w http.ResponseWriter, r *http.Request) {
+	if a.Jobs == nil {
+		errJSON(w, errString("jobs unavailable"), http.StatusInternalServerError)
+		return
+	}
+	actor := actorFrom(r.Context())
+	j := a.Jobs.Start("hedioum core install", func(job *Job) error {
+		err := tunnel.InstallHedCore(job.Write)
+		if err != nil {
+			a.St.Audit(actor, "hedcore.install", trimAudit(err.Error()), "error")
+			return err
+		}
+		st := tunnel.DetectHedCore()
+		job.Write("[portguard] installed: " + st.Version + " → " + st.Binary)
+		a.St.Audit(actor, "hedcore.install", "core installed: "+st.Version, "ok")
+		return nil
+	})
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": j.ID})
+}
+
+func (a *App) handleHedCoreService(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Action string `json:"action"` // start | stop | restart
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	out, err := tunnel.HedCoreServiceControl(body.Action)
+	if err != nil {
+		a.St.Audit(actorFrom(r.Context()), "hedcore.service", body.Action+" failed: "+trimAudit(err.Error()), "error")
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"ok": false, "output": out, "error": err.Error()})
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "hedcore.service", body.Action, "ok")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "output": out})
+}
+
+func (a *App) handleHedCoreUninstall(w http.ResponseWriter, r *http.Request) {
+	// refuse while wizard-managed units that depend on hedioum still exist —
+	// the trojan bridge's After= would just dangle; the operator purges first
+	relays, _ := a.St.ListTrojanRelays()
+	ings, _ := a.St.ListTrojanIngresses()
+	if len(relays) > 0 || len(ings) > 0 {
+		errJSON(w, errString("trojan relays/ingresses still configured — purge the trojan suite first"), http.StatusConflict)
+		return
+	}
+	if bridgeUp := tunnel.ServiceStatus(tunnel.TrojanBridgeUnit); bridgeUp == "active" {
+		errJSON(w, errString("the trojan bridge unit is still installed — purge the trojan suite first"), http.StatusConflict)
+		return
+	}
+	removed, err := tunnel.RemoveHedCore()
+	if err != nil {
+		a.St.Audit(actorFrom(r.Context()), "hedcore.uninstall", trimAudit(err.Error()), "error")
+		errJSON(w, errString("uninstall failed: "+err.Error()), http.StatusInternalServerError)
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "hedcore.uninstall", fmt.Sprintf("%d items removed", len(removed)), "ok")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "removed": removed})
+}

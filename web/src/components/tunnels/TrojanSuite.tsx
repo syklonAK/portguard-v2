@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, Zap, ShieldCheck, RefreshCw, CheckCircle2, XCircle, Gauge, Flame, Globe2, Wind, Stethoscope, Terminal, Bomb } from 'lucide-react'
+import { Plus, Pencil, Trash2, Zap, ShieldCheck, RefreshCw, CheckCircle2, XCircle, Gauge, Flame, Globe2, Wind, Stethoscope, Terminal, Bomb, Download } from 'lucide-react'
 import { api, type TrojanRelayRow, type TrojanIngressRow, type BBRStatus, type TunnelStatus, type RelayVerifyReport, type HedioumToolResult } from '../../api'
 import { Badge, Button, Card, CardHeader, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../ui'
 import { useToast } from '../toast'
@@ -68,6 +68,61 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
   const [toolBusy, setToolBusy] = useState<string | null>(null)
   const [purgeConfirm, setPurgeConfirm] = useState(false)
   const [purging, setPurging] = useState(false)
+  // standalone hedioum core
+  const core = useQuery({ queryKey: ['hedcore'], queryFn: () => api.hedCoreStatus(), refetchInterval: 15_000 })
+  const [hedBusy, setHedBusy] = useState<string | null>(null)
+  const [uninstallConfirm, setUninstallConfirm] = useState(false)
+  const [uninstalling, setUninstalling] = useState(false)
+
+  const hedInstall = useMutation({
+    mutationFn: () => api.hedCoreInstall(),
+    onSuccess: async (res) => {
+      push('info', 'Core install started — watch the terminal view.')
+      // poll the job to completion so the UI reflects the final state
+      const deadline = Date.now() + 10 * 60_000
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2000))
+        try {
+          const job = await api.job(res.job_id)
+          if (job.status === 'success') { push('success', 'Hedioum core installed.'); break }
+          if (job.status === 'failed') { push('error', job.error || 'Core install failed.'); break }
+        } catch { break }
+      }
+      qc.invalidateQueries({ queryKey: ['hedcore'] })
+      qc.invalidateQueries({ queryKey: ['tunnel-status'] })
+      qc.invalidateQueries({ queryKey: ['hedioum-egress'] })
+    },
+    onError: (e: any) => push('error', e.message),
+  })
+
+  const hedService = async (action: 'start' | 'stop' | 'restart') => {
+    setHedBusy(action)
+    try {
+      const res = await api.hedCoreService(action)
+      push(res.ok ? 'success' : 'error', res.ok ? `hedioum ${action}: done.` : (res.output || res.error || 'failed'))
+      qc.invalidateQueries({ queryKey: ['hedcore'] })
+      qc.invalidateQueries({ queryKey: ['tunnel-status'] })
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setHedBusy(null)
+    }
+  }
+
+  const runUninstall = async () => {
+    setUninstalling(true)
+    try {
+      const res = await api.hedCoreUninstall()
+      push('success', `Core uninstalled (${res.removed.length} item(s)).`)
+      setUninstallConfirm(false)
+      qc.invalidateQueries({ queryKey: ['hedcore'] })
+      qc.invalidateQueries({ queryKey: ['tunnel-status'] })
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setUninstalling(false)
+    }
+  }
 
   const hygiene = useQuery({ queryKey: ['node-hygiene'], queryFn: () => api.nodeHygiene() })
 
@@ -576,6 +631,80 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
       </Modal>
 
       {/* hedioum-suite v3: node hygiene + tools + purge */}
+      <Card>
+        <CardHeader
+          title="Hedioum core"
+          desc="the tunnel binary + systemd service as a standalone resource — install the pinned release from GitHub, restart, or uninstall"
+          right={
+            <Badge color={core.data?.installed ? 'green' : 'red'}>
+              {core.data?.installed ? (core.data.version?.split('\n')[0] || 'installed') : 'not installed'}
+            </Badge>
+          }
+        />
+        <div className="space-y-3 p-5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <EnvRowInline label="Binary" ok={!!core.data?.installed} detail={core.data?.binary || core.data?.version || undefined} missing={`pinned: ${core.data?.pinned_version || '…'}`} />
+            <EnvRowInline label="Service (hedioum)" ok={core.data?.unit_state === 'active'} detail={core.data?.unit_state} missing={core.data?.unit_state || 'absent'} />
+            <EnvRowInline label="Config role" ok={!!core.data?.config_ok} detail={core.data?.role} missing="no config yet (run a wizard)" />
+            {core.data?.pin_warning && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-2xs text-amber-800 sm:col-span-2 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                {core.data.pin_warning}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {!core.data?.installed ? (
+              <Button size="sm" onClick={() => hedInstall.mutate()} disabled={hedInstall.isPending}>
+                <Download className={`h-3.5 w-3.5 ${hedInstall.isPending ? 'animate-bounce' : ''}`} />
+                {hedInstall.isPending ? 'Installing…' : `Install core (${core.data?.pinned_version || 'pinned release'})`}
+              </Button>
+            ) : (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => hedService('restart')} disabled={hedBusy !== null}>
+                  <RefreshCw className={`h-3.5 w-3.5 ${hedBusy === 'restart' ? 'animate-spin' : ''}`} /> Restart
+                </Button>
+                <Button variant="secondary" size="sm" disabled={hedBusy !== null || core.data?.unit_state !== 'active'}
+                  onClick={() => hedService('stop')}>
+                  Stop
+                </Button>
+                <Button variant="secondary" size="sm" disabled={hedBusy !== null || core.data?.unit_state === 'active'}
+                  onClick={() => hedService('start')}>
+                  Start
+                </Button>
+                <Button size="sm" onClick={() => hedInstall.mutate()} disabled={hedInstall.isPending}>
+                  <Download className={`h-3.5 w-3.5 ${hedInstall.isPending ? 'animate-bounce' : ''}`} />
+                  {hedInstall.isPending ? 'Reinstalling…' : 'Reinstall / update'}
+                </Button>
+              </>
+            )}
+          </div>
+          {!core.data?.installed && (
+            <p className="text-2xs leading-relaxed text-muted-foreground">
+              Downloads the pinned release from GitHub (sha256-verified when the release publishes one) and runs the
+              binary's own installer — systemd unit, firewall port and BBR. No interactive wizard.
+            </p>
+          )}
+          {!uninstallConfirm ? (
+            core.data?.installed && (
+              <Button variant="ghost" size="sm" className="text-red-500" onClick={() => setUninstallConfirm(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Uninstall core…
+              </Button>
+            )
+          ) : (
+            <div className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-3 text-2xs leading-relaxed text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+              <p>Removes the hedioum-tunnel binary, its systemd unit and <code>/etc/hedioum</code> (via the binary's own non-interactive uninstaller).</p>
+              <p><b>Requires:</b> no trojan relays/ingresses configured (purge the suite first) and the bridge unit gone.</p>
+              <div className="flex gap-2 pt-1">
+                <Button variant="secondary" size="sm" onClick={() => setUninstallConfirm(false)} disabled={uninstalling}>Cancel</Button>
+                <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={runUninstall} disabled={uninstalling}>
+                  {uninstalling ? 'Uninstalling…' : 'Yes, uninstall the core'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader

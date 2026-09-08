@@ -478,6 +478,13 @@ export const api = {
   hedioumCheckIP: () => req<HedioumToolResult>('GET', '/api/hedioum/check-ip'),
   trojanPurge: () => req<{ ok: boolean; relays_removed: number; ingresses_removed: number; result: { removed: string[]; kept: string[] } }>('POST', '/api/tunnels/trojan/purge'),
 
+  // standalone hedioum core (download/install/lifecycle)
+  hedCoreStatus: () => req<HedCoreStatus>('GET', '/api/hedioum/core'),
+  hedCoreInstall: () => req<{ job_id: string }>('POST', '/api/hedioum/core/install'),
+  hedCoreService: (action: 'start' | 'stop' | 'restart') =>
+    req<{ ok: boolean; output: string; error?: string }>('POST', '/api/hedioum/core/service', { action }),
+  hedCoreUninstall: () => req<{ ok: boolean; removed: string[] }>('POST', '/api/hedioum/core/uninstall'),
+
   // v2.13: hedioum wizards + egress check
   hedioumSetupForeign: (body?: { persona?: string; domain?: string; public_ip?: string; token?: string; move_ssh?: boolean; force?: boolean }) =>
     req<HedioumForeignResult>('POST', '/api/tunnels/hedioum/setup-foreign', body),
@@ -940,6 +947,19 @@ export interface HedioumToolResult {
   ok: boolean
   output: string
   error?: string
+}
+
+/** Standalone hedioum core (binary + systemd unit) state. */
+export interface HedCoreStatus {
+  installed: boolean
+  version?: string
+  binary?: string
+  pinned_version: string
+  unit_state: string
+  unit_exists: boolean
+  role?: string
+  config_ok: boolean
+  pin_warning?: string
 }
 
 export interface BBRStatus {
