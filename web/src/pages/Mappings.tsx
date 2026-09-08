@@ -48,10 +48,10 @@ export default function Mappings() {
   const { push } = useToast()
   const [params, setParams] = useSearchParams()
 
-  const mappings = useQuery({ queryKey: ['mappings'], queryFn: () => api.listMappings() })
-  const certs = useQuery({ queryKey: ['certs'], queryFn: () => api.listCerts() })
-  const templates = useQuery({ queryKey: ['templates'], queryFn: () => api.templates() })
-  const services = useQuery({ queryKey: ['services'], queryFn: () => api.listServices() })
+  const mappings = useQuery({ queryKey: ['mappings'], queryFn: () => api.listMappings(), placeholderData: (p) => p })
+  const certs = useQuery({ queryKey: ['certs'], queryFn: () => api.listCerts(), placeholderData: (p) => p })
+  const templates = useQuery({ queryKey: ['templates'], queryFn: () => api.templates(), placeholderData: (p) => p })
+  const services = useQuery({ queryKey: ['services'], queryFn: () => api.listServices(), placeholderData: (p) => p })
 
   const [modal, setModal] = useState<null | 'create' | 'edit'>(null)
   const [draft, setDraft] = useState<Partial<Mapping>>(emptyMapping())
@@ -274,7 +274,7 @@ export default function Mappings() {
 
       <Card>
         <CardHeader title="All mappings" desc={`${mappings.data?.length ?? 0} total`} />
-        {mappings.isLoading ? (
+        {mappings.isPending && !mappings.data ? (
           <div className="flex justify-center py-16 short:py-8"><Spinner /></div>
         ) : !mappings.data?.length ? (
           <Empty message="No mappings yet. Click “New mapping” to create your first route." />
