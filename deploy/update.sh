@@ -55,7 +55,7 @@ pick_goproxy() {
   echo "direct"
 }
 export GOPROXY="${GOPROXY:-$(pick_goproxy)}"
-log "GOPROXY=${GOPROXY}"
+say "GOPROXY=${GOPROXY}"
 go mod tidy >/dev/null 2>&1 || true
 go build -trimpath -ldflags "-s -w" -o "${BIN}.new" ./cmd/server || die "build failed — keeping the running binary"
 
