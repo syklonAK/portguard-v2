@@ -123,8 +123,8 @@ func TestBuildTrojanBridgeConfigMultiSocks(t *testing.T) {
 
 func TestBuildTrojanIngressConfig(t *testing.T) {
 	fwd := []TrojanIngressSpec{
-		{Name: "ing1", ListenPort: 35001, NodePort: 10000},
-		{Name: "ing2", ListenPort: 35002, NodePort: 10001},
+		{Name: "ing1", ListenIP: "0.0.0.0", ListenPort: 35001, TargetHost: "127.0.0.1", TargetPort: 10000},
+		{Name: "ing2", ListenIP: "10.0.0.5", ListenPort: 35002, TargetHost: "192.168.1.10", TargetPort: 10001, UDP: true},
 	}
 	out, err := BuildTrojanIngressConfig(fwd)
 	if err != nil {
@@ -141,6 +141,14 @@ func TestBuildTrojanIngressConfig(t *testing.T) {
 	ib := inbounds[0].(map[string]any)
 	if ib["listen"] != "0.0.0.0" || ib["port"] != float64(35001) {
 		t.Errorf("ingress inbound wrong: %v", ib)
+	}
+	ib2 := inbounds[1].(map[string]any)
+	if ib2["listen"] != "10.0.0.5" || ib2["port"] != float64(35002) {
+		t.Errorf("ingress inbound 2 wrong: %v", ib2)
+	}
+	set := ib2["settings"].(map[string]any)
+	if set["address"] != "192.168.1.10" || set["network"] != "tcp,udp" {
+		t.Errorf("udp target settings wrong: %v", set)
 	}
 }
 

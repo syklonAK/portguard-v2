@@ -38,6 +38,13 @@ func migrate(db *sql.DB) error {
 		{"mappings", "routes", `ALTER TABLE mappings ADD COLUMN routes TEXT NOT NULL DEFAULT '[]'`},
 		{"server_nodes", "conn_mode", `ALTER TABLE server_nodes ADD COLUMN conn_mode TEXT NOT NULL DEFAULT 'direct'`},
 		{"server_nodes", "uid", `ALTER TABLE server_nodes ADD COLUMN uid TEXT NOT NULL DEFAULT ''`},
+		// v2.13 trojan ingresses gained listen_ip/target/udp (the old shape had
+		// only listen_port+node_port). The table is disposable (no history), so
+		// migrate by widening; rows keep working since target defaults loopback.
+		{"trojan_ingresses", "listen_ip", `ALTER TABLE trojan_ingresses ADD COLUMN listen_ip TEXT NOT NULL DEFAULT '0.0.0.0'`},
+		{"trojan_ingresses", "target_host", `ALTER TABLE trojan_ingresses ADD COLUMN target_host TEXT NOT NULL DEFAULT '127.0.0.1'`},
+		{"trojan_ingresses", "target_port", `ALTER TABLE trojan_ingresses ADD COLUMN target_port INTEGER NOT NULL DEFAULT 10000`},
+		{"trojan_ingresses", "udp", `ALTER TABLE trojan_ingresses ADD COLUMN udp INTEGER NOT NULL DEFAULT 0`},
 	} {
 		// pragma functions cannot be parameterized reliably across drivers —
 		// the table name is from our fixed list above, never user input
@@ -134,8 +141,11 @@ CREATE TABLE IF NOT EXISTS trojan_relays (
 CREATE TABLE IF NOT EXISTS trojan_ingresses (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	name TEXT NOT NULL UNIQUE,
+	listen_ip TEXT NOT NULL DEFAULT '0.0.0.0',
 	listen_port INTEGER NOT NULL,
-	node_port INTEGER NOT NULL DEFAULT 10000,
+	target_host TEXT NOT NULL DEFAULT '127.0.0.1',
+	target_port INTEGER NOT NULL DEFAULT 10000,
+	udp INTEGER NOT NULL DEFAULT 0,
 	enabled INTEGER NOT NULL DEFAULT 1,
 	notes TEXT NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL,

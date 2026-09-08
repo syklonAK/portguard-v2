@@ -108,23 +108,37 @@ func TestTrojanIngressCRUD(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	app.Router().ServeHTTP(rec, trojanReq(t, app, "POST", "/api/tunnels/trojan/ingresses",
-		`{"name":"ing1","listen_port":35001,"node_port":10000}`))
+		`{"name":"ing1","listen_port":35001,"target_host":"127.0.0.1","target_port":10000,"udp":true}`))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create ingress: %d %s", rec.Code, rec.Body.String())
 	}
 	// duplicate listen port
 	rec = httptest.NewRecorder()
 	app.Router().ServeHTTP(rec, trojanReq(t, app, "POST", "/api/tunnels/trojan/ingresses",
-		`{"name":"ing2","listen_port":35001,"node_port":10000}`))
+		`{"name":"ing2","listen_port":35001,"target_host":"127.0.0.1","target_port":10000}`))
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("duplicate listen_port should 409: %d %s", rec.Code, rec.Body.String())
 	}
 	// bad name
 	rec = httptest.NewRecorder()
 	app.Router().ServeHTTP(rec, trojanReq(t, app, "POST", "/api/tunnels/trojan/ingresses",
-		`{"name":"bad name!","listen_port":35002,"node_port":10000}`))
+		`{"name":"bad name!","listen_port":35002,"target_port":10000}`))
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("bad name should 422: %d", rec.Code)
+	}
+	// loop guard: same-host identical ports
+	rec = httptest.NewRecorder()
+	app.Router().ServeHTTP(rec, trojanReq(t, app, "POST", "/api/tunnels/trojan/ingresses",
+		`{"name":"loopy","listen_port":35003,"target_host":"127.0.0.1","target_port":35003}`))
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("loop guard should 422: %d %s", rec.Code, rec.Body.String())
+	}
+	// invalid listen_ip
+	rec = httptest.NewRecorder()
+	app.Router().ServeHTTP(rec, trojanReq(t, app, "POST", "/api/tunnels/trojan/ingresses",
+		`{"name":"badip","listen_port":35004,"listen_ip":"banana","target_port":10000}`))
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid listen_ip should 422: %d", rec.Code)
 	}
 }
 

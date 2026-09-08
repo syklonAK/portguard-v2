@@ -469,6 +469,15 @@ export const api = {
   deleteTrojanIngress: (id: number) => req<{ ok: boolean }>('DELETE', `/api/tunnels/trojan/ingresses/${id}`),
   trojanIngressApply: () => req<{ ok: boolean; forwarders: number; note?: string }>('POST', '/api/tunnels/trojan/ingress/apply'),
 
+  // hedioum-suite v3 extras: relay verify, node hygiene, hedioum tools, purge
+  trojanRelayVerify: (id: number) => req<RelayVerifyReport>('GET', `/api/tunnels/trojan/relays/${id}/verify`),
+  nodeHygiene: () => req<NodeHygieneReport>('GET', '/api/node-hygiene'),
+  hedioumProbe: (node: string) => req<HedioumToolResult>('GET', `/api/hedioum/probe?node=${encodeURIComponent(node)}`),
+  hedioumSpeedtest: (node: string, mimic?: string, dir?: string) =>
+    req<HedioumToolResult>('GET', `/api/hedioum/speedtest?node=${encodeURIComponent(node)}${mimic ? `&mimic=${encodeURIComponent(mimic)}` : ''}${dir ? `&dir=${dir}` : ''}`),
+  hedioumCheckIP: () => req<HedioumToolResult>('GET', '/api/hedioum/check-ip'),
+  trojanPurge: () => req<{ ok: boolean; relays_removed: number; ingresses_removed: number; result: { removed: string[]; kept: string[] } }>('POST', '/api/tunnels/trojan/purge'),
+
   // v2.13: hedioum wizards + egress check
   hedioumSetupForeign: (body?: { persona?: string; domain?: string; public_ip?: string; token?: string; move_ssh?: boolean; force?: boolean }) =>
     req<HedioumForeignResult>('POST', '/api/tunnels/hedioum/setup-foreign', body),
@@ -886,12 +895,51 @@ export interface TrojanRelayRow {
 export interface TrojanIngressRow {
   id: number
   name: string
+  listen_ip: string
   listen_port: number
-  node_port: number
+  target_host: string
+  target_port: number
+  udp: boolean
   enabled: boolean
   notes: string
   created_at: string
   updated_at: string
+}
+
+/** End-to-end verdict for one trojan relay (the hedioum-suite relay_verify). */
+export interface RelayVerifyReport {
+  name: string
+  listen_up: boolean
+  https_port_up?: boolean
+  bridge_up?: boolean
+  cert_days_left?: number
+  hub_alive: boolean
+  target_ok: boolean
+  target_probe: string
+  note?: string
+}
+
+/** Foreign-side PasarGuard node discovery (hedioum-suite detect_node). */
+export interface NodeServiceInfo {
+  kind?: string
+  xray_ports?: number[]
+  rpc_ports?: number[]
+  public_bind?: string
+  loopback_only: boolean
+}
+
+export interface NodeHygieneReport {
+  node: NodeServiceInfo
+  clashes: { port: number; owner: string }[]
+  overlap: number[]
+  fail2ban: boolean
+  advice: string[]
+}
+
+export interface HedioumToolResult {
+  ok: boolean
+  output: string
+  error?: string
 }
 
 export interface BBRStatus {

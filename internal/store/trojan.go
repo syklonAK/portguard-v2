@@ -25,13 +25,19 @@ type TrojanRelay struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// TrojanIngress is one foreign-side forwarder: public tunnel port → node
-// inbound on 127.0.0.1.
+// TrojanIngress is one foreign-side forwarder: public listen port → node
+// inbound. Ported from hedioum-suite.sh v3 ingress records: the target can
+// be any host (another box on a private network, not just 127.0.0.1), the
+// listen address is configurable, and UDP can ride along (QUIC/Hysteria
+// style inbounds).
 type TrojanIngress struct {
 	ID         int64     `json:"id"`
 	Name       string    `json:"name"`
+	ListenIP   string    `json:"listen_ip"`  // 0.0.0.0 = all IPv4
 	ListenPort int       `json:"listen_port"`
-	NodePort   int       `json:"node_port"`
+	TargetHost string    `json:"target_host"` // node inbound address
+	TargetPort int       `json:"target_port"` // node inbound port
+	UDP        bool      `json:"udp"`
 	Enabled    bool      `json:"enabled"`
 	Notes      string    `json:"notes"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -55,13 +61,15 @@ func scanTrojanRelay(row interface{ Scan(...any) error }) (TrojanRelay, error) {
 
 func scanTrojanIngress(row interface{ Scan(...any) error }) (TrojanIngress, error) {
 	var r TrojanIngress
-	var enabled int
+	var enabled, udp int
 	var createdTS, updatedTS int64
-	err := row.Scan(&r.ID, &r.Name, &r.ListenPort, &r.NodePort, &enabled, &r.Notes, &createdTS, &updatedTS)
+	err := row.Scan(&r.ID, &r.Name, &r.ListenIP, &r.ListenPort, &r.TargetHost, &r.TargetPort,
+		&udp, &enabled, &r.Notes, &createdTS, &updatedTS)
 	if err != nil {
 		return r, err
 	}
 	r.Enabled = enabled == 1
+	r.UDP = udp == 1
 	r.CreatedAt = time.Unix(createdTS, 0)
 	r.UpdatedAt = time.Unix(updatedTS, 0)
 	return r, nil
@@ -70,7 +78,8 @@ func scanTrojanIngress(row interface{ Scan(...any) error }) (TrojanIngress, erro
 const trojanRelayCols = `id, name, domain, https_port, foreign_ip, foreign_port,
 bridge_port, route, socks_port, enabled, notes, created_at, updated_at`
 
-const trojanIngressCols = `id, name, listen_port, node_port, enabled, notes, created_at, updated_at`
+const trojanIngressCols = `id, name, listen_ip, listen_port, target_host, target_port,
+udp, enabled, notes, created_at, updated_at`
 
 // ---- trojan relays ----
 
@@ -163,8 +172,10 @@ func (s *Store) GetTrojanIngress(id int64) (TrojanIngress, error) {
 func (s *Store) CreateTrojanIngress(r *TrojanIngress) (int64, error) {
 	ts := nowTS()
 	res, err := s.DB.Exec(`INSERT INTO trojan_ingresses
-		(name, listen_port, node_port, enabled, notes, created_at, updated_at) VALUES(?,?,?,?,?,?,?)`,
-		r.Name, r.ListenPort, r.NodePort, b2i(r.Enabled), r.Notes, ts, ts)
+		(name, listen_ip, listen_port, target_host, target_port, udp, enabled, notes, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		r.Name, r.ListenIP, r.ListenPort, r.TargetHost, r.TargetPort,
+		b2i(r.UDP), b2i(r.Enabled), r.Notes, ts, ts)
 	if err != nil {
 		return 0, err
 	}
@@ -172,8 +183,10 @@ func (s *Store) CreateTrojanIngress(r *TrojanIngress) (int64, error) {
 }
 
 func (s *Store) UpdateTrojanIngress(r *TrojanIngress) error {
-	_, err := s.DB.Exec(`UPDATE trojan_ingresses SET name=?, listen_port=?, node_port=?, enabled=?, notes=?, updated_at=? WHERE id=?`,
-		r.Name, r.ListenPort, r.NodePort, b2i(r.Enabled), r.Notes, nowTS(), r.ID)
+	_, err := s.DB.Exec(`UPDATE trojan_ingresses SET name=?, listen_ip=?, listen_port=?,
+		target_host=?, target_port=?, udp=?, enabled=?, notes=?, updated_at=? WHERE id=?`,
+		r.Name, r.ListenIP, r.ListenPort, r.TargetHost, r.TargetPort,
+		b2i(r.UDP), b2i(r.Enabled), r.Notes, nowTS(), r.ID)
 	return err
 }
 

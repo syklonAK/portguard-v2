@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, Zap, ShieldCheck, RefreshCw, CheckCircle2, XCircle, Gauge, Flame, Globe2, Wind } from 'lucide-react'
-import { api, type TrojanRelayRow, type TrojanIngressRow, type BBRStatus, type TunnelStatus } from '../../api'
+import { Plus, Pencil, Trash2, Zap, ShieldCheck, RefreshCw, CheckCircle2, XCircle, Gauge, Flame, Globe2, Wind, Stethoscope, Terminal, Bomb } from 'lucide-react'
+import { api, type TrojanRelayRow, type TrojanIngressRow, type BBRStatus, type TunnelStatus, type RelayVerifyReport, type HedioumToolResult } from '../../api'
 import { Badge, Button, Card, CardHeader, Empty, Field, Input, Modal, Select, Spinner, Toggle } from '../ui'
 import { useToast } from '../toast'
 
@@ -18,7 +18,7 @@ function emptyTrojanRelay(): Partial<TrojanRelayRow> {
 }
 
 function emptyTrojanIngress(): Partial<TrojanIngressRow> {
-  return { name: '', listen_port: 35000, node_port: 10000, enabled: true, notes: '' }
+  return { name: '', listen_ip: '0.0.0.0', listen_port: 35000, target_host: '127.0.0.1', target_port: 10000, udp: false, enabled: true, notes: '' }
 }
 
 export function EnvRowInline({ label, ok, detail, missing }: { label: string; ok: boolean; detail?: string; missing?: string }) {
@@ -61,8 +61,56 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
   const [pairToken, setPairToken] = useState('')
   const [pairInfo, setPairInfo] = useState<{ exit_ip?: string; persona?: string; endpoints?: Record<string, number>; is_v2?: boolean } | null>(null)
   const [fwPort, setFwPort] = useState('')
+  // hedioum-suite v3 extras: verify modal, tool output modal, purge confirm
+  const [verifyRep, setVerifyRep] = useState<RelayVerifyReport | null>(null)
+  const [verifying, setVerifying] = useState(false)
+  const [toolModal, setToolModal] = useState<null | { title: string; output: string; ok: boolean }>(null)
+  const [toolBusy, setToolBusy] = useState<string | null>(null)
+  const [purgeConfirm, setPurgeConfirm] = useState(false)
+  const [purging, setPurging] = useState(false)
+
+  const hygiene = useQuery({ queryKey: ['node-hygiene'], queryFn: () => api.nodeHygiene() })
 
   const rSet = <K extends keyof TrojanRelayRow>(k: K, v: TrojanRelayRow[K]) => setRelayDraft((d) => ({ ...d, [k]: v }))
+
+  const verifyRelay = async (r: TrojanRelayRow) => {
+    setVerifying(true)
+    try {
+      const rep = await api.trojanRelayVerify(r.id)
+      setVerifyRep(rep)
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  const runTool = async (title: string, fn: () => Promise<HedioumToolResult>) => {
+    setToolBusy(title)
+    try {
+      const res = await fn()
+      setToolModal({ title, output: res.output || res.error || '(no output)', ok: res.ok })
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setToolBusy(null)
+    }
+  }
+
+  const runPurge = async () => {
+    setPurging(true)
+    try {
+      const res = await api.trojanPurge()
+      push('success', `Purged ${res.relays_removed} relay(s) and ${res.ingresses_removed} forwarder(s). Hedioum/nginx/node kept.`)
+      setPurgeConfirm(false)
+      qc.invalidateQueries({ queryKey: ['trojan-relays'] })
+      qc.invalidateQueries({ queryKey: ['trojan-ingresses'] })
+    } catch (e: any) {
+      push('error', e.message)
+    } finally {
+      setPurging(false)
+    }
+  }
 
   const saveRelay = async () => {
     setSavingRelay(true)
@@ -239,6 +287,10 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" title="Verify end-to-end (through the tunnel)"
+                          onClick={() => verifyRelay(r)} disabled={verifying}>
+                          <Stethoscope className="h-3.5 w-3.5" />
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => { setRelayDraft(JSON.parse(JSON.stringify(r))); setRelayModal('edit') }}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -263,7 +315,7 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
         <Card>
           <CardHeader
             title="Trojan ingress forwarders (foreign side)"
-            desc="tunnel port → 127.0.0.1:node-inbound on the egress node"
+            desc="public listen → node inbound on the egress box (any target host, optional UDP)"
             right={
               <Button size="sm" onClick={() => { setIngDraft(emptyTrojanIngress()); setIngModal('create') }}>
                 <Plus className="h-3.5 w-3.5" /> New forwarder
@@ -278,7 +330,9 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
                 <div key={i.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
                   <div className="text-xs">
                     <b>{i.name}</b>
-                    <span className="ml-2 font-mono text-muted-foreground">:{i.listen_port} → 127.0.0.1:{i.node_port}</span>
+                    <span className="ml-2 font-mono text-muted-foreground">
+                      {i.listen_ip || '0.0.0.0'}:{i.listen_port} → {i.target_host}:{i.target_port}{i.udp ? ' (+udp)' : ''}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Toggle checked={i.enabled} onChange={() => api.updateTrojanIngress(i.id, { ...i, enabled: !i.enabled })
@@ -475,13 +529,25 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
             <Input value={ingDraft.name || ''} onChange={(e) => setIngDraft({ ...ingDraft, name: e.target.value })} placeholder="ing01" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Public tunnel port" hint="what relays dial from Iran">
+            <Field label="Public listen port" hint="what relays dial from Iran">
               <Input type="number" value={ingDraft.listen_port ?? ''} onChange={(e) => setIngDraft({ ...ingDraft, listen_port: parseInt(e.target.value, 10) })} />
             </Field>
-            <Field label="Node inbound port" hint="trojan inbound on 127.0.0.1">
-              <Input type="number" value={ingDraft.node_port ?? ''} onChange={(e) => setIngDraft({ ...ingDraft, node_port: parseInt(e.target.value, 10) })} />
+            <Field label="Listen IP" hint="0.0.0.0 = all IPv4">
+              <Input value={ingDraft.listen_ip || '0.0.0.0'} onChange={(e) => setIngDraft({ ...ingDraft, listen_ip: e.target.value })} />
             </Field>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Node address" hint="127.0.0.1 if the node is on this box">
+              <Input value={ingDraft.target_host || ''} onChange={(e) => setIngDraft({ ...ingDraft, target_host: e.target.value })} placeholder="127.0.0.1" />
+            </Field>
+            <Field label="Node port" hint="the node inbound port">
+              <Input type="number" value={ingDraft.target_port ?? ''} onChange={(e) => setIngDraft({ ...ingDraft, target_port: parseInt(e.target.value, 10) })} />
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Toggle checked={!!ingDraft.udp} onChange={(v) => setIngDraft({ ...ingDraft, udp: v })} />
+            Also forward UDP (QUIC / Hysteria style inbounds)
+          </label>
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" onClick={() => setIngModal(null)}>Cancel</Button>
             <Button onClick={saveIngress} disabled={!ingDraft.name || !ingDraft.listen_port}>
@@ -489,6 +555,137 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* relay end-to-end verify modal (hedioum-suite relay_verify) */}
+      <Modal open={verifyRep !== null} onClose={() => setVerifyRep(null)}
+        title={`Verify relay — ${verifyRep?.name ?? ''}`}>
+        {verifyRep && (
+          <div className="space-y-2">
+            <EnvRowInline label="Local listeners (https + bridge)" ok={verifyRep.listen_up} detail="listening" missing="down — apply the bridge" />
+            <EnvRowInline label="SOCKS5 hub" ok={verifyRep.hub_alive} detail="reachable" missing="not answering" />
+            <EnvRowInline label={`Foreign target (${verifyRep.target_probe})`} ok={verifyRep.target_ok} detail="answers" missing="no answer" />
+            {verifyRep.note && (
+              <p className="rounded-lg bg-sky-50 p-2.5 text-2xs leading-relaxed text-sky-800 dark:bg-sky-500/10 dark:text-sky-300">{verifyRep.note}</p>
+            )}
+            <div className="flex justify-end pt-2">
+              <Button variant="secondary" size="sm" onClick={() => setVerifyRep(null)}>Close</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* hedioum-suite v3: node hygiene + tools + purge */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Node check (foreign side)"
+            desc="PasarGuard/marzban service, xray listeners, mimic clashes and fail2ban"
+            right={
+              <Button variant="secondary" size="sm" onClick={() => hygiene.refetch()} disabled={hygiene.isFetching}>
+                <RefreshCw className={`h-3.5 w-3.5 ${hygiene.isFetching ? 'animate-spin' : ''}`} /> Refresh
+              </Button>
+            }
+          />
+          <div className="space-y-2 p-4">
+            {hygiene.isLoading ? (
+              <div className="flex justify-center py-6"><Spinner /></div>
+            ) : hygiene.data ? (
+              <>
+                <EnvRowInline label="Node service" ok={!!hygiene.data.node.kind} detail={hygiene.data.node.kind || 'none on this box'} missing="none on this box" />
+                {hygiene.data.node.kind && (
+                  <EnvRowInline
+                    label="Node inbound path"
+                    ok={!hygiene.data.node.loopback_only}
+                    detail={hygiene.data.node.public_bind || 'public bind found'}
+                    missing="loopback-only — the egress cannot dial it (add a forwarder or rebind)"
+                  />
+                )}
+                {!!hygiene.data.node.xray_ports?.length && (
+                  <div className="rounded-lg border border-border px-3 py-2 text-2xs text-muted-foreground">
+                    xray ports: <span className="font-mono">{hygiene.data.node.xray_ports.join(', ')}</span>
+                    {!!hygiene.data.node.rpc_ports?.length && <> · panel RPC: <span className="font-mono">{hygiene.data.node.rpc_ports.join(', ')}</span></>}
+                  </div>
+                )}
+                {(hygiene.data.clashes.length > 0 || hygiene.data.overlap.length > 0) && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-2xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                    {hygiene.data.overlap.length > 0 && <div><b>Node ports on mimic ports:</b> {hygiene.data.overlap.join(', ')} — move them, a forwarder cannot fix this</div>}
+                    {hygiene.data.clashes.map((c) => <div key={c.port}>mimic port {c.port} held by {c.owner}</div>)}
+                  </div>
+                )}
+                {hygiene.data.fail2ban && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-2xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                    fail2ban is active — whitelist the Hedioum egress address
+                  </div>
+                )}
+                {(hygiene.data.advice ?? []).map((a, i) => (
+                  <p key={i} className="text-2xs leading-relaxed text-muted-foreground">• {a}</p>
+                ))}
+              </>
+            ) : null}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Hedioum tools & suite purge"
+            desc="non-interactive runs of the built-in diagnostics; purge removes every relay/forwarder but keeps hedioum, nginx and the node"
+            right={
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" disabled={toolBusy !== null}
+                  onClick={() => runTool('check-ip', () => api.hedioumCheckIP())}>
+                  <Terminal className="h-3.5 w-3.5" /> {toolBusy === 'check-ip' ? '…' : 'Check egress IP'}
+                </Button>
+                <Button variant="secondary" size="sm" disabled={toolBusy !== null}
+                  onClick={() => {
+                    const alias = window.prompt('Node alias to probe (e.g. DE-01):', 'DE-01')
+                    if (alias && /^[A-Za-z0-9_-]{1,64}$/.test(alias)) runTool(`probe ${alias}`, () => api.hedioumProbe(alias))
+                  }}>
+                  <Stethoscope className="h-3.5 w-3.5" /> Probe
+                </Button>
+                <Button variant="secondary" size="sm" disabled={toolBusy !== null}
+                  onClick={() => {
+                    const alias = window.prompt('Node alias to speedtest:', 'DE-01')
+                    if (alias && /^[A-Za-z0-9_-]{1,64}$/.test(alias)) runTool(`speedtest ${alias}`, () => api.hedioumSpeedtest(alias, 'tls', 'down'))
+                  }}>
+                  <Gauge className="h-3.5 w-3.5" /> Speedtest
+                </Button>
+              </div>
+            }
+          />
+          <div className="space-y-3 p-4">
+            {!purgeConfirm ? (
+              <Button variant="ghost" size="sm" className="text-red-500" onClick={() => setPurgeConfirm(true)}>
+                <Bomb className="h-3.5 w-3.5" /> Purge the trojan suite…
+              </Button>
+            ) : (
+              <div className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-3 text-2xs leading-relaxed text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                <p>Deletes <b>all trojan relays and ingress forwarders</b> from this panel and removes the bridge/ingress units and configs from this server.</p>
+                <p><b>Kept:</b> the Hedioum tunnel itself, nginx, and your node service.</p>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="secondary" size="sm" onClick={() => setPurgeConfirm(false)} disabled={purging}>Cancel</Button>
+                  <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={runPurge} disabled={purging}>
+                    {purging ? 'Purging…' : 'Yes, purge everything'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* hedioum tool output modal */}
+      <Modal open={toolModal !== null} onClose={() => setToolModal(null)} wide
+        title={toolModal ? `hedioum-tunnel ${toolModal.title}` : ''}>
+        {toolModal && (
+          <div className="space-y-3">
+            <Badge color={toolModal.ok ? 'green' : 'red'}>{toolModal.ok ? 'ok' : 'error'}</Badge>
+            <pre className="max-h-96 overflow-auto rounded-xl border border-border bg-mutedslate p-3 font-mono text-2xs leading-relaxed whitespace-pre-wrap">{toolModal.output}</pre>
+            <div className="flex justify-end">
+              <Button variant="secondary" size="sm" onClick={() => setToolModal(null)}>Close</Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   )

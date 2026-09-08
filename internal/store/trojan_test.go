@@ -58,7 +58,8 @@ func TestTrojanRelayCRUD(t *testing.T) {
 func TestTrojanIngressCRUD(t *testing.T) {
 	st := openTestStore(t)
 
-	ing := &TrojanIngress{Name: "ing1", ListenPort: 35001, NodePort: 10000, Enabled: true}
+	ing := &TrojanIngress{Name: "ing1", ListenIP: "0.0.0.0", ListenPort: 35001,
+		TargetHost: "127.0.0.1", TargetPort: 10000, UDP: true, Enabled: true}
 	id, err := st.CreateTrojanIngress(ing)
 	if err != nil {
 		t.Fatal(err)
@@ -67,16 +68,17 @@ func TestTrojanIngressCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ListenPort != 35001 || got.NodePort != 10000 {
+	if got.ListenPort != 35001 || got.TargetPort != 10000 || got.TargetHost != "127.0.0.1" || got.ListenIP != "0.0.0.0" || !got.UDP {
 		t.Errorf("roundtrip mismatch: %+v", got)
 	}
 	got.Enabled = false
+	got.UDP = false
 	if err := st.UpdateTrojanIngress(&got); err != nil {
 		t.Fatal(err)
 	}
 	got2, _ := st.GetTrojanIngress(id)
-	if got2.Enabled {
-		t.Error("enabled flag not persisted")
+	if got2.Enabled || got2.UDP {
+		t.Error("enabled/udp flags not persisted")
 	}
 	if err := st.DeleteTrojanIngress(id); err != nil {
 		t.Fatal(err)
@@ -98,7 +100,7 @@ func TestTrojanTablesSurviveReopen(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st1.CreateTrojanIngress(&TrojanIngress{Name: "keep-ing", ListenPort: 35000, NodePort: 10000, Enabled: true}); err != nil {
+	if _, err := st1.CreateTrojanIngress(&TrojanIngress{Name: "keep-ing", ListenIP: "0.0.0.0", ListenPort: 35000, TargetHost: "127.0.0.1", TargetPort: 10000, Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
 	st1.DB.Close()

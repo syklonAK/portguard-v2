@@ -9,6 +9,7 @@ package tunnel
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 )
 
@@ -227,9 +228,21 @@ func BuildTrojanBridgeConfig(relays []TrojanRelaySpec, defaultSocksPort int) ([]
 	return []byte(b.String()), nil
 }
 
+// TrojanIngressSpec is one foreign-side forwarder record — the hedioum-suite
+// v3 ingress shape: any target host (not just loopback), a configurable
+// listen address, and optional UDP relay.
+type TrojanIngressSpec struct {
+	Name       string
+	ListenIP   string // "" = 0.0.0.0
+	ListenPort int    // public tunnel port on the foreign node
+	TargetHost string // node inbound address (127.0.0.1 or another box)
+	TargetPort int    // node inbound port
+	UDP        bool   // also forward UDP (QUIC/Hysteria style inbounds)
+}
+
 // BuildTrojanIngressConfig renders the foreign-side ingress xray config:
-// one public dokodemo inbound per forwarder pointing at the node's local
-// inbound. Mirrors tj_ingress_apply.
+// one public dokodemo inbound per forwarder pointing at its node target —
+// mirrors hedioum-suite build_ingress_config (udp → "tcp,udp" network).
 func BuildTrojanIngressConfig(forwarders []TrojanIngressSpec) ([]byte, error) {
 	var b strings.Builder
 	b.WriteString("{\n")
@@ -241,11 +254,20 @@ func BuildTrojanIngressConfig(forwarders []TrojanIngressSpec) ([]byte, error) {
 			b.WriteString(",")
 		}
 		first = false
-		fmt.Fprintf(&b, "\n    { \"tag\": \"tjing-%s\", \"listen\": \"0.0.0.0\", \"port\": %d, "+
+		listenIP := f.ListenIP
+		if listenIP == "" {
+			listenIP = "0.0.0.0"
+		}
+		network := "tcp"
+		if f.UDP {
+			network = "tcp,udp"
+		}
+		fmt.Fprintf(&b, "\n    { \"tag\": \"ingress-%s\", \"listen\": \"%s\", \"port\": %d, "+
 			"\"protocol\": \"dokodemo-door\", "+
-			"\"settings\": { \"address\": \"127.0.0.1\", \"port\": %d, \"network\": \"tcp\", \"followRedirect\": false }, "+
+			"\"settings\": { \"address\": \"%s\", \"port\": %d, \"network\": \"%s\", \"followRedirect\": false }, "+
 			"\"sniffing\": { \"enabled\": false } }",
-			jsonEscape(f.Name), f.ListenPort, f.NodePort)
+			jsonEscape(f.Name), jsonEscape(listenIP), f.ListenPort,
+			jsonEscape(f.TargetHost), f.TargetPort, network)
 	}
 	if !first {
 		b.WriteString("\n  ")
@@ -254,16 +276,11 @@ func BuildTrojanIngressConfig(forwarders []TrojanIngressSpec) ([]byte, error) {
 	b.WriteString("  \"outbounds\": [ { \"tag\": \"direct\", \"protocol\": \"freedom\", \"settings\": {}, " +
 		"\"streamSettings\": { \"sockopt\": { \"tcpNoDelay\": true, \"tcpKeepAliveIdle\": 30 } } } ],\n")
 	b.WriteString("  \"routing\": { \"domainStrategy\": \"AsIs\", \"rules\": " +
-		"[ { \"type\": \"field\", \"network\": \"tcp\", \"outboundTag\": \"direct\" } ] }\n")
+		"[ { \"type\": \"field\", \"network\": \"tcp,udp\", \"outboundTag\": \"direct\" } ] },\n")
+	b.WriteString("  \"policy\": { \"levels\": { \"0\": { \"handshake\": 8, \"connIdle\": 300, \"uplinkOnly\": 2, \"downlinkOnly\": 5 } }, " +
+		"\"system\": { \"statsInboundUplink\": false, \"statsInboundDownlink\": false } }\n")
 	b.WriteString("}\n")
 	return []byte(b.String()), nil
-}
-
-// TrojanIngressSpec is one foreign-side forwarder record.
-type TrojanIngressSpec struct {
-	Name       string
-	ListenPort int // public tunnel port on the foreign node
-	NodePort   int // node inbound port on 127.0.0.1
 }
 
 // TrojanBridgeUnitBody renders the systemd unit for the trojan bridge.
@@ -312,7 +329,53 @@ WantedBy=multi-user.target
 `, xrayBin, confPath)
 }
 
-// --- small helpers ---
+// ProbeThroughTunnel checks whether host:port answers THROUGH the local
+// SOCKS hub — the relay_verify end-to-end check (curl exit codes 0/35/52/56/60
+// all mean "the far side answered": 35=TLS handshake, 52=empty reply,
+// 56=recv failure after connect, 60=cert verify — the port is alive either way).
+func ProbeThroughTunnel(socksHost string, socksPort int, host string, port int) bool {
+	if _, err := exec.LookPath("curl"); err != nil {
+		return false
+	}
+	proxy := fmt.Sprintf("%s:%d", socksHost, socksPort)
+	url := fmt.Sprintf("https://%s:%d/", host, port)
+	_, err := exec.Command("curl", "-s", "-o", "/dev/null", "--max-time", "10", "-k",
+		"--socks5-hostname", proxy, url).Output()
+	code := exitCode(err)
+	switch code {
+	case 0, 35, 52, 56, 60:
+		return true
+	}
+	url = fmt.Sprintf("http://%s:%d/", host, port)
+	_, err = exec.Command("curl", "-s", "-o", "/dev/null", "--max-time", "10",
+		"--socks5-hostname", proxy, url).Output()
+	code = exitCode(err)
+	return code == 0 || code == 52 || code == 56
+}
+
+// exitCode maps an exec error to the process exit status (0 when nil).
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if ee, ok := err.(*exec.ExitError); ok {
+		return ee.ExitCode()
+	}
+	return -1
+}
+
+// RelayVerifyReport is the end-to-end verdict for one relay.
+type RelayVerifyReport struct {
+	Name         string `json:"name"`
+	ListenUp     bool   `json:"listen_up"`
+	HTTPSPortUp  bool   `json:"https_port_up,omitempty"`
+	BridgeUp     bool   `json:"bridge_up,omitempty"`
+	CertDaysLeft *int   `json:"cert_days_left,omitempty"`
+	HubAlive     bool   `json:"hub_alive"`
+	TargetOK     bool   `json:"target_ok"`
+	TargetProbe  string `json:"target_probe"` // "through the tunnel" | "direct"
+	Note         string `json:"note,omitempty"`
+}
 
 func sortInts(v []int) {
 	for i := 1; i < len(v); i++ {

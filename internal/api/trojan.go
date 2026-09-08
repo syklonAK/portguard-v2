@@ -6,12 +6,15 @@ package api
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -335,11 +338,27 @@ func (a *App) validTrojanIngress(ing *store.TrojanIngress) error {
 	if !tunnel.IsValidTrojanName(ing.Name) {
 		return errString("name must be 1-64 chars of [A-Za-z0-9_-]")
 	}
+	if strings.TrimSpace(ing.ListenIP) == "" {
+		ing.ListenIP = "0.0.0.0"
+	}
+	if net.ParseIP(ing.ListenIP) == nil {
+		return errString("listen_ip must be a valid IP address (0.0.0.0 = all)")
+	}
 	if ing.ListenPort < 1 || ing.ListenPort > 65535 {
 		return errString("listen_port must be 1-65535")
 	}
-	if ing.NodePort < 1 || ing.NodePort > 65535 {
-		return errString("node_port must be 1-65535")
+	if strings.TrimSpace(ing.TargetHost) == "" {
+		return errString("target_host is required (the node inbound address)")
+	}
+	if len(ing.TargetHost) > 255 || strings.ContainsAny(ing.TargetHost, " 	;{}") {
+		return errString("invalid target_host")
+	}
+	if ing.TargetPort < 1 || ing.TargetPort > 65535 {
+		return errString("target_port must be 1-65535")
+	}
+	// loop guard: a same-host identical-port forwarder loops forever
+	if (ing.TargetHost == "127.0.0.1" || ing.TargetHost == "localhost") && ing.TargetPort == ing.ListenPort {
+		return errString("listen_port and target_port are identical on the same host — that is a loop")
 	}
 	return nil
 }
@@ -351,8 +370,11 @@ func (a *App) handleCreateTrojanIngress(w http.ResponseWriter, r *http.Request) 
 	}
 	// default to enabled when the body omits the flag (same as relays)
 	ing.Enabled = true
-	if ing.NodePort == 0 {
-		ing.NodePort = tunnel.NodeIngressPortDefault
+	if ing.TargetPort == 0 {
+		ing.TargetPort = tunnel.NodeIngressPortDefault
+	}
+	if strings.TrimSpace(ing.TargetHost) == "" {
+		ing.TargetHost = "127.0.0.1"
 	}
 	if err := a.validTrojanIngress(&ing); err != nil {
 		errJSON(w, err, http.StatusUnprocessableEntity)
@@ -441,7 +463,10 @@ func (a *App) handleTrojanIngressApply(w http.ResponseWriter, r *http.Request) {
 		if !ing.Enabled {
 			continue
 		}
-		specs = append(specs, tunnel.TrojanIngressSpec{Name: ing.Name, ListenPort: ing.ListenPort, NodePort: ing.NodePort})
+		specs = append(specs, tunnel.TrojanIngressSpec{
+			Name: ing.Name, ListenIP: ing.ListenIP, ListenPort: ing.ListenPort,
+			TargetHost: ing.TargetHost, TargetPort: ing.TargetPort, UDP: ing.UDP,
+		})
 	}
 	cfg, err := tunnel.BuildTrojanIngressConfig(specs)
 	if err != nil {
@@ -667,4 +692,173 @@ func trimAudit(s string) string {
 		s = s[:200] + "…"
 	}
 	return s
+}
+
+// ---- hedioum-suite v3 extras: relay end-to-end verify, node hygiene, ----
+// ---- hedioum tools (probe/speedtest/check-ip), purge                  ----
+
+// tcpPortUp probes a TCP port with a 3s deadline.
+func tcpPortUp(host string, port int) bool {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), 3*time.Second)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+// handleTrojanRelayVerify runs the relay_verify end-to-end check: local
+// listeners up, SOCKS hub reachable, and the foreign target answering
+// THROUGH the tunnel (falls back to a direct TCP probe when the hub is down).
+func (a *App) handleTrojanRelayVerify(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	rel, err := a.St.GetTrojanRelay(id)
+	if err != nil {
+		errJSON(w, err, http.StatusNotFound)
+		return
+	}
+	host, port := a.tunnelSOCKS()
+	rep := tunnel.RelayVerifyReport{Name: rel.Name}
+	// local listeners: raw mode serves listen_port, tls mode https_port (+bridge)
+	if rel.HTTPSPort >= 1 {
+		rep.HTTPSPortUp = tcpPortUp("127.0.0.1", rel.HTTPSPort) || tcpPortUp("0.0.0.0", rel.HTTPSPort)
+	}
+	rep.BridgeUp = tcpPortUp("127.0.0.1", rel.BridgePort)
+	rep.ListenUp = rep.BridgeUp && (rel.HTTPSPort < 1 || rep.HTTPSPortUp)
+	rep.HubAlive = tunnel.HubAlive(host, port)
+	if rep.HubAlive {
+		rep.TargetProbe = "through the tunnel"
+		rep.TargetOK = tunnel.ProbeThroughTunnel(host, port, rel.ForeignIP, rel.ForeignPort)
+	} else {
+		rep.TargetProbe = "direct (hub down — cannot prove the tunnel path)"
+		rep.TargetOK = tcpPortUp(rel.ForeignIP, rel.ForeignPort)
+	}
+	switch {
+	case !rep.HubAlive:
+		rep.Note = "the SOCKS5 hub is not answering — verify the hedioum service first"
+	case rep.TargetOK && rep.ListenUp:
+		rep.Note = "end-to-end path is up"
+	case rep.TargetOK:
+		rep.Note = "the foreign side answers through the tunnel, but the local listeners are down — apply the bridge"
+	case rep.ListenUp:
+		rep.Note = "local listeners are up but the target does not answer through the tunnel — check the foreign node / ingress"
+	default:
+		rep.Note = "neither the local listeners nor the target answered — apply the bridge and check the foreign node"
+	}
+	a.St.Audit(actorFrom(r.Context()), "trojan.relay.verify", "relay "+rel.Name+": target_ok="+strconv.FormatBool(rep.TargetOK), "ok")
+	writeJSON(w, http.StatusOK, rep)
+}
+
+// reHedArg validates free-text hedioum tool arguments (node alias, mimic, dir).
+var reHedArg = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+func (a *App) handleHedioumProbe(w http.ResponseWriter, r *http.Request) {
+	alias := strings.TrimSpace(r.URL.Query().Get("node"))
+	if !reHedArg.MatchString(alias) {
+		errJSON(w, errString("node alias must be 1-64 chars of [A-Za-z0-9_-]"), http.StatusUnprocessableEntity)
+		return
+	}
+	out, err := tunnel.HedProbe(alias)
+	a.hedioumToolResponse(w, r, "probe "+alias, out, err)
+}
+
+func (a *App) handleHedioumSpeedtest(w http.ResponseWriter, r *http.Request) {
+	alias := strings.TrimSpace(r.URL.Query().Get("node"))
+	if !reHedArg.MatchString(alias) {
+		errJSON(w, errString("node alias must be 1-64 chars of [A-Za-z0-9_-]"), http.StatusUnprocessableEntity)
+		return
+	}
+	mimic := strings.TrimSpace(r.URL.Query().Get("mimic"))
+	dir := strings.TrimSpace(r.URL.Query().Get("dir"))
+	if mimic != "" && !reHedArg.MatchString(mimic) {
+		errJSON(w, errString("invalid mimic"), http.StatusUnprocessableEntity)
+		return
+	}
+	if dir != "" && dir != "down" && dir != "up" && dir != "both" {
+		errJSON(w, errString("dir must be down, up or both"), http.StatusUnprocessableEntity)
+		return
+	}
+	out, err := tunnel.HedSpeedtest(alias, mimic, dir)
+	a.hedioumToolResponse(w, r, "speedtest "+alias, out, err)
+}
+
+func (a *App) handleHedioumCheckIP(w http.ResponseWriter, r *http.Request) {
+	out, err := tunnel.HedCheckIP()
+	a.hedioumToolResponse(w, r, "check-ip", out, err)
+}
+
+func (a *App) hedioumToolResponse(w http.ResponseWriter, r *http.Request, what, out string, err error) {
+	if err != nil {
+		a.St.Audit(actorFrom(r.Context()), "hedioum.tools", trimAudit(what+": "+err.Error()), "error")
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "output": out, "error": err.Error()})
+		return
+	}
+	a.St.Audit(actorFrom(r.Context()), "hedioum.tools", what, "ok")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "output": out})
+}
+
+// handleNodeHygiene is the foreign-side node check: panel service discovery,
+// xray listeners, public bind, mimic clashes/port overlaps and fail2ban —
+// each with the same advice the hedioum-suite report prints.
+func (a *App) handleNodeHygiene(w http.ResponseWriter, r *http.Request) {
+	ns := tunnel.DetectNodeService()
+	clashes := tunnel.MimicClashes()
+	overlap := tunnel.NodeMimicOverlap(ns)
+	fail2ban := exec.Command("systemctl", "is-active", "--quiet", "fail2ban").Run() == nil
+
+	var advice []string
+	if ns.LoopbackOnly && len(ns.XrayPorts) > 0 {
+		advice = append(advice,
+			"every xray inbound is bound to 127.0.0.1 and the egress refuses loopback targets — "+
+				"rebind the node TLS front to 0.0.0.0 on a free non-mimic port, or add a tunnel ingress forwarder")
+	}
+	if len(overlap) > 0 {
+		advice = append(advice, fmt.Sprintf(
+			"node port(s) %v sit on Hedioum mimic ports — the mimic owns them on every address including loopback, "+
+				"move those inbounds in the panel first (a forwarder cannot fix this)", overlap))
+	}
+	if len(clashes) > 0 {
+		var c []string
+		for _, m := range clashes {
+			c = append(c, fmt.Sprintf("%d (%s)", m.Port, m.Owner))
+		}
+		advice = append(advice, "non-Hedioum services hold mimic ports: "+strings.Join(c, ", "))
+	}
+	if fail2ban {
+		advice = append(advice, "fail2ban is active — whitelist the Hedioum egress address or it may ban the tunnel IP")
+	}
+	if ns.Kind == "" && len(ns.XrayPorts) == 0 {
+		advice = append(advice, "no PasarGuard/marzban node detected on this box (fine when the node lives elsewhere)")
+	}
+	a.St.Audit(actorFrom(r.Context()), "node.hygiene",
+		fmt.Sprintf("kind=%s xray=%d clashes=%d overlap=%v fail2ban=%v", ns.Kind, len(ns.XrayPorts), len(clashes), overlap, fail2ban), "ok")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"node": ns, "clashes": clashes, "overlap": overlap, "fail2ban": fail2ban, "advice": advice,
+	})
+}
+
+// handleTrojanPurge removes every trojan relay + ingress from the DB and
+// wipes the suite's units/configs from this box — KEEPING hedioum itself,
+// nginx and the node (purge_suite contract).
+func (a *App) handleTrojanPurge(w http.ResponseWriter, r *http.Request) {
+	relays, _ := a.St.ListTrojanRelays()
+	ings, _ := a.St.ListTrojanIngresses()
+	for _, rel := range relays {
+		_ = a.St.DeleteTrojanRelay(rel.ID)
+	}
+	for _, ing := range ings {
+		_ = a.St.DeleteTrojanIngress(ing.ID)
+	}
+	removed, err := tunnel.PurgeTrojanSuite()
+	if err != nil {
+		a.St.Audit(actorFrom(r.Context()), "trojan.purge", trimAudit(err.Error()), "error")
+		errJSON(w, errString("purge failed: "+err.Error()), http.StatusInternalServerError)
+		return
+	}
+	rep := tunnel.PurgeReport(removed)
+	a.St.Audit(actorFrom(r.Context()), "trojan.purge",
+		fmt.Sprintf("purged %d relays, %d ingresses, %d files/units", len(relays), len(ings), len(removed)), "ok")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "relays_removed": len(relays), "ingresses_removed": len(ings), "result": rep,
+	})
 }
