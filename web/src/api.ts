@@ -453,7 +453,7 @@ export const api = {
   pingTunnelInstall: () => req<{ ok: boolean }>('POST', '/api/tunnels/pingtunnel/install'),
   pingTunnelCreate: (body: { side: 'iran' | 'foreign'; port?: number; foreign_ip?: string; target_port?: number }) =>
     req<{ ok: boolean; unit: string }>('POST', '/api/tunnels/pingtunnel', body),
-  pingTunnelDelete: (unit: string) => req<{ ok: boolean }>('DELETE', `/api/tunnels/pingtunnel/${unit}`),
+  pingTunnelDelete: (unit: string) => req<{ ok: boolean }>('DELETE', `/api/tunnels/pingtunnel/${encodeURIComponent(unit)}`),
   pingTunnelCoreRemove: () => req<{ ok: boolean }>('POST', '/api/tunnels/pingtunnel/core-remove'),
 
   // v2.13: Trojan L4 relays (hedioum-allinone suite)

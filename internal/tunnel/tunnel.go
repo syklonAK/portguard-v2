@@ -54,8 +54,12 @@ func Detect() Status {
 			break
 		}
 	}
-	if out, err := exec.Command("hedioum-tunnel", "--version").Output(); err == nil {
-		st.HedioumVersion = strings.TrimSpace(string(out))
+	if st.HedioumInstalled {
+		// upstream has NO --version flag — `hedioum-tunnel version` is the
+		// supported form (cli.go subcommand)
+		if out, err := exec.Command(st.HedioumBinary, "version").CombinedOutput(); err == nil {
+			st.HedioumVersion = strings.TrimSpace(string(out))
+		}
 	}
 	if out, err := exec.Command("systemctl", "is-active", "hedioum").Output(); err == nil {
 		st.HedioumActive = strings.TrimSpace(string(out))

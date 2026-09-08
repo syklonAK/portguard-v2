@@ -283,7 +283,7 @@ export default function Tunnels() {
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="sm" onClick={() => { setDraft(JSON.parse(JSON.stringify(r))); setModal('edit') }}><Pencil className="h-3.5 w-3.5" /></Button>
-                          <Button variant="ghost" size="sm" className="text-red-500" onClick={() => del.mutate(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { if (confirm(`Delete relay "${r.name}"? Apply the bridge afterwards to update listeners.`)) del.mutate(r.id) }}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
                       </td>
                     </tr>
@@ -365,7 +365,7 @@ export default function Tunnels() {
                       </td>
                       <td className="px-3 py-2.5"><StateBadge state={u.active} /></td>
                       <td className="px-4 py-2.5 text-right">
-                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => ptDelete(u.unit)}>
+                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { if (confirm(`Delete ICMP tunnel "${u.unit}"?`)) ptDelete(u.unit) }}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </td>

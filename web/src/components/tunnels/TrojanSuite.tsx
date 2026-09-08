@@ -250,6 +250,10 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
         ? { exit_ip: res.exit_ip, persona: res.persona, endpoints: res.endpoints, is_v2: true }
         : { is_v2: false })
       push(res.ok ? 'success' : 'warning', res.ok ? 'Egress configured — pairing token captured below.' : 'setup-foreign reported problems.')
+      if (!res.ok && res.output) {
+        // surface the upstream output — the actual reason lives in there
+        setToolModal({ title: 'setup-foreign (failed)', output: res.output, ok: false })
+      }
       qc.invalidateQueries({ queryKey: ['tunnel-status'] })
       qc.invalidateQueries({ queryKey: ['hedioum-egress'] })
     },
@@ -261,6 +265,10 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
       push(res.ok ? 'success' : 'error', res.ok
         ? `Hub configured — SOCKS ${res.socks}${res.egress_ip ? `, exit IP ${res.egress_ip}` : ''}.`
         : 'setup-iran failed (check the token).')
+      if (!res.ok && res.output) {
+        // surface the upstream output — the actual reason lives in there
+        setToolModal({ title: 'setup-iran (failed)', output: res.output, ok: false })
+      }
       setWizard(null)
       qc.invalidateQueries({ queryKey: ['tunnel-status'] })
       qc.invalidateQueries({ queryKey: ['hedioum-egress'] })
@@ -349,7 +357,7 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
                         <Button variant="ghost" size="sm" onClick={() => { setRelayDraft(JSON.parse(JSON.stringify(r))); setRelayModal('edit') }}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => delRelay(r.id)}>
+                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { if (confirm(`Delete trojan relay "${r.name}"?`)) delRelay(r.id) }}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -393,7 +401,7 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
                     <Toggle checked={i.enabled} onChange={() => api.updateTrojanIngress(i.id, { ...i, enabled: !i.enabled })
                       .then(() => qc.invalidateQueries({ queryKey: ['trojan-ingresses'] }))
                       .catch((e: any) => push('error', e.message))} />
-                    <Button variant="ghost" size="sm" className="text-red-500" onClick={() => delIngress(i.id)}>
+                    <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { if (confirm(`Delete forwarder "${i.name}"?`)) delIngress(i.id) }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>

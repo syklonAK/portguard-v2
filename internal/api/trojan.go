@@ -537,7 +537,9 @@ func (a *App) handleHedioumSetupForeign(w http.ResponseWriter, r *http.Request) 
 	token, isV2, decoded, output, err := tunnel.SetupForeign(cfg)
 	if err != nil {
 		a.St.Audit(actorFrom(r.Context()), "hedioum.setup-foreign", trimAudit(err.Error()), "error")
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+		// 200 with ok:false (not 422): the frontend must be able to show the
+		// full upstream output — the reason a wizard failed is in there
+		writeJSON(w, http.StatusOK, map[string]any{
 			"ok": false, "error": err.Error(), "token": token, "output": output,
 		})
 		return
@@ -577,7 +579,9 @@ func (a *App) handleHedioumSetupIran(w http.ResponseWriter, r *http.Request) {
 	output, err := tunnel.SetupIran(tunnel.SetupIranConfig{Alias: body.Alias, Token: body.Token, SocksPort: port, Force: body.Force})
 	if err != nil {
 		a.St.Audit(actorFrom(r.Context()), "hedioum.setup-iran", trimAudit(err.Error()), "error")
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"ok": false, "error": err.Error(), "output": output})
+		// 200 with ok:false (not 422): the frontend must be able to show the
+		// full upstream output — the reason the hub setup failed is in there
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error(), "output": output})
 		return
 	}
 	egress := tunnel.EgressIP(host, port)
