@@ -37,7 +37,7 @@ export default function Bandwidth() {
     return () => clearTimeout(t)
   }, [search])
   const users = useQuery({
-    queryKey: ['pg-users', page, pageSize, debounced, status],
+    queryKey: ['pg-users', page, pageSize, debounced, stateFilter],
     queryFn: () =>
       api.listPasarguardUsersPaged({ limit: pageSize, offset: page * pageSize, search: debounced, status: stateFilter }),
     placeholderData: (prev) => prev,
@@ -137,6 +137,10 @@ export default function Bandwidth() {
     const ul = userDraft.custom ? parseBpsInput(userDraft.ul || '0') : undefined
     if (dl !== undefined && dl < 0) {
       push('error', 'Invalid download value.')
+      return
+    }
+    if (ul !== undefined && ul < 0) {
+      push('error', 'Invalid upload value.')
       return
     }
     setSaving(true)

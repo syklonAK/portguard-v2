@@ -391,7 +391,7 @@ export default function Servers() {
                   <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
                     n.role === 'iran' ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-300'
                     : n.role === 'foreign' ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300'
-                    : 'bg-mutedslate text-muted-foreground dark:bg-mutedslate0/15'}`}>
+                    : 'bg-mutedslate text-muted-foreground'}`}>
                     {n.role === 'iran' ? <RadioTower className="h-5 w-5" /> :
                      n.role === 'foreign' ? <Globe2 className="h-5 w-5" /> :
                      <Server className="h-5 w-5" />}
@@ -457,7 +457,7 @@ export default function Servers() {
                 <Button variant="ghost" size="sm" onClick={() => { setDraft(JSON.parse(JSON.stringify(n))); setTokenDraft(''); setModal('edit') }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="sm" className="text-red-500" onClick={() => del.mutate(n.id)}>
+                <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { if (confirm(`Remove server "${n.name}" from management?`)) del.mutate(n.id) }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>

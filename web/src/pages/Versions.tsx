@@ -127,9 +127,10 @@ export default function Versions() {
             )}
             {(diffModal.lines ?? []).map((line, i) => (
               <div key={i} className={
-                line.startsWith('+') ? 'text-emerald-400' :
-                line.startsWith('-') ? 'text-red-400' :
-                'text-amber-400'
+                line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' :
+                line.startsWith('-') && !line.startsWith('---') ? 'text-red-400' :
+                line.startsWith('@@') ? 'text-sky-400' :
+                'text-muted-foreground'
               }>{line}</div>
             ))}
           </div>

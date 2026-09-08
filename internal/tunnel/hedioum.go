@@ -213,10 +213,6 @@ type SetupIranConfig struct {
 // instead of upstream's generic "provide a v2 pairing token". Guard: refused
 // on a foreign-configured box unless Force is set.
 func SetupIran(cfg SetupIranConfig) (output string, err error) {
-	bin := HedBinary()
-	if bin == "" {
-		return "", fmt.Errorf("hedioum-tunnel is not installed — install it from the Tools page first")
-	}
 	cfg.Token = strings.TrimSpace(cfg.Token)
 	if cfg.Token == "" {
 		return "", fmt.Errorf("pairing token is required")
@@ -226,6 +222,10 @@ func SetupIran(cfg SetupIranConfig) (output string, err error) {
 	} else if !isV2 {
 		return "", fmt.Errorf("this looks like a legacy raw 32-hex key, not the v2 pairing token — "+
 			"re-run setup-foreign on the foreign node and paste the long base64 token (or decode it with --target-ip manually)")
+	}
+	bin := HedBinary()
+	if bin == "" {
+		return "", fmt.Errorf("hedioum-tunnel is not installed — install it from the Tools page first")
 	}
 	if cfg.Alias == "" {
 		cfg.Alias = "relay01"

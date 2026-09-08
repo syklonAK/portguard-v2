@@ -21,8 +21,8 @@ function DiffView({ diffs }: { diffs: BackupDiffT[] }) {
             <pre className="max-h-64 overflow-auto rounded-lg bg-popover p-3 font-mono text-2xs leading-relaxed">
               {d.diff.split('\n').map((line, j) => (
                 <div key={j} className={
-                  line.startsWith('+') ? 'text-emerald-400' :
-                  line.startsWith('-') ? 'text-red-400' :
+                  line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' :
+                  line.startsWith('-') && !line.startsWith('---') ? 'text-red-400' :
                   line.startsWith('@@') ? 'text-sky-400' : 'text-muted-foreground'
                 }>{line}</div>
               ))}
