@@ -19,7 +19,14 @@ die() { echo -e "\033[1;31m[update:ERROR]\033[0m $*" >&2; exit 1; }
 
 [ "$(id -u)" = "0" ] || die "run as root (sudo)"
 [ -d "${APP_DIR}/.git" ] || die "${APP_DIR} is not a git checkout — reinstall with remote-install.sh"
-command -v go >/dev/null 2>&1 || die "go toolchain not found — install Go or rerun install.sh"
+command -v go >/dev/null 2>&1 || {
+  say "go toolchain not found — installing via multi-mirror installer…"
+  GO_VERSION="${GO_VERSION:-1.24.5}"
+  # shellcheck source=ensure_go.sh
+  source "${APP_DIR}/deploy/ensure_go.sh"
+  GOARCH="$(dpkg --print-architecture)"
+  ensure_go || die "go toolchain could not be installed — see guidance above"
+}
 
 cd "${APP_DIR}"
 
@@ -36,6 +43,8 @@ fi
 
 say "building (CGO_ENABLED=0, frontend embedded)…"
 export CGO_ENABLED=0
+# module proxy fallback chain for filtered networks (Iran/CN)
+export GOPROXY="${GOPROXY:-https://proxy.golang.org,https://goproxy.cn,https://goproxy.io,direct}"
 go mod tidy >/dev/null 2>&1 || true
 go build -trimpath -ldflags "-s -w" -o "${BIN}.new" ./cmd/server || die "build failed — keeping the running binary"
 

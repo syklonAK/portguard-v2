@@ -15,6 +15,9 @@ APP_DIR="/opt/portguard"
 DATA_DIR="/var/lib/portguard"
 PANEL_PORT="${PORTGUARD_PORT:-8080}"
 GO_VERSION="${GO_VERSION:-1.24.5}"
+# module proxy fallback chain for filtered networks (Iran/CN):
+# default proxy → goproxy.cn → direct. Override with GOPROXY=... if needed.
+export GOPROXY="${GOPROXY:-https://proxy.golang.org,https://goproxy.cn,https://goproxy.io,direct}"
 
 log()  { echo -e "\033[1;34m[PortGuard]\033[0m $*"; }
 fail() { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }
@@ -36,19 +39,12 @@ rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 cd "$APP_DIR"
 
 # ---- build (Go is installed only when missing) ----
-if ! command -v go >/dev/null 2>&1; then
-  log "installing Go ${GO_VERSION}…"
-  ARCH="$(dpkg --print-architecture)"
-  case "$ARCH" in amd64) GOARCH=amd64 ;; arm64) GOARCH=arm64 ;; *) fail "unsupported arch $ARCH" ;; esac
-  curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz" -o /tmp/go.tgz
-  rm -rf /usr/local/go
-  tar -C /usr/local -xzf /tmp/go.tgz
-  ln -sf /usr/local/go/bin/go /usr/local/bin/go
-  ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
-  rm -f /tmp/go.tgz
-else
-  log "Go already installed: $(go version)"
-fi
+# source the resilient multi-mirror installer (dl.google → go.dev → aliyun →
+# golang.google.cn → TUNA → USTC → apt → snap) so hosts behind filtering
+# (Iran/CN) still get a toolchain
+source "$(dirname "$0")/ensure_go.sh"
+GOARCH="$(dpkg --print-architecture)"
+ensure_go || fail "Go toolchain could not be installed — see guidance above"
 
 log "building PortGuard…"
 export CGO_ENABLED=0
