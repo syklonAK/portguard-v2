@@ -59,7 +59,12 @@ github_go_urls() {
 # a working go binary we can exec?
 go_works() {
   local g="$1"
-  command -v "$g" >/dev/null 2>&1 && "$g" version >/dev/null 2>&1
+  # works for bare names AND absolute paths (the dir may not be on PATH)
+  if [[ "$g" == */* ]]; then
+    [ -x "$g" ] && "$g" version >/dev/null 2>&1
+  else
+    command -v "$g" >/dev/null 2>&1 && "$g" version >/dev/null 2>&1
+  fi
 }
 
 # verify the downloaded tarball is really a gzip archive (error pages lie)
@@ -73,18 +78,33 @@ mirror_reachable() {
 }
 
 install_go_tarball() {
-  local url="$1" tries=0
+  local url="$1" tries=0 stage root
   log "trying Go download: $url"
   rm -f /tmp/go.tgz
   while [ $tries -lt 2 ]; do
     if curl -fSL --connect-timeout 12 --max-time 420 --retry 2 --retry-delay 2 \
          -o /tmp/go.tgz "$url" 2>>"$GO_DL_LOG" && tarball_ok /tmp/go.tgz; then
-      rm -rf /usr/local/go
-      if tar -C /usr/local -xzf /tmp/go.tgz 2>>"$GO_DL_LOG"; then
+      stage="$(mktemp -d)"
+      if tar -C "$stage" -xzf /tmp/go.tgz 2>>"$GO_DL_LOG"; then
+        # layouts differ: official tarballs nest under go/, the GitHub
+        # actions/go-versions asset nests under ./ — find the root that
+        # actually contains bin/go
+        if [ -x "$stage/go/bin/go" ]; then
+          root="$stage/go"
+        elif [ -x "$stage/bin/go" ]; then
+          root="$stage"
+        else
+          log "tarball layout unrecognized — skipping this mirror"
+          rm -rf "$stage"; tries=$((tries+1)); sleep 2; continue
+        fi
+        rm -rf /usr/local/go
+        mv "$root" /usr/local/go
         ln -sf /usr/local/go/bin/go /usr/local/bin/go
         ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
-        rm -f /tmp/go.tgz
-        go_works /usr/local/bin/go && return 0
+        rm -rf "$stage" /tmp/go.tgz
+        if go_works /usr/local/bin/go; then return 0; fi
+      else
+        rm -rf "$stage"
       fi
     fi
     tries=$((tries+1))
@@ -140,7 +160,7 @@ ensure_go() {
   while read -r url; do
     [ -z "$url" ] && continue
     if mirror_reachable "$url" && install_go_tarball "$url"; then
-      log "Go installed from $url: $(go version)"
+      log "Go installed from $url: $(/usr/local/go/bin/go version 2>/dev/null || go version)"
       return 0
     fi
   done < <(go_mirror_urls)
