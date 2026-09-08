@@ -27,10 +27,11 @@ pick_goproxy() {
   echo "direct"
 }
 export GOPROXY="${GOPROXY:-$(pick_goproxy)}"
-log "GOPROXY=${GOPROXY}"
 
 log()  { echo -e "\033[1;34m[PortGuard]\033[0m $*"; }
 fail() { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }
+
+log "GOPROXY=${GOPROXY}"
 
 [ "$(id -u)" = "0" ] || fail "run as root (sudo bash install.sh)"
 
