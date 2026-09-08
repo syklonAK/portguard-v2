@@ -15,9 +15,19 @@ APP_DIR="/opt/portguard"
 DATA_DIR="/var/lib/portguard"
 PANEL_PORT="${PORTGUARD_PORT:-8080}"
 GO_VERSION="${GO_VERSION:-1.24.5}"
-# module proxy fallback chain for filtered networks (Iran/CN):
-# default proxy → goproxy.cn → direct. Override with GOPROXY=... if needed.
-export GOPROXY="${GOPROXY:-https://proxy.golang.org,https://goproxy.cn,https://goproxy.io,direct}"
+# module proxy: probe candidates and pin the first that answers, because
+# go does NOT fall back on HTTP errors (a 403 from proxy.golang.org aborts
+# the whole build). Override freely with GOPROXY=... .
+pick_goproxy() {
+  for p in https://proxy.golang.org https://goproxy.cn https://goproxy.io; do
+    code="$(curl -s -o /dev/null --connect-timeout 5 --max-time 10 \
+      -w '%{http_code}' "$p/modernc.org/sqlite/@v/list" 2>/dev/null)"
+    case "$code" in 2*) echo "$p,direct"; return ;; esac
+  done
+  echo "direct"
+}
+export GOPROXY="${GOPROXY:-$(pick_goproxy)}"
+log "GOPROXY=${GOPROXY}"
 
 log()  { echo -e "\033[1;34m[PortGuard]\033[0m $*"; }
 fail() { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }

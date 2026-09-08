@@ -28,11 +28,32 @@ go_mirror_urls() {
   cat <<EOF
 https://dl.google.com/go/${GO_TARBALL_PREFIX}.tar.gz
 https://go.dev/dl/${GO_TARBALL_PREFIX}.tar.gz
+EOF
+  github_go_urls
+  cat <<EOF
 https://mirrors.aliyun.com/golang/${GO_TARBALL_PREFIX}.tar.gz
 https://golang.google.cn/dl/${GO_TARBALL_PREFIX}.tar.gz
 https://mirrors.tuna.tsinghua.edu.cn/golang/${GO_TARBALL_PREFIX}.tar.gz
 https://mirrors.ustc.edu.cn/golang/${GO_TARBALL_PREFIX}.tar.gz
 EOF
+}
+
+# resolve GitHub-hosted Go tarballs for this version. actions/go-versions
+# pins the full run tag (e.g. 1.24.5-16210585985) and names its asset
+# go-<ver>-linux-x64; golang/go release assets use the canonical name.
+github_go_urls() {
+  local ver  # GO_TARBALL_PREFIX = go1.24.5.linux-amd64
+  ver="$(echo "${GO_TARBALL_PREFIX}" | sed -E 's/^go([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/')"
+  local gharch="${GOARCH}"; [ "$gharch" = "amd64" ] && gharch="x64"
+  local tag
+  tag="$(curl -fsSL --connect-timeout 8 --max-time 20 \
+      "https://api.github.com/repos/actions/go-versions/releases?per_page=100" 2>/dev/null \
+      | grep -o "\"tag_name\": \"${ver}[^\"]*\"" 2>/dev/null | head -1 \
+      | sed -E 's/.*"(1\.[0-9]+\.[0-9]+[^"]*)"/\1/')" 
+  if [ -n "$tag" ]; then
+    echo "https://github.com/actions/go-versions/releases/download/${tag}/go-${ver}-linux-${gharch}.tar.gz"
+  fi
+  echo "https://github.com/golang/go/releases/download/go${ver}/go${ver}.linux-${GOARCH}.tar.gz"
 }
 
 # a working go binary we can exec?

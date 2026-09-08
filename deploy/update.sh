@@ -43,8 +43,19 @@ fi
 
 say "building (CGO_ENABLED=0, frontend embedded)…"
 export CGO_ENABLED=0
-# module proxy fallback chain for filtered networks (Iran/CN)
-export GOPROXY="${GOPROXY:-https://proxy.golang.org,https://goproxy.cn,https://goproxy.io,direct}"
+# module proxy: probe candidates and pin the first that answers, because
+# go does NOT fall back on HTTP errors (a 403 from proxy.golang.org aborts
+# the whole build). Override freely with GOPROXY=... .
+pick_goproxy() {
+  for p in https://proxy.golang.org https://goproxy.cn https://goproxy.io; do
+    code="$(curl -s -o /dev/null --connect-timeout 5 --max-time 10 \
+      -w '%{http_code}' "$p/modernc.org/sqlite/@v/list" 2>/dev/null)"
+    case "$code" in 2*) echo "$p,direct"; return ;; esac
+  done
+  echo "direct"
+}
+export GOPROXY="${GOPROXY:-$(pick_goproxy)}"
+log "GOPROXY=${GOPROXY}"
 go mod tidy >/dev/null 2>&1 || true
 go build -trimpath -ldflags "-s -w" -o "${BIN}.new" ./cmd/server || die "build failed — keeping the running binary"
 
