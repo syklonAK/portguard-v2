@@ -836,6 +836,18 @@ func (a *App) handleNodeHygiene(w http.ResponseWriter, r *http.Request) {
 	}
 	a.St.Audit(actorFrom(r.Context()), "node.hygiene",
 		fmt.Sprintf("kind=%s xray=%d clashes=%d overlap=%v fail2ban=%v", ns.Kind, len(ns.XrayPorts), len(clashes), overlap, fail2ban), "ok")
+	// nil Go slices marshal to JSON null — the frontend does
+	// clashes.length / overlap.length / advice.map directly, so always
+	// emit real arrays (a null here crashed the whole Tunnels page)
+	if clashes == nil {
+		clashes = []tunnel.MimicClash{}
+	}
+	if overlap == nil {
+		overlap = []int{}
+	}
+	if advice == nil {
+		advice = []string{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"node": ns, "clashes": clashes, "overlap": overlap, "fail2ban": fail2ban, "advice": advice,
 	})

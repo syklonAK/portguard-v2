@@ -738,16 +738,16 @@ export default function TrojanSuite({ status }: { status?: TunnelStatus }) {
                     missing="loopback-only — the egress cannot dial it (add a forwarder or rebind)"
                   />
                 )}
-                {!!hygiene.data.node.xray_ports?.length && (
+                {(hygiene.data.node.xray_ports ?? []).length > 0 && (
                   <div className="rounded-lg border border-border px-3 py-2 text-2xs text-muted-foreground">
-                    xray ports: <span className="font-mono">{hygiene.data.node.xray_ports.join(', ')}</span>
-                    {!!hygiene.data.node.rpc_ports?.length && <> · panel RPC: <span className="font-mono">{hygiene.data.node.rpc_ports.join(', ')}</span></>}
+                    xray ports: <span className="font-mono">{(hygiene.data.node.xray_ports ?? []).join(', ')}</span>
+                    {!!(hygiene.data.node.rpc_ports ?? []).length && <> · panel RPC: <span className="font-mono">{(hygiene.data.node.rpc_ports ?? []).join(', ')}</span></>}
                   </div>
                 )}
-                {(hygiene.data.clashes.length > 0 || hygiene.data.overlap.length > 0) && (
+                {((hygiene.data.clashes ?? []).length > 0 || (hygiene.data.overlap ?? []).length > 0) && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-2xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-                    {hygiene.data.overlap.length > 0 && <div><b>Node ports on mimic ports:</b> {hygiene.data.overlap.join(', ')} — move them, a forwarder cannot fix this</div>}
-                    {hygiene.data.clashes.map((c) => <div key={c.port}>mimic port {c.port} held by {c.owner}</div>)}
+                    {(hygiene.data.overlap ?? []).length > 0 && <div><b>Node ports on mimic ports:</b> {(hygiene.data.overlap ?? []).join(', ')} — move them, a forwarder cannot fix this</div>}
+                    {(hygiene.data.clashes ?? []).map((c) => <div key={c.port}>mimic port {c.port} held by {c.owner}</div>)}
                   </div>
                 )}
                 {hygiene.data.fail2ban && (
