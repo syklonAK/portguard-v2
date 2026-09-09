@@ -182,7 +182,7 @@ func (s *Store) ListTunnelRelays() ([]TunnelRelay, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []TunnelRelay
+	out := []TunnelRelay{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		r, err := scanTunnelRelay(rows)
 		if err != nil {

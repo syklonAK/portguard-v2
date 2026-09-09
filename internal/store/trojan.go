@@ -89,7 +89,7 @@ func (s *Store) ListTrojanRelays() ([]TrojanRelay, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []TrojanRelay
+	out := []TrojanRelay{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		r, err := scanTrojanRelay(rows)
 		if err != nil {
@@ -149,7 +149,7 @@ func (s *Store) ListTrojanIngresses() ([]TrojanIngress, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []TrojanIngress
+	out := []TrojanIngress{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		r, err := scanTrojanIngress(rows)
 		if err != nil {
