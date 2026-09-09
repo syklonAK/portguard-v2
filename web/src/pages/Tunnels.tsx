@@ -343,7 +343,7 @@ export default function Tunnels() {
             </div>
           )}
 
-          {pt && pt.services.length > 0 && (
+          {pt && Array.isArray(pt.services) && pt.services.length > 0 && (
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-sm">
                 <thead>
@@ -375,7 +375,7 @@ export default function Tunnels() {
               </table>
             </div>
           )}
-          {pt && pt.services.length === 0 && (
+          {pt && Array.isArray(pt.services) && pt.services.length === 0 && (
             <Empty message="No ICMP tunnels yet. Configure one for the Iran or the foreign server." />
           )}
 
