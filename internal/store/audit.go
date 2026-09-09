@@ -20,7 +20,7 @@ func (s *Store) ListAudit(limit int) ([]AuditLog, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []AuditLog
+	out := []AuditLog{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var a AuditLog
 		var createdTS int64

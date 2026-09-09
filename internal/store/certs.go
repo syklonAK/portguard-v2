@@ -318,7 +318,7 @@ func (s *Store) ListCertsPaged(limit, offset int) ([]Cert, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Cert
+	out := []Cert{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var c Cert
 		var domains string

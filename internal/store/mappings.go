@@ -18,7 +18,7 @@ func (s *Store) ListMappingsPaged(limit, offset int) ([]Mapping, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Mapping
+	out := []Mapping{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		m, err := scanMapping(rows)
 		if err != nil {
@@ -161,7 +161,7 @@ func (s *Store) ListPorts() ([]PortEntry, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PortEntry
+	out := []PortEntry{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var p PortEntry
 		var managed, self int
@@ -193,7 +193,7 @@ func (s *Store) ListHealth() ([]TargetHealth, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []TargetHealth
+	out := []TargetHealth{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var h TargetHealth
 		var last sql.NullInt64
@@ -285,7 +285,7 @@ func (s *Store) ListConnections() ([]ConnEntry, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ConnEntry
+	out := []ConnEntry{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var c ConnEntry
 		var managed, inner, self int
@@ -317,7 +317,7 @@ func (s *Store) TopTalkers(limit int) ([]TopTalker, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []TopTalker
+	out := []TopTalker{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var t TopTalker
 		if err := rows.Scan(&t.SrcIP, &t.Conns, &t.FirstSeen); err != nil {

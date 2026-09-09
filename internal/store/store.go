@@ -133,7 +133,7 @@ func (s *Store) ListAdmins() ([]Admin, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Admin
+	out := []Admin{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var a Admin
 		var c, ll int64
@@ -260,7 +260,7 @@ func (s *Store) ListAlerts(limit int) ([]Alert, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Alert
+	out := []Alert{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var a Alert
 		var ack, c int64
@@ -323,7 +323,7 @@ func (s *Store) ListConfigVersions() ([]ConfigVersion, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ConfigVersion
+	out := []ConfigVersion{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var v ConfigVersion
 		var c int64
@@ -367,7 +367,7 @@ func (s *Store) ListServices() ([]Service, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Service
+	out := []Service{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var sv Service
 		var enabled int

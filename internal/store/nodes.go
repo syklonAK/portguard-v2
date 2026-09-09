@@ -46,7 +46,7 @@ func (s *Store) ListServerNodesPaged(limit, offset int) ([]ServerNode, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ServerNode
+	out := []ServerNode{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		n, err := scanServerNode(rows)
 		if err != nil {

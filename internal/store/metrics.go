@@ -22,7 +22,7 @@ func (s *Store) QueryMetrics(nodeID int64, from, to int64) ([]MetricPoint, error
 		return nil, err
 	}
 	defer rows.Close()
-	var out []MetricPoint
+	out := []MetricPoint{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var p MetricPoint
 		if err := rows.Scan(&p.NodeID, &p.CPUPercent, &p.MemPercent, &p.DiskPercent, &p.RxBytes, &p.TxBytes, &p.RxBps, &p.TxBps, &p.Conns, &p.TS); err != nil {

@@ -15,7 +15,7 @@ func (s *Store) ListRateProfiles() ([]RateProfile, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []RateProfile
+	out := []RateProfile{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var p RateProfile
 		var enabled int
@@ -133,7 +133,7 @@ func (s *Store) ListPasarguardUsersPaged(search, status string, limit, offset in
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PasarguardUser
+	out := []PasarguardUser{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var u PasarguardUser
 		var enabled, expired int
@@ -170,7 +170,7 @@ func (s *Store) ListPasarguardUsers() ([]PasarguardUser, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PasarguardUser
+	out := []PasarguardUser{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var u PasarguardUser
 		var enabled, expired int
@@ -198,7 +198,7 @@ func (s *Store) ListRatePolicies() ([]RateLimitPolicy, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []RateLimitPolicy
+	out := []RateLimitPolicy{} // never nil — nil marshals to JSON null and the UI maps over it
 	for rows.Next() {
 		var p RateLimitPolicy
 		var enabled, custom int
